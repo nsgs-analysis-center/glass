@@ -1332,6 +1332,7 @@ void parse_data_args(int argc, char **argv, struct Data *data, struct Orbit *orb
     flags->quiet       = 0;
     flags->simNoise    = 0;
     flags->confNoise   = 0;
+    flags->sgwbTemplate=-1;
     flags->stationary  = 0;
     flags->burnin      = 1;
     flags->debug       = 0;
@@ -1381,23 +1382,24 @@ void parse_data_args(int argc, char **argv, struct Data *data, struct Orbit *orb
     static struct option long_options[] =
     {
         /* These options set a flag. */
-        {"samples",    required_argument, 0, 0},
-        {"padding",    required_argument, 0, 0},
-        {"duration",   required_argument, 0, 0},
-        {"start-time", required_argument, 0, 0},
-        {"orbit",      required_argument, 0, 0},
-        {"chains",     required_argument, 0, 0},
-        {"chainseed",  required_argument, 0, 0},
-        {"noiseseed",  required_argument, 0, 0},
-        {"data",       required_argument, 0, 0},
-        {"h5-data",    required_argument, 0, 0},
-        {"psd",        required_argument, 0, 0},
-        {"fmin",       required_argument, 0, 0},
-        {"fmax",       required_argument, 0, 0},
-        {"channels",   required_argument, 0, 0},
-        {"steps",      required_argument, 0, 0},
-        {"threads",    required_argument, 0, 0},
-        {"rundir",     required_argument, 0, 0},
+        {"samples",      required_argument, 0, 0},
+        {"padding",      required_argument, 0, 0},
+        {"duration",     required_argument, 0, 0},
+        {"start-time",   required_argument, 0, 0},
+        {"orbit",        required_argument, 0, 0},
+        {"chains",       required_argument, 0, 0},
+        {"chainseed",    required_argument, 0, 0},
+        {"noiseseed",    required_argument, 0, 0},
+        {"data",         required_argument, 0, 0},
+        {"h5-data",      required_argument, 0, 0},
+        {"psd",          required_argument, 0, 0},
+        {"fmin",         required_argument, 0, 0},
+        {"fmax",         required_argument, 0, 0},
+        {"channels",     required_argument, 0, 0},
+        {"steps",        required_argument, 0, 0},
+        {"threads",      required_argument, 0, 0},
+        {"rundir",       required_argument, 0, 0},
+        {"sgwb-template",required_argument, 0, 0},
         
         /* These options don’t set a flag.
          We distinguish them by their indices. */
@@ -1442,6 +1444,7 @@ void parse_data_args(int argc, char **argv, struct Data *data, struct Orbit *orb
                 if(strcmp("injseed",     long_options[long_index].name) == 0) data->iseed       = (long)atoi(optarg);
                 if(strcmp("sim-noise",   long_options[long_index].name) == 0) flags->simNoise   = 1;
                 if(strcmp("conf-noise",  long_options[long_index].name) == 0) flags->confNoise  = 1;
+                if(strcmp("sgwb-template",long_options[long_index].name)== 0) flags->sgwbTemplate=atoi(optarg);
                 if(strcmp("stationary",  long_options[long_index].name) == 0) flags->stationary = 1;
                 if(strcmp("prior",       long_options[long_index].name) == 0) flags->prior      = 1;
                 if(strcmp("no-burnin",   long_options[long_index].name) == 0) flags->burnin     = 0;
@@ -1524,6 +1527,15 @@ void parse_data_args(int argc, char **argv, struct Data *data, struct Orbit *orb
         }
     }
     if(flags->cheat || !flags->burnin) flags->NBURN = 0;
+
+    if(flags->sgwbTemplate < -1 || flags->sgwbTemplate >= SGWB_TEMPLATE_COUNT)
+    {
+        fprintf(stderr,"selected SGWB template does not exist, options are:\n");
+        for (int i=0; i<SGWB_TEMPLATE_COUNT; i++) {
+            fprintf(stderr,"\t%d: %s\n",i,SGWB_TEMPLATE_NAMES[i]);
+        }
+        exit(1);
+    }
     
     if(flags->verbose && flags->quiet)
     {

@@ -90,6 +90,26 @@ struct ForegroundModel
     struct GalaxyModulation *modulation; //!< time-series of modulation
 };
 
+typedef enum SGWB_t{
+    SGWB_TEMPLATE_POWERLAW,
+    SGWB_TEMPLATE_COUNT}; // leave this here, counts length of enum
+const char*[] SGWB_TEMPLATE_NAMES = {"powerlaw"};
+const int[] SGWB_TEMPLATE_NPARAMS = {2};
+_Static_assert(sizeof(SGWB_TEMPLATE_NAMES)/sizeof(SGWB_TEMPLATE_NAMES[0]) == SGWB_TEMPLATE_COUNT,
+        "Did you add an SGWB template but not its name?");
+_Static_assert(sizeof(SGWB_TEMPLATE_NPARAMS)/sizeof(SGWB_TEMPLATE_NPARAMS[0]) == SGWB_TEMPLATE_COUNT,
+        "Did you add an SGWB template but not its parameter count?");
+
+struct SGWBModel
+{
+    int Nparams;       //!< number of SGWB parameters
+    double Tobs;       //!< observation time (in seconds)
+    double *params;    //!< SGWB parameters
+    double logL;       //!< log Likelihood of model
+    struct Noise *psd; //!< power and cross spectral densities
+    SGWB_t SGWB_type;  //!< which SGWB template is used
+};
+
 /**
  \brief Converts physical noise parameters to array expected by InstrumentModel
  */
@@ -128,6 +148,11 @@ void alloc_instrument_model(struct InstrumentModel *model, int Ndata, int Nchann
 void alloc_foreground_model(struct ForegroundModel *model, int Ndata, int Nchannel);
 
 /**
+ \brief Allocates SGWB model structure and contents.
+ */
+void alloc_sgwb_model(struct SGWBModel *model, int Ndata, int Nchannel, SGWB_t SGWB_type);
+
+/**
  \brief Free allocated spline model.
  */
 void free_spline_model(struct SplineModel *model);
@@ -138,9 +163,14 @@ void free_spline_model(struct SplineModel *model);
 void free_instrument_model(struct InstrumentModel *model);
 
 /**
- \brief Free allocated spline model.
+ \brief Free allocated foreground model.
  */
 void free_foreground_model(struct ForegroundModel *model);
+
+/**
+ \brief Free allocated SGWB model.
+ */
+void free_sgwb_model(struct SGWBModel *model);
 
 /**
  \brief Deep copy of SplineModel structure from `origin` into `copy`
@@ -158,6 +188,11 @@ void copy_instrument_model(struct InstrumentModel *origin, struct InstrumentMode
 void copy_foreground_model(struct ForegroundModel *origin, struct ForegroundModel *copy);
 
 /**
+ \brief Deep copy of SGWBModel structure from `origin` into `copy`
+ */
+void copy_sgwb_model(struct SGWBModel *origin, struct SGWBModel *copy);
+
+/**
  \brief Wrapper to `CubicSplineGSL` functions for generating PSD model based on current state of `model`
  */
 void generate_spline_noise_model(struct SplineModel *model);
@@ -173,6 +208,11 @@ void generate_instrument_noise_model_wavelet(struct Wavelets *wdm, struct Orbit 
  */
 void generate_galactic_foreground_model(struct ForegroundModel *model);
 void generate_galactic_foreground_model_wavelet(struct Wavelets *wdm, struct ForegroundModel *model);
+
+/**
+ \brief Compute SGWB contribution to covariance matrix based on current state of `model`
+ */
+void generate_sgwb_model(struct SGWBModel *model);
 
 /**
  \brief Add components to `full` noise covariance matrix `C`
@@ -217,12 +257,22 @@ void initialize_spline_model(struct Orbit *orbit, struct Data *data, struct Spli
 void initialize_instrument_model(struct Orbit *orbit, struct Data *data, struct InstrumentModel *model);
 void initialize_instrument_model_wavelet(struct Orbit *orbit, struct Data *data, struct InstrumentModel *model);
 /**
- \brief Set initial state of instrument noise `model`
+ \brief Set initial state of galactic foreground `model`
  */
 void initialize_foreground_model(struct Orbit *orbit, struct Data *data, struct ForegroundModel *model);
 void initialize_foreground_model_wavelet(struct Orbit *orbit, struct Data *data, struct ForegroundModel *model);
 
+/**
+ \brief Set initial state of sgwb `model`
+ */
+void initialize_sgwb_model(struct Orbit *orbit, struct Data *data, struct SGWBModel *model);
+
 void GetDynamicNoiseModel(struct Data *data, struct Orbit *orbit, struct Flags *flags);
 void GetStationaryNoiseModel(struct Data *data, struct Orbit *orbit, struct Flags *flags, struct Noise *noise);
+
+/**
+ \brief functional form for a powerlaw SGWB
+ */
+inline double sgwb_powerlaw(double f, const double* params);
 
 #endif /* noise_model_h */

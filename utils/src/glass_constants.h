@@ -77,4 +77,8 @@
 //! Astronomical unit [m]
 #define AU 1.49597870700e11
 
+//! Hubble constant [1/s]
+#define H0 70*3.24078e-20
+#define Hscale (3*H0*H0 / (4*M_PI*M_PI))
+
 #endif /* constants_h */

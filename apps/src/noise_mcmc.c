@@ -121,9 +121,31 @@ int main(int argc, char *argv[])
         print_noise_model(conf_model[0]->psd, filename);
     }
 
+    /* Initialize SGWB Model */
+    if(flags->sgwbTemplate>=0) printf("   ...initialize SGWB model\n");
+    struct SGWBModel **sgwb_model = malloc(chain->NC*sizeof(struct SGWBModel *));
+    struct SGWBModel **sgwb_trial = malloc(chain->NC*sizeof(struct SGWBModel *));
+    for(int ic=0; ic<chain->NC; ic++)
+    {
+        sgwb_model[ic] = malloc(sizeof(struct SGWBModel));
+        sgwb_trial[ic] = malloc(sizeof(struct SGWBModel));
+        if(flags->sgwbTemplate>=0) 
+        {
+           initialize_sgwb_model(orbit, data, sgwb_model[ic]);
+           initialize_sgwb_model(orbit, data, sgwb_trial[ic]);
+        }
+    }
+    if(flags->sgwbTemplate>=0)
+    {
+        sprintf(filename,"%s/sgwb_noise_model.dat",data->dataDir);
+        print_noise_model(sgwb_model[0]->psd, filename);
+    }
+    
+
     /* Combine noise components to form covariance matrix */
     for(int ic=0; ic<chain->NC; ic++)
         if(flags->confNoise) generate_full_covariance_matrix(inst_model[ic]->psd, conf_model[ic]->psd, data->Nchannel);
+        if(flags->sgwbNoise) generate_full_covariance_matrix(inst_model[ic]->psd, sgwb_model[ic]->psd, data->Nchannel);
 
     /* get initial likelihood */
     for(int ic=0; ic<chain->NC; ic++)
@@ -179,11 +201,14 @@ int main(int argc, char *argv[])
                 struct InstrumentModel *inst_trial_ptr = inst_trial[chain->index[ic]];
                 struct ForegroundModel *conf_model_ptr = conf_model[chain->index[ic]];
                 struct ForegroundModel *conf_trial_ptr = conf_trial[chain->index[ic]];
+                struct SGWBModel       *sgwb_model_ptr = sgwb_model[chain->index[ic]];
+                struct SGWBModel       *sgwb_trial_ptr = sgwb_trial[chain->index[ic]];
 
                 for(int mc=0; mc<10; mc++)
                 {
-                    noise_instrument_model_mcmc(orbit, data, inst_model_ptr, inst_trial_ptr, conf_model_ptr, psd_ptr, chain, flags, ic);
-                    if(flags->confNoise) noise_foreground_model_mcmc(data, inst_model_ptr, conf_model_ptr, conf_trial_ptr, psd_ptr, chain, flags, ic);
+                    noise_instrument_model_mcmc(orbit, data, inst_model_ptr, inst_trial_ptr, conf_model_ptr, sgwb_model_ptr, psd_ptr, chain, flags, ic);
+                    if(flags->confNoise) noise_foreground_model_mcmc(data, inst_model_ptr, conf_model_ptr, conf_trial_ptr, sgwb_model_ptr, psd_ptr, chain, flags, ic);
+                    if(flags->sgwbTemplate>=0) noise_sgwb_model_mcmc(data, inst_model_ptr, conf_model_ptr, sgwb_model_ptr, sgwb_trial_ptr, psd_ptr, chain, flags, ic);
                 }
             }// end (parallel) loop over chains
             
@@ -209,6 +234,13 @@ int main(int argc, char *argv[])
                     fprintf(foregroundChainFile,"\n");
                 }
 
+                if(flags->sgwbTemplate>=0) 
+                {
+                    fprintf(sgwbChainFile,"%i %.12g ",step,sgwb_model[chain->index[0]]->logL);
+                    print_sgwb_state(conf_model[chain->index[0]], sgwbChainFile);
+                    fprintf(sgwbChainFile,"\n");
+                }
+
                 if(step%(flags->NMCMC/10)==0)
                 {
                     generate_instrument_noise_model(orbit,inst_model[chain->index[0]]);
@@ -221,6 +253,12 @@ int main(int argc, char *argv[])
                         sprintf(filename,"%s/current_foreground_noise_model.dat",data->dataDir);
                         print_noise_model(conf_model[chain->index[0]]->psd, filename);
                     }
+                    if(flags->sgwbTemplate>=0) 
+                    {
+                        generate_galactic_sgwb_model(sgwb_model[chain->index[0]]);
+                        sprintf(filename,"%s/current_sgwb_noise_model.dat",data->dataDir);
+                        print_noise_model(conf_model[chain->index[0]]->psd, filename);
+                    }
                 }
                 
                 if(step%data->downsample==0 && step/data->downsample < data->Nwave)
@@ -230,6 +268,11 @@ int main(int argc, char *argv[])
                     {
                         generate_galactic_foreground_model(conf_model[chain->index[0]]);
                         generate_full_covariance_matrix(inst_model[chain->index[0]]->psd,conf_model[chain->index[0]]->psd, data->Nchannel);
+                    }
+                    if(flags->sgwbTemplate>=0) 
+                    {
+                        generate_sgwb_model(sgwb_model[chain->index[0]]);
+                        generate_full_covariance_matrix(inst_model[chain->index[0]]->psd,sgwb_model[chain->index[0]]->psd, data->Nchannel);
                     }
                     
                     for(int n=0; n<data->NFFT; n++)
@@ -250,6 +293,7 @@ int main(int argc, char *argv[])
     
     fclose(noiseChainFile);
     if(flags->confNoise)fclose(foregroundChainFile);
+    if(flags->sgwbTemplate>=0)fclose(sgwbChainFile);
 
     generate_instrument_noise_model(orbit,inst_model[chain->index[0]]);
     sprintf(filename,"%s/final_instrument_noise_model.dat",data->dataDir);
@@ -260,8 +304,17 @@ int main(int argc, char *argv[])
         generate_galactic_foreground_model(conf_model[chain->index[0]]);
         sprintf(filename,"%s/final_foreground_noise_model.dat",data->dataDir);
         print_noise_model(conf_model[chain->index[0]]->psd, filename);
-        
         generate_full_covariance_matrix(inst_model[chain->index[0]]->psd, conf_model[chain->index[0]]->psd, data->Nchannel);
+    }
+    if(flags->sgwbTemplate>=0)
+    {
+        generate_sgwb_model(sgwb_model[chain->index[0]]);
+        sprintf(filename,"%s/final_sgwb_noise_model.dat",data->dataDir);
+        print_noise_model(sgwb_model[chain->index[0]]->psd, filename);
+        generate_full_covariance_matrix(inst_model[chain->index[0]]->psd, sgwb_model[chain->index[0]]->psd, data->Nchannel);
+    }
+    if(flags->confNoise || flags->sgwbTemplate>=0)
+    {
         sprintf(filename,"%s/final_full_noise_model.dat",data->dataDir);
         print_noise_model(inst_model[chain->index[0]]->psd, filename);
     }
@@ -269,7 +322,8 @@ int main(int argc, char *argv[])
     print_noise_reconstruction(data, flags);
 
     sprintf(filename,"%s/whitened_data.dat",data->dataDir);
-    if(flags->confNoise)generate_full_covariance_matrix(inst_model[chain->index[0]]->psd,conf_model[chain->index[0]]->psd, data->Nchannel);
+    // this was here, but it was already added??
+    //if(flags->confNoise)generate_full_covariance_matrix(inst_model[chain->index[0]]->psd,conf_model[chain->index[0]]->psd, data->Nchannel);
     print_whitened_data(data, inst_model[chain->index[0]]->psd, filename);
 
     
