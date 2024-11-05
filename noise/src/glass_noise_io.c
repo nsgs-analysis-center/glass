@@ -38,7 +38,7 @@ void print_foreground_state(struct ForegroundModel *model, FILE *fptr)
     for(int i=0; i<model->Nparams; i++)fprintf(fptr,"%.12g ", model->sgal[i]);
 }
 
-void print_sgwb_state(struct SGWBModel *model, FILE *fptr)
+inline void print_sgwb_state(struct SGWBModel *model, FILE *fptr)
 {
     for(int i=0; i<model->Nparams; i++)fprintf(fptr,"%.12g ", model->params[i]);
 }

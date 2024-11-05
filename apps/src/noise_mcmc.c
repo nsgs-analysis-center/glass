@@ -245,7 +245,7 @@ int main(int argc, char *argv[])
                 if(flags->sgwbTemplate>=0) 
                 {
                     fprintf(sgwbChainFile,"%i %.12g ",step,sgwb_model[chain->index[0]]->logL);
-                    print_sgwb_state(conf_model[chain->index[0]], sgwbChainFile);
+                    print_sgwb_state(sgwb_model[chain->index[0]], sgwbChainFile);
                     fprintf(sgwbChainFile,"\n");
                 }
 

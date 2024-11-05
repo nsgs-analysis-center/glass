@@ -20,9 +20,9 @@ set(CMAKE_C_COMPILER mpicc)
 
 project(ldasoft VERSION 1.0.0 LANGUAGES C)
 #set(OpenMP_C_FLAGS "-fopenmp")
-set(CMAKE_C_FLAGS "-I/usr/local/Cellar/libomp/19.1.2/include")
-set(OpenMP_C_LIB_NAMES "libomp")
-set(OpenMP_libomp_LIBRARY "/usr/local/Cellar/libomp/19.1.2/lib/libomp.dylib")
+#set(CMAKE_C_FLAGS "-I/usr/local/Cellar/libomp/19.1.2/include")
+#set(OpenMP_C_LIB_NAMES "libomp")
+#set(OpenMP_libomp_LIBRARY "/usr/local/Cellar/libomp/19.1.2/lib/libomp.dylib")
 
 # External packages
 find_package(GSL REQUIRED)
@@ -36,7 +36,7 @@ if(APPLE)
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Xpreprocessor")
 endif()
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fopenmp -Wall -std=gnu99")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fopenmp -Wall -std=gnu99 -g")
 
 # Set git version header file
 message(STATUS "Resolving GIT Version")
