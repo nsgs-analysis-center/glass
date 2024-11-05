@@ -38,6 +38,11 @@ void print_foreground_state(struct ForegroundModel *model, FILE *fptr)
     for(int i=0; i<model->Nparams; i++)fprintf(fptr,"%.12g ", model->sgal[i]);
 }
 
+inline void print_sgwb_state(struct SGWBModel *model, FILE *fptr)
+{
+    for(int i=0; i<model->Nparams; i++)fprintf(fptr,"%.12g ", model->params[i]);
+}
+
 void print_noise_model(struct Noise *noise, char filename[])
 {
     FILE *fptr = fopen(filename,"w");

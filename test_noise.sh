@@ -2,5 +2,6 @@
 
 rm -rf ./chains
 rm -rf ./data
-OMP_NUM_THREADS=24 build/apps/src/noise_mcmc --sim-noise --conf-noise --steps 2000 --chains 24 --cheat --fmin 1e-4 --fmax 1e-2 --duration 1966080
+OMP_NUM_THREADS=6 build/apps/src/noise_mcmc --sim-noise --sgwb-template 0 --steps 2000 --chains 6 --cheat --fmin 1e-4 --fmax 8e-3 --duration 1966080
+#OMP_NUM_THREADS=6 build/apps/src/noise_mcmc --sim-noise --sgwb-template 0 --steps 2000 --chains 6 --cheat --fmin 1e-4 --fmax 8e-3 --duration 1966080
 

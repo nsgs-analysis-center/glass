@@ -111,6 +111,15 @@ void alloc_foreground_model(struct ForegroundModel *model, int Ndata, int Nchann
     alloc_noise(model->psd, Ndata, Nchannel);
 }
 
+void alloc_sgwb_model(struct SGWBModel *model, int Ndata, int Nchannel, SGWB_t SGWB_type)
+{
+    model->SGWB_type = SGWB_type;
+    model->Nparams = SGWB_TEMPLATE_NPARAMS[SGWB_type];
+    model->params = malloc(model->Nparams*sizeof(double));
+    model->psd = malloc(sizeof(struct Noise));
+    alloc_noise(model->psd, Ndata, Nchannel);
+}
+
 void free_spline_model(struct SplineModel *model)
 {
     free_noise(model->psd);
@@ -130,6 +139,13 @@ void free_foreground_model(struct ForegroundModel *model)
 {
     free_noise(model->psd);
     free(model->sgal);
+    free(model);
+}
+
+void free_sgwb_model(struct SGWBModel *model)
+{
+    free_noise(model->psd);
+    free(model->params);
     free(model);
 }
 
@@ -177,6 +193,21 @@ void copy_foreground_model(struct ForegroundModel *origin, struct ForegroundMode
     copy->Tobs = origin->Tobs;
     copy->Nparams = origin->Nparams;
     memcpy(copy->sgal, origin->sgal, origin->Nparams*sizeof(double));
+    
+}
+void copy_sgwb_model(struct SGWBModel *origin, struct SGWBModel *copy)
+{
+    //Noise model parameters
+    copy_noise(origin->psd,copy->psd);
+    
+    //Model likelihood
+    copy->logL = origin->logL;
+
+    //SGWB model Parameters
+    copy->Tobs = origin->Tobs;
+    copy->Nparams = origin->Nparams;
+    copy->SGWB_type = origin->SGWB_type;
+    memcpy(copy->params, origin->params, origin->Nparams*sizeof(double));
     
 }
 
@@ -539,6 +570,54 @@ void generate_galactic_foreground_model_wavelet(struct Wavelets *wdm, struct For
     free_foreground_model(grid);
 }
 
+
+_Static_assert(SGWB_TEMPLATE_COUNT == 1, "Did you add an SGWB template? Implement its form in frequency in a new function here");
+inline double sgwb_powerlaw(double f, const double* params) {
+    static double fref = 25.0;
+    double A     = pow(10.0,params[0]);
+    double alpha = params[1];
+    double prefactor = Hscale / (f*f*f);
+    return prefactor*A*pow(f/fref,alpha);
+}
+
+void generate_sgwb_model(struct SGWBModel *model)
+{
+    double f;
+    double Sgw;
+    
+    for(int n=0; n<model->psd->N; n++)
+    {
+        f = model->psd->f[n];
+        
+        _Static_assert(SGWB_TEMPLATE_COUNT == 1, "Did you add an SGWB template? Edit this switch case, it needs to be exhaustive.");
+        switch(model->SGWB_type) {
+            case SGWB_TEMPLATE_POWERLAW:
+                Sgw = sgwb_powerlaw(f,model->params);
+                break;
+            default:
+                fprintf(stderr,"Unimplemented SGWB type?\n\tTemplate index: %d\n\tTemplate name: %s\n",model->SGWB_type,SGWB_TEMPLATE_NAMES[model->SGWB_type]);
+                exit(1);
+                break;
+        }
+        
+        switch(model->psd->Nchannel)
+        {
+            case 1:
+                model->psd->C[0][0][n] = Sgw;
+                break;
+            case 2:
+                model->psd->C[0][0][n] = model->psd->C[1][1][n] = 1.5*Sgw;
+                model->psd->C[0][1][n] = model->psd->C[1][0][n] = 0;
+                break;
+            case 3:
+                model->psd->C[0][0][n] = model->psd->C[1][1][n] = model->psd->C[2][2][n] = Sgw;
+                model->psd->C[0][1][n] = model->psd->C[0][2][n] = model->psd->C[1][2][n] = -0.5*Sgw;
+                model->psd->C[1][0][n] = model->psd->C[2][0][n] = model->psd->C[2][1][n] = -0.5*Sgw;
+                break;
+        }
+    }
+}
+
 void generate_full_covariance_matrix(struct Noise *full, struct Noise *component, int Nchannel)
 {
     for(int n=0; n<full->N; n++)
@@ -795,6 +874,34 @@ void initialize_foreground_model(struct Orbit *orbit, struct Data *data, struct 
     
     // get noise covariance matrix for initial parameters
     generate_galactic_foreground_model(model);
+
+}
+
+void initialize_sgwb_model(struct Orbit *orbit, struct Data *data, struct SGWBModel *model, SGWB_t SGWB_type)
+{
+    // initialize data models
+    alloc_sgwb_model(model, data->NFFT, data->Nchannel, SGWB_type);
+    
+    // set up psd frequency grid
+    for(int n=0; n<model->psd->N; n++)
+        model->psd->f[n] = data->fmin + (double)n/data->T;
+
+    _Static_assert(SGWB_TEMPLATE_COUNT == 1, "Did you add an SGWB template? Edit this switch case, it needs to be exhaustive.");
+    // set default values
+    switch (SGWB_type) {
+        case SGWB_TEMPLATE_POWERLAW:
+            model->params[0] = -8.45;
+            model->params[1] = 0.66667;
+            break;
+        default:
+            fprintf(stderr,"need default values for SGWB type: %s", SGWB_TEMPLATE_NAMES[SGWB_type]);
+            exit(1);
+            break;
+    }
+    
+    model->Tobs  =  data->T;
+    // get covariance matrix for initial parameters
+    generate_sgwb_model(model);
 
 }
 
