@@ -774,6 +774,7 @@ void noise_sgwb_model_mcmc(struct Data *data, struct InstrumentModel *noise, str
     }
     
     
+    _Static_assert(SGWB_TEMPLATE_COUNT == 1, "Did you add an SGWB template? Edit this switch case, it needs to be exhaustive.");
     switch (model_x->SGWB_type) {
         case SGWB_TEMPLATE_POWERLAW:
             //log(A_p)

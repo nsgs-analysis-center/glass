@@ -571,6 +571,7 @@ void generate_galactic_foreground_model_wavelet(struct Wavelets *wdm, struct For
 }
 
 
+_Static_assert(SGWB_TEMPLATE_COUNT == 1, "Did you add an SGWB template? Implement its form in frequency in a new function here");
 inline double sgwb_powerlaw(double f, const double* params) {
     static double fref = 25.0;
     double A     = pow(10.0,params[0]);
@@ -588,6 +589,7 @@ void generate_sgwb_model(struct SGWBModel *model)
     {
         f = model->psd->f[n];
         
+        _Static_assert(SGWB_TEMPLATE_COUNT == 1, "Did you add an SGWB template? Edit this switch case, it needs to be exhaustive.");
         switch(model->SGWB_type) {
             case SGWB_TEMPLATE_POWERLAW:
                 Sgw = sgwb_powerlaw(f,model->params);
@@ -884,6 +886,7 @@ void initialize_sgwb_model(struct Orbit *orbit, struct Data *data, struct SGWBMo
     for(int n=0; n<model->psd->N; n++)
         model->psd->f[n] = data->fmin + (double)n/data->T;
 
+    _Static_assert(SGWB_TEMPLATE_COUNT == 1, "Did you add an SGWB template? Edit this switch case, it needs to be exhaustive.");
     // set default values
     switch (SGWB_type) {
         case SGWB_TEMPLATE_POWERLAW:
