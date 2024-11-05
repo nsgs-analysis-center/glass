@@ -90,11 +90,13 @@ struct ForegroundModel
     struct GalaxyModulation *modulation; //!< time-series of modulation
 };
 
-typedef enum SGWB_t{
+typedef enum {
     SGWB_TEMPLATE_POWERLAW,
-    SGWB_TEMPLATE_COUNT}; // leave this here, counts length of enum
-const char*[] SGWB_TEMPLATE_NAMES = {"powerlaw"};
-const int[] SGWB_TEMPLATE_NPARAMS = {2};
+    SGWB_TEMPLATE_COUNT // leave this here, counts length of enum
+} SGWB_t;
+// note that if this array ever becomes extremely large, maybe swap to extern
+static const char* SGWB_TEMPLATE_NAMES[] = {"powerlaw"};
+static const int SGWB_TEMPLATE_NPARAMS[] = {2};
 _Static_assert(sizeof(SGWB_TEMPLATE_NAMES)/sizeof(SGWB_TEMPLATE_NAMES[0]) == SGWB_TEMPLATE_COUNT,
         "Did you add an SGWB template but not its name?");
 _Static_assert(sizeof(SGWB_TEMPLATE_NPARAMS)/sizeof(SGWB_TEMPLATE_NPARAMS[0]) == SGWB_TEMPLATE_COUNT,
@@ -265,7 +267,7 @@ void initialize_foreground_model_wavelet(struct Orbit *orbit, struct Data *data,
 /**
  \brief Set initial state of sgwb `model`
  */
-void initialize_sgwb_model(struct Orbit *orbit, struct Data *data, struct SGWBModel *model);
+void initialize_sgwb_model(struct Orbit *orbit, struct Data *data, struct SGWBModel *model, SGWB_t SGWB_type);
 
 void GetDynamicNoiseModel(struct Data *data, struct Orbit *orbit, struct Flags *flags);
 void GetStationaryNoiseModel(struct Data *data, struct Orbit *orbit, struct Flags *flags, struct Noise *noise);
@@ -273,6 +275,6 @@ void GetStationaryNoiseModel(struct Data *data, struct Orbit *orbit, struct Flag
 /**
  \brief functional form for a powerlaw SGWB
  */
-inline double sgwb_powerlaw(double f, const double* params);
+double sgwb_powerlaw(double f, const double* params);
 
 #endif /* noise_model_h */

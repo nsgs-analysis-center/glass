@@ -883,6 +883,18 @@ void initialize_sgwb_model(struct Orbit *orbit, struct Data *data, struct SGWBMo
     // set up psd frequency grid
     for(int n=0; n<model->psd->N; n++)
         model->psd->f[n] = data->fmin + (double)n/data->T;
+
+    // set default values
+    switch (SGWB_type) {
+        case SGWB_TEMPLATE_POWERLAW:
+            model->params[0] = -8.45;
+            model->params[1] = 0.66667;
+            break;
+        default:
+            fprintf(stderr,"need default values for SGWB type: %s", SGWB_TEMPLATE_NAMES[SGWB_type]);
+            exit(1);
+            break;
+    }
     
     model->Tobs  =  data->T;
     // get covariance matrix for initial parameters

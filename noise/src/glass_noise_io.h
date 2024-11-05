@@ -36,9 +36,14 @@ void print_spline_state(struct SplineModel *model, FILE *fptr, int step);
 void print_instrument_state(struct InstrumentModel *model, FILE *fptr);
 
 /**
- \brief Print current state of instrument model to ASCII
+ \brief Print current state of foreground model to ASCII
  */
 void print_foreground_state(struct ForegroundModel *model, FILE *fptr);
+
+/**
+ \brief Print current state of sgwb model to ASCII
+ */
+void print_sgwb_state(struct SGWBModel *model, FILE *fptr);
 
 /**
  \brief Print full PSD model to file named `filename`

@@ -62,8 +62,8 @@ int main(int argc, char *argv[])
     sprintf(chain->chainDir,"%s/chains",flags->runDir);
     sprintf(chain->chkptDir,"%s/checkpoint",flags->runDir);
     
-    mkdir(flags->runDir,S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
-    mkdir(data->dataDir,S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+    mkdir(flags->runDir,  S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+    mkdir(data->dataDir,  S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
     mkdir(chain->chainDir,S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
     mkdir(chain->chkptDir,S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 
@@ -125,14 +125,14 @@ int main(int argc, char *argv[])
     if(flags->sgwbTemplate>=0) printf("   ...initialize SGWB model\n");
     struct SGWBModel **sgwb_model = malloc(chain->NC*sizeof(struct SGWBModel *));
     struct SGWBModel **sgwb_trial = malloc(chain->NC*sizeof(struct SGWBModel *));
-    for(int ic=0; ic<chain->NC; ic++)
+    for (int ic=0; ic<chain->NC; ic++)
     {
         sgwb_model[ic] = malloc(sizeof(struct SGWBModel));
         sgwb_trial[ic] = malloc(sizeof(struct SGWBModel));
         if(flags->sgwbTemplate>=0) 
         {
-           initialize_sgwb_model(orbit, data, sgwb_model[ic]);
-           initialize_sgwb_model(orbit, data, sgwb_trial[ic]);
+           initialize_sgwb_model(orbit, data, sgwb_model[ic], flags->sgwbTemplate);
+           initialize_sgwb_model(orbit, data, sgwb_trial[ic], flags->sgwbTemplate);
         }
     }
     if(flags->sgwbTemplate>=0)
@@ -144,8 +144,10 @@ int main(int argc, char *argv[])
 
     /* Combine noise components to form covariance matrix */
     for(int ic=0; ic<chain->NC; ic++)
+    {
         if(flags->confNoise) generate_full_covariance_matrix(inst_model[ic]->psd, conf_model[ic]->psd, data->Nchannel);
-        if(flags->sgwbNoise) generate_full_covariance_matrix(inst_model[ic]->psd, sgwb_model[ic]->psd, data->Nchannel);
+        if(flags->sgwbTemplate>=0) generate_full_covariance_matrix(inst_model[ic]->psd, sgwb_model[ic]->psd, data->Nchannel);
+    }
 
     /* get initial likelihood */
     for(int ic=0; ic<chain->NC; ic++)
@@ -170,6 +172,12 @@ int main(int argc, char *argv[])
     {
         sprintf(filename,"%s/foreground_chain.dat",chain->chainDir);
         foregroundChainFile = fopen(filename,"w");
+    }
+    FILE *sgwbChainFile = NULL;
+    if(flags->sgwbTemplate>=0)
+    {
+        sprintf(filename,"%s/sgwb_chain.dat",chain->chainDir);
+        sgwbChainFile = fopen(filename,"w");
     }
     
     int numThreads;
@@ -255,9 +263,9 @@ int main(int argc, char *argv[])
                     }
                     if(flags->sgwbTemplate>=0) 
                     {
-                        generate_galactic_sgwb_model(sgwb_model[chain->index[0]]);
+                        generate_sgwb_model(sgwb_model[chain->index[0]]);
                         sprintf(filename,"%s/current_sgwb_noise_model.dat",data->dataDir);
-                        print_noise_model(conf_model[chain->index[0]]->psd, filename);
+                        print_noise_model(sgwb_model[chain->index[0]]->psd, filename);
                     }
                 }
                 

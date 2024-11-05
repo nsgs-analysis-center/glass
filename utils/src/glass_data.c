@@ -19,6 +19,7 @@
 
 
 #include "glass_utils.h"
+#include "glass_noise.h"
 #include "gitversion.h"
 
 #define FIXME 0
