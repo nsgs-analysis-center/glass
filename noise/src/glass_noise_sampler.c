@@ -410,6 +410,8 @@ void noise_instrument_model_mcmc(struct Orbit *orbit, struct Data *data, struct 
     copy_Cij(model_x->psd->C, psd->C, psd->Nchannel, psd->N);
     if(flags->confNoise) 
         generate_full_covariance_matrix(psd,galaxy->psd, data->Nchannel);
+    if(flags->sgwbTemplate>=0) 
+        generate_full_covariance_matrix(psd,sgwb->psd, data->Nchannel);
     invert_noise_covariance_matrix(psd);
     
     model_x->logL = noise_log_likelihood(data, psd);
@@ -559,6 +561,9 @@ void noise_instrument_model_mcmc(struct Orbit *orbit, struct Data *data, struct 
             //add foreground noise contribution
             if(flags->confNoise)
                 generate_full_covariance_matrix(psd,galaxy->psd, data->Nchannel);
+            //add sgwb contribution
+            if(flags->sgwbTemplate>=0) 
+                generate_full_covariance_matrix(psd,sgwb->psd, data->Nchannel);
             
             invert_noise_covariance_matrix(psd);
             
@@ -601,6 +606,8 @@ void noise_foreground_model_mcmc(struct Data *data, struct InstrumentModel *nois
     generate_galactic_foreground_model(model_x);
     copy_Cij(model_x->psd->C, psd->C, psd->Nchannel, psd->N);
     generate_full_covariance_matrix(psd, noise->psd, data->Nchannel);
+    if(flags->sgwbTemplate>=0) 
+        generate_full_covariance_matrix(psd,sgwb->psd, data->Nchannel);
     invert_noise_covariance_matrix(psd);
     model_x->logL = noise_log_likelihood(data, psd);
 
@@ -707,6 +714,9 @@ void noise_foreground_model_mcmc(struct Data *data, struct InstrumentModel *nois
             
             //add instrument noise contribution
             generate_full_covariance_matrix(psd, noise->psd, data->Nchannel);
+            //add sgwb contribution
+            if(flags->sgwbTemplate>=0) 
+                generate_full_covariance_matrix(psd, sgwb->psd, data->Nchannel);
             
             invert_noise_covariance_matrix(psd);
             
