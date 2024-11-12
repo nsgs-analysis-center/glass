@@ -140,6 +140,8 @@ int main(int argc, char *argv[])
         sprintf(filename,"%s/sgwb_noise_model.dat",data->dataDir);
         print_noise_model(sgwb_model[0]->psd, filename);
     }
+
+    /* TODO: SGWB injections??? */
     
 
     /* Combine noise components to form covariance matrix */
