@@ -617,6 +617,43 @@ void generate_sgwb_model(struct SGWBModel *model)
         }
     }
 }
+void generate_sgwb_model_wavelet(struct Data* data, struct SGWBModel *model)
+{
+    double f;
+    double Sgw;
+    
+    for(int n=0; n<data->N; n++)
+    {
+        f = model->psd->f[n];
+        
+        _Static_assert(SGWB_TEMPLATE_COUNT == 1, "Did you add an SGWB template? Edit this switch case, it needs to be exhaustive.");
+        switch(model->SGWB_type) {
+            case SGWB_TEMPLATE_POWERLAW:
+                Sgw = sgwb_powerlaw(f,model->params);
+                break;
+            default:
+                fprintf(stderr,"Unimplemented SGWB type?\n\tTemplate index: %d\n\tTemplate name: %s\n",model->SGWB_type,SGWB_TEMPLATE_NAMES[model->SGWB_type]);
+                exit(1);
+                break;
+        }
+        
+        switch(model->psd->Nchannel)
+        {
+            case 1:
+                model->psd->C[0][0][n] = Sgw;
+                break;
+            case 2:
+                model->psd->C[0][0][n] = model->psd->C[1][1][n] = 1.5*Sgw;
+                model->psd->C[0][1][n] = model->psd->C[1][0][n] = 0;
+                break;
+            case 3:
+                model->psd->C[0][0][n] = model->psd->C[1][1][n] = model->psd->C[2][2][n] = Sgw;
+                model->psd->C[0][1][n] = model->psd->C[0][2][n] = model->psd->C[1][2][n] = -0.5*Sgw;
+                model->psd->C[1][0][n] = model->psd->C[2][0][n] = model->psd->C[2][1][n] = -0.5*Sgw;
+                break;
+        }
+    }
+}
 
 void generate_full_covariance_matrix(struct Noise *full, struct Noise *component, int Nchannel)
 {
