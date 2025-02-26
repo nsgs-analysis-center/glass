@@ -758,6 +758,41 @@ double noise_log_likelihood(struct Data *data, struct Noise *noise)
     return logL;
 }
 
+double noise_log_likelihood_wavelet(struct Data *data, struct Noise *noise)
+{
+    double logL = 0.0;
+    
+    struct TDI *tdi = data->tdi;
+    
+    int N = data->N;
+    int *list = int_vector(data->N);
+    for(int n=0; n<data->N; n++) list[n]=n;
+    
+    switch(data->Nchannel)
+    {
+        case 1:
+            logL += -0.5*wavelet_nwip(tdi->X, tdi->X, noise->invC[0][0], list, N);
+            break;
+        case 2:
+            logL += -0.5*wavelet_nwip(tdi->A, tdi->A, noise->invC[0][0], list, N);
+            logL += -0.5*wavelet_nwip(tdi->E, tdi->E, noise->invC[1][1], list, N);
+            break;
+        case 3:
+            logL += -0.5*wavelet_nwip(tdi->X, tdi->X, noise->invC[0][0], list, N);
+            logL += -0.5*wavelet_nwip(tdi->Y, tdi->Y, noise->invC[1][1], list, N);
+            logL += -0.5*wavelet_nwip(tdi->Z, tdi->Z, noise->invC[2][2], list, N);
+            logL += -wavelet_nwip(tdi->X, tdi->Y, noise->invC[0][1], list, N);
+            logL += -wavelet_nwip(tdi->X, tdi->Z, noise->invC[0][2], list, N);
+            logL += -wavelet_nwip(tdi->Y, tdi->Z, noise->invC[1][2], list, N);
+            break;
+    }
+    for(int n=0; n<N; n++)
+        logL -= log(noise->detC[n]);
+    
+    return logL;
+    // this comment constitutes an offering to the diety responsible for the correct factors of 2
+}
+
 double noise_delta_log_likelihood(struct Data *data, struct SplineModel *model_x, struct SplineModel *model_y, double fmin, double fmax,int ic)
 {
     double dlogL = 0.0;

@@ -180,11 +180,12 @@ int main(int argc, char *argv[])
     for(int ic=0; ic<chain->NC; ic++)
     {
         invert_noise_covariance_matrix(psds[ic]);
-        psds[ic]->logL = noise_log_likelihood(data, inst_model[ic]->psd);
+        psd[ic]->logL = noise_log_likelihood_wavelet(data, psd[ic]);
     }
 
     sprintf(filename,"%s/full_noise_model.dat",data->dataDir);
-    print_noise_model(inst_model[0]->psd, filename);
+    // TODO do we need to fix this?? is wavelet. might work anyway
+    print_noise_model(psd[0], filename);
 
     //MCMC
     printf("\n==== Noise Wavelet MCMC Sampler ====\n");
@@ -240,9 +241,9 @@ int main(int argc, char *argv[])
 
                 for(int mc=0; mc<10; mc++)
                 {
-                    noise_instrument_model_mcmc(orbit, data, inst_model_ptr, inst_trial_ptr, conf_model_ptr, sgwb_model_ptr, psd_ptr, chain, flags, ic);
+                    noise_instrument_model_mcmc_wavelet(orbit, data, inst_model_ptr, inst_trial_ptr, conf_model_ptr, sgwb_model_ptr, psd_ptr, chain, flags, ic);
                     //if(flags->confNoise) noise_foreground_model_mcmc(data, inst_model_ptr, conf_model_ptr, conf_trial_ptr, sgwb_model_ptr, psd_ptr, chain, flags, ic);
-                    if(flags->sgwbTemplate>=0) noise_sgwb_model_mcmc(data, inst_model_ptr, conf_model_ptr, sgwb_model_ptr, sgwb_trial_ptr, psd_ptr, chain, flags, ic);
+                    if(flags->sgwbTemplate>=0) noise_sgwb_model_mcmc_wavelet(data, inst_model_ptr, conf_model_ptr, sgwb_model_ptr, sgwb_trial_ptr, psd_ptr, chain, flags, ic);
                 }
             }// end (parallel) loop over chains
             
