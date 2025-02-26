@@ -632,7 +632,7 @@ void generate_full_covariance_matrix(struct Noise *full, struct Noise *component
     }
 }
 
-void generate_full_dynamic_covariance_matrix(struct Wavelets *wdm, struct InstrumentModel *inst, struct ForegroundModel *conf, struct Noise *full)
+void generate_full_dynamic_covariance_matrix(struct Wavelets *wdm, struct InstrumentModel *inst, struct ForegroundModel *conf, struct SGWBModel *sgwb, struct Noise *full)
 {
     int k;
     int jmin=(int)round(inst->psd->f[0]/wdm->df);
@@ -663,6 +663,15 @@ void generate_full_dynamic_covariance_matrix(struct Wavelets *wdm, struct Instru
             full->C[0][2][k] += conf->psd->C[0][2][j-jmin]*gsl_spline_eval(conf->modulation->XZ_spline, t, conf->modulation->acc); 
             full->C[1][2][k] += conf->psd->C[1][2][j-jmin]*gsl_spline_eval(conf->modulation->YZ_spline, t, conf->modulation->acc); 
 
+
+            //stationary stochastic background
+            full->C[0][0][k] += sgwb->psd->C[0][0][j-jmin];
+            full->C[1][1][k] += sgwb->psd->C[1][1][j-jmin];
+            full->C[2][2][k] += sgwb->psd->C[2][2][j-jmin];
+            full->C[0][1][k] += sgwb->psd->C[0][1][j-jmin];
+            full->C[0][2][k] += sgwb->psd->C[0][2][j-jmin];
+            full->C[1][2][k] += sgwb->psd->C[1][2][j-jmin];
+
             //noise covariance matrix is symmetric
             full->C[1][0][k] = full->C[0][1][k]; 
             full->C[2][0][k] = full->C[0][2][k]; 
@@ -671,7 +680,7 @@ void generate_full_dynamic_covariance_matrix(struct Wavelets *wdm, struct Instru
     } //loop over time slices
 }
 
-static void generate_full_stationary_covariance_matrix(struct Wavelets *wdm, struct InstrumentModel *inst, struct ForegroundModel *conf, struct Noise *full)
+static void generate_full_stationary_covariance_matrix(struct Wavelets *wdm, struct InstrumentModel *inst, struct ForegroundModel *conf, struct SGWBModel *sgwb, struct Noise *full)
 {
     int k;
     int jmin=(int)round(inst->psd->f[0]/wdm->df);
@@ -699,7 +708,15 @@ static void generate_full_stationary_covariance_matrix(struct Wavelets *wdm, str
             full->C[2][2][k] += conf->psd->C[2][2][j-jmin];
             full->C[0][1][k] -= conf->psd->C[0][1][j-jmin]/2.;
             full->C[0][2][k] -= conf->psd->C[0][2][j-jmin]/2.;
-            full->C[1][2][k] -= conf->psd->C[1][2][j-jmin]/2.;
+            full->C[1][2][k] -= conf->psd->C[1][2][j-jmin]/2.; // TODO why 2 here??
+
+            //stationary stochastic background
+            full->C[0][0][k] += sgwb->psd->C[0][0][j-jmin];
+            full->C[1][1][k] += sgwb->psd->C[1][1][j-jmin];
+            full->C[2][2][k] += sgwb->psd->C[2][2][j-jmin];
+            full->C[0][1][k] += sgwb->psd->C[0][1][j-jmin];
+            full->C[0][2][k] += sgwb->psd->C[0][2][j-jmin];
+            full->C[1][2][k] += sgwb->psd->C[1][2][j-jmin];
 
             //noise covariance matrix is symmetric
             full->C[1][0][k] = full->C[0][1][k];

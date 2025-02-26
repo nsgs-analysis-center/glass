@@ -215,12 +215,13 @@ void generate_galactic_foreground_model_wavelet(struct Wavelets *wdm, struct For
  \brief Compute SGWB contribution to covariance matrix based on current state of `model`
  */
 void generate_sgwb_model(struct SGWBModel *model);
+void generate_sgwb_model_wavelet(struct Wavelets *wdm, struct SGWBModel *model);
 
 /**
  \brief Add components to `full` noise covariance matrix `C`
  */
 void generate_full_covariance_matrix(struct Noise *full, struct Noise *component, int Nchannel);
-void generate_full_dynamic_covariance_matrix(struct Wavelets *wdm, struct InstrumentModel *inst, struct ForegroundModel *conf, struct Noise *full);
+void generate_full_dynamic_covariance_matrix(struct Wavelets *wdm, struct InstrumentModel *inst, struct ForegroundModel *conf, struct SGWBModel *sgwb, struct Noise *full);
 
 /**
 \brief Compute spline model only where interpolant changes
@@ -237,6 +238,7 @@ void update_spline_noise_model(struct SplineModel *model, int new_knot, int min_
  @return \f$  \ln p({\rm data}|{\rm spline}) \f$
  */
 double noise_log_likelihood(struct Data *data, struct Noise *noise);
+double noise_log_likelihood_wavelet(struct Data *data, struct Noise *noise);
 
 /**
  \brief Change in log likelihood for noise model.
@@ -268,6 +270,8 @@ void initialize_foreground_model_wavelet(struct Orbit *orbit, struct Data *data,
  \brief Set initial state of sgwb `model`
  */
 void initialize_sgwb_model(struct Orbit *orbit, struct Data *data, struct SGWBModel *model, SGWB_t SGWB_type);
+void initialize_sgwb_wavelet(struct Orbit *orbit, struct Data *data, struct SGWBModel *model, SGWB_t SGWB_type);
+
 
 void GetDynamicNoiseModel(struct Data *data, struct Orbit *orbit, struct Flags *flags);
 void GetStationaryNoiseModel(struct Data *data, struct Orbit *orbit, struct Flags *flags, struct Noise *noise);
