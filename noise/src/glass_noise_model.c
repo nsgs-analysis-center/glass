@@ -600,6 +600,7 @@ void generate_sgwb_model(struct SGWBModel *model)
                 break;
         }
         
+        // TODO: we need to include the instrument response here!!!!
         switch(model->psd->Nchannel)
         {
             case 1:
