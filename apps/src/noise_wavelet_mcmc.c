@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2024 Robert Rosati
+ *  Copyright (C) 2024 Robert Rosati MSFC/UAH
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -63,6 +63,8 @@ int main(int argc, char *argv[])
     print_version(stdout);
     if(argc==1) print_usage();
 
+    bool stationary_test = false;
+
     /* Allocate data structures */
     struct Data *data   = malloc(sizeof(struct Data));
     struct Flags *flags = malloc(sizeof(struct Flags));
@@ -100,23 +102,28 @@ int main(int argc, char *argv[])
     //
     /* Initialize Instrument Noise Model */
     printf("   ...initialize instrument noise model\n");
-    struct Noise **psd = malloc(chain->NC*sizeof(struct Noise *));
+    struct Noise **psd = malloc(chain->NC*sizeof(struct Noise *)); // will save total scalograms here
     struct InstrumentModel **inst_model = malloc(chain->NC*sizeof(struct InstrumentModel *));
+    struct InstrumentModel **inst_trial = malloc(chain->NC*sizeof(struct InstrumentModel *));
     for(int ic=0; ic<chain->NC; ic++)
     {
         psd[ic] = malloc(sizeof(struct Noise));
-        alloc_noise(psd[ic], data->NFFT, data->Nchannel);
+        alloc_noise(psd[ic], data->N, data->Nchannel); // note is data->N in wavelet not data->NFFT
 
         inst_model[ic] = malloc(sizeof(struct InstrumentModel));
         inst_trial[ic] = malloc(sizeof(struct InstrumentModel));
-        initialize_instrument_model(orbit, data, inst_model[ic]);
+        initialize_instrument_model_wavelet(orbit, data, inst_model[ic]);
+        initialize_instrument_model_wavelet(orbit, data, inst_trial[ic]);
     }
+    // TODO for now this works because the noise model is stationary
     sprintf(filename,"%s/instrument_noise_model.dat",data->dataDir);
     print_noise_model(inst_model[0]->psd, filename);
-    // TODO why doesn't UCB wavelet app do this?
 
     /* Initialize Galactic Foreground Model */
-    // TODO why doesn't UCB wavelet app do this?
+    // note: UCB wavelet app hides this inside initialize_ucb_state if stationary noise, and in the waveform calls otherwise.
+    // See GetDynamicNoiseModel and GetStationaryNoiseModel
+    // remember, plan here for now is to not sample over foreground model in wavelet basis, but still sample over noise/sgwb
+    // doesn't look too hard tbh!
     if(flags->confNoise)printf("   ...initialize foreground noise model\n");
     struct ForegroundModel **conf_model = malloc(chain->NC*sizeof(struct ForegroundModel *));
     for(int ic=0; ic<chain->NC; ic++)
@@ -124,9 +131,10 @@ int main(int argc, char *argv[])
         conf_model[ic] = malloc(sizeof(struct ForegroundModel));
         if(flags->confNoise) 
         {
-           initialize_foreground_model(orbit, data, conf_model[ic]);
+           initialize_foreground_model_wavelet(orbit, data, conf_model[ic]);
         }
     }
+    // TODO check if this even works
     if(flags->confNoise)
     {
         sprintf(filename,"%s/foreground_noise_model.dat",data->dataDir);
@@ -152,27 +160,32 @@ int main(int argc, char *argv[])
     {
         sprintf(filename,"%s/sgwb_noise_model.dat",data->dataDir);
         print_noise_model(sgwb_model[0]->psd, filename);
+        // works because stationary
     }
 
     /* TODO: SGWB injections??? */
 
-    // TODO:: need wavelet version!!
     /* Combine noise components to form covariance matrix */
+    // TODO need stationary flag
     for(int ic=0; ic<chain->NC; ic++)
     {
-        if(flags->confNoise) generate_full_covariance_matrix(inst_model[ic]->psd, conf_model[ic]->psd, data->Nchannel);
-        if(flags->sgwbTemplate>=0) generate_full_covariance_matrix(inst_model[ic]->psd, sgwb_model[ic]->psd, data->Nchannel);
+        if(!flags->confNoise || flags->sgwbTemplate==0){
+            printf("error: only support conf and sgwb on!");
+            return -1;
+        }
+        generate_full_dynamic_covariance_matrix(data->wdm,inst_model[ic],conf_noise[ic],sgwb_model[ic],psd[ic]);
     }
 
     /* get initial likelihood */
     for(int ic=0; ic<chain->NC; ic++)
     {
-        invert_noise_covariance_matrix(inst_model[ic]->psd);
-        inst_model[ic]->logL = noise_log_likelihood(data, inst_model[ic]->psd);
+        invert_noise_covariance_matrix(psds[ic]);
+        psd[ic]->logL = noise_log_likelihood_wavelet(data, psd[ic]);
     }
 
     sprintf(filename,"%s/full_noise_model.dat",data->dataDir);
-    print_noise_model(inst_model[0]->psd, filename);
+    // TODO do we need to fix this?? is wavelet. might work anyway
+    print_noise_model(psd[0], filename);
 
     //MCMC
     printf("\n==== Noise Wavelet MCMC Sampler ====\n");
@@ -222,15 +235,15 @@ int main(int argc, char *argv[])
                 struct InstrumentModel *inst_model_ptr = inst_model[chain->index[ic]];
                 struct InstrumentModel *inst_trial_ptr = inst_trial[chain->index[ic]];
                 struct ForegroundModel *conf_model_ptr = conf_model[chain->index[ic]];
-                struct ForegroundModel *conf_trial_ptr = conf_trial[chain->index[ic]];
+                //struct ForegroundModel *conf_trial_ptr = conf_trial[chain->index[ic]];
                 struct SGWBModel       *sgwb_model_ptr = sgwb_model[chain->index[ic]];
                 struct SGWBModel       *sgwb_trial_ptr = sgwb_trial[chain->index[ic]];
 
                 for(int mc=0; mc<10; mc++)
                 {
-                    noise_instrument_model_mcmc(orbit, data, inst_model_ptr, inst_trial_ptr, conf_model_ptr, sgwb_model_ptr, psd_ptr, chain, flags, ic);
-                    if(flags->confNoise) noise_foreground_model_mcmc(data, inst_model_ptr, conf_model_ptr, conf_trial_ptr, sgwb_model_ptr, psd_ptr, chain, flags, ic);
-                    if(flags->sgwbTemplate>=0) noise_sgwb_model_mcmc(data, inst_model_ptr, conf_model_ptr, sgwb_model_ptr, sgwb_trial_ptr, psd_ptr, chain, flags, ic);
+                    noise_instrument_model_mcmc_wavelet(orbit, data, inst_model_ptr, inst_trial_ptr, conf_model_ptr, sgwb_model_ptr, psd_ptr, chain, flags, ic);
+                    //if(flags->confNoise) noise_foreground_model_mcmc(data, inst_model_ptr, conf_model_ptr, conf_trial_ptr, sgwb_model_ptr, psd_ptr, chain, flags, ic);
+                    if(flags->sgwbTemplate>=0) noise_sgwb_model_mcmc_wavelet(data, inst_model_ptr, conf_model_ptr, sgwb_model_ptr, sgwb_trial_ptr, psd_ptr, chain, flags, ic);
                 }
             }// end (parallel) loop over chains
             
