@@ -703,6 +703,7 @@ void generate_full_dynamic_covariance_matrix(struct Wavelets *wdm, struct Instru
 
 
             //stationary stochastic background
+            //TODO need to multiply by response also!!
             full->C[0][0][k] += sgwb->psd->C[0][0][j-jmin];
             full->C[1][1][k] += sgwb->psd->C[1][1][j-jmin];
             full->C[2][2][k] += sgwb->psd->C[2][2][j-jmin];
