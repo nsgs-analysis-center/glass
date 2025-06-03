@@ -135,22 +135,22 @@ void alloc_pop_sgwb_response(struct SGWBResponse* sgwbr, char* fname) {
         printf("Could not open file %s ! SGWBResponse generation failed.",fname);
         exit(-2);
     }
-    int N;
-    if (fscanf(ff,"%d\n",&N) != 1) {
+    int *N = &sgwbr->N;
+    if (fscanf(ff,"%d\n",N) != 1) {
         fclose(ff);
         printf("Failed to read first line of %s ! SGWBResponse generation failed.",fname);
         exit(-2);
     }
-    if (N > 3000 || N < 10) {
+    if (*N > 3000 || *N < 10) {
         fclose(ff);
-        printf("That seems wrong? I read N=%d . SGWBResponse generation failed.",N);
+        printf("That seems wrong? I read N=%d . SGWBResponse generation failed.",*N);
         exit(-2);
     }
 
-    sgwbr->f = malloc(sizeof(double)*N);
-    sgwbr->XX = malloc(sizeof(double)*N);
-    sgwbr->XY = malloc(sizeof(double)*N);
-    for (int i=0;i<N;i++) {
+    sgwbr->f = malloc(sizeof(double) * *N);
+    sgwbr->XX = malloc(sizeof(double) * *N);
+    sgwbr->XY = malloc(sizeof(double) * *N);
+    for (int i=0;i<*N;i++) {
         fscanf(ff,"%lf %lf %lf\n",&sgwbr->f[i],&sgwbr->XX[i],&sgwbr->XY[i]);
     }
     fclose(ff);
@@ -628,6 +628,12 @@ void generate_sgwb_model(struct SGWBModel *model)
 {
     double f;
     double Sgw;
+
+    gsl_interp_accel *acc = gsl_interp_accel_alloc();
+    gsl_spline *responseXX = gsl_spline_alloc(gsl_interp_cspline, model->R->N);
+    gsl_spline *responseXY = gsl_spline_alloc(gsl_interp_cspline, model->R->N);
+    gsl_spline_init(responseXX, model->R->f, model->R->XX, model->R->N);
+    gsl_spline_init(responseXY, model->R->f, model->R->XY, model->R->N);
     
     for(int n=0; n<model->psd->N; n++)
     {
@@ -644,30 +650,34 @@ void generate_sgwb_model(struct SGWBModel *model)
                 break;
         }
         
-        // TODO: we need to include the instrument response here!!!!
         switch(model->psd->Nchannel)
         {
             case 1:
-                model->psd->C[0][0][n] = Sgw;
-                break;
             case 2:
-                model->psd->C[0][0][n] = model->psd->C[1][1][n] = 1.5*Sgw;
-                model->psd->C[0][1][n] = model->psd->C[1][0][n] = 0;
+                fprintf(stderr, "Unimplemented error! SGWB covariance generation with Nchannels = %d\n",model->psd->Nchannel);
+                exit(-3);
                 break;
             case 3:
-                model->psd->C[0][0][n] = model->psd->C[1][1][n] = model->psd->C[2][2][n] = Sgw;
-                model->psd->C[0][1][n] = model->psd->C[0][2][n] = model->psd->C[1][2][n] = -0.5*Sgw;
-                model->psd->C[1][0][n] = model->psd->C[2][0][n] = model->psd->C[2][1][n] = -0.5*Sgw;
+                double Rxx = gsl_spline_eval(responseXX,f,acc);
+                double Rxy = gsl_spline_eval(responseXY,f,acc);
+                // note that, in equal-arm LISA, XYZ: Rxx = Ryy = Rzz, and Rxy = Rxz = Ryz = -0.5*Rxx
+                model->psd->C[0][0][n] = model->psd->C[1][1][n] = model->psd->C[2][2][n] = Rxx*Sgw;
+                model->psd->C[0][1][n] = model->psd->C[0][2][n] = model->psd->C[1][2][n] = Rxy*Sgw;
+                model->psd->C[1][0][n] = model->psd->C[2][0][n] = model->psd->C[2][1][n] = Rxy*Sgw;
                 break;
         }
     }
+    gsl_spline_free(responseXX);
+    gsl_spline_free(responseXY);
+    gsl_interp_accel_free(acc);
 }
 void generate_sgwb_model_wavelet(struct Wavelets* wdm, struct SGWBModel *model)
 {
+    // see notes, need to cover jmin to jmax in C
     double f;
     double Sgw;
     
-    for(int n=0; n<wdm->N; n++)
+    for(int n=0; n<wdm->NF; n++)
     {
         f = model->psd->f[n];
         
@@ -748,7 +758,6 @@ void generate_full_dynamic_covariance_matrix(struct Wavelets *wdm, struct Instru
 
 
             //stationary stochastic background
-            //TODO need to multiply by response also!!
             full->C[0][0][k] += sgwb->psd->C[0][0][j-jmin];
             full->C[1][1][k] += sgwb->psd->C[1][1][j-jmin];
             full->C[2][2][k] += sgwb->psd->C[2][2][j-jmin];
@@ -1046,9 +1055,11 @@ void initialize_sgwb_model_wavelet(struct Orbit *orbit, struct Data *data, struc
     struct Wavelets* wdm = data->wdm;
 
     // initialize data models
-    alloc_sgwb_model(model, data->qmax - data->qmin, data->Nchannel, SGWB_type);
+    alloc_sgwb_model(model, data->wdm->NF, data->Nchannel, SGWB_type);
     printf("qmax-qmin: %d\n",data->qmax - data->qmin);
     printf("N: %d\n",data->N);
+    printf("NF: %d\n",data->wdm->NF);
+    printf("NT: %d\n",data->wdm->NT);
     
     // set up psd frequency grid
     for(int n=0; n<model->psd->N; n++)

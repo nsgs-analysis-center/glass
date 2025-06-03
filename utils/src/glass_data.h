@@ -375,6 +375,7 @@ struct SGWBResponse
 {
     ///@name Each independent channel response 
     ///@{
+    int N; // length of channel response
     double *f;
     double *XX; // with equal arms, all on  diagonal elements are equal
     double *XY; // with equal arms, all off diagonal elements are equal
