@@ -16,13 +16,16 @@ foreach(policy
 endforeach()
 
 # Set compiler
-set(CMAKE_C_COMPILER mpicc)
+#set(CMAKE_C_COMPILER mpicc)
+set(CMAKE_C_COMPILER /opt/homebrew/Cellar/llvm/20.1.6/bin/clang)
 
 project(ldasoft VERSION 1.0.0 LANGUAGES C)
-#set(OpenMP_C_FLAGS "-fopenmp")
+set(OpenMP_C_FLAGS "-fopenmp")
 #set(CMAKE_C_FLAGS "-I/usr/local/Cellar/libomp/19.1.2/include")
-#set(OpenMP_C_LIB_NAMES "libomp")
+set(CMAKE_C_FLAGS "-I/opt/homebrew/Cellar/libomp/20.1.6/include")
+set(OpenMP_C_LIB_NAMES "libomp")
 #set(OpenMP_libomp_LIBRARY "/usr/local/Cellar/libomp/19.1.2/lib/libomp.dylib")
+set(OpenMP_libomp_LIBRARY "/opt/homebrew/Cellar/libomp/20.1.6/lib/libomp.dylib")
 
 # External packages
 find_package(GSL REQUIRED)

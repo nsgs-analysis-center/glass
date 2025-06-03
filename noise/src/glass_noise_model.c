@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2023 Tyson B. Littenberg (MSFC-ST12)
+ *  Copyright (C) 2023 Tyson B. Littenberg (MSFC-ST12) and Robbie Rosati (ST12 / UAH)
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -111,6 +111,8 @@ void alloc_foreground_model(struct ForegroundModel *model, int Ndata, int Nchann
     alloc_noise(model->psd, Ndata, Nchannel);
 }
 
+struct SGWBResponse* global_SGWBResponse;
+
 void alloc_sgwb_model(struct SGWBModel *model, int Ndata, int Nchannel, SGWB_t SGWB_type)
 {
     model->SGWB_type = SGWB_type;
@@ -118,6 +120,47 @@ void alloc_sgwb_model(struct SGWBModel *model, int Ndata, int Nchannel, SGWB_t S
     model->params = malloc(model->Nparams*sizeof(double));
     model->psd = malloc(sizeof(struct Noise));
     alloc_noise(model->psd, Ndata, Nchannel);
+    if (global_SGWBResponse == NULL) {
+        model->R = malloc(sizeof(struct SGWBResponse));
+        alloc_pop_sgwb_response(model->R,"./sgwb_response_xyz1.dat");
+        global_SGWBResponse = model->R;
+    } else {
+        model->R = global_SGWBResponse;
+    }
+}
+
+void alloc_pop_sgwb_response(struct SGWBResponse* sgwbr, char* fname) {
+    FILE* ff = fopen(fname,"r");
+    if (ff == NULL) {
+        printf("Could not open file %s ! SGWBResponse generation failed.",fname);
+        exit(-2);
+    }
+    int N;
+    if (fscanf(ff,"%d\n",&N) != 1) {
+        fclose(ff);
+        printf("Failed to read first line of %s ! SGWBResponse generation failed.",fname);
+        exit(-2);
+    }
+    if (N > 3000 || N < 10) {
+        fclose(ff);
+        printf("That seems wrong? I read N=%d . SGWBResponse generation failed.",N);
+        exit(-2);
+    }
+
+    sgwbr->f = malloc(sizeof(double)*N);
+    sgwbr->XX = malloc(sizeof(double)*N);
+    sgwbr->XY = malloc(sizeof(double)*N);
+    for (int i=0;i<N;i++) {
+        fscanf(ff,"%lf %lf %lf\n",&sgwbr->f[i],&sgwbr->XX[i],&sgwbr->XY[i]);
+    }
+    fclose(ff);
+}
+
+void free_sgwb_response(struct SGWBResponse *sgwbr) {
+    free(sgwbr->f);
+    free(sgwbr->XX);
+    free(sgwbr->XY);
+    free(sgwbr);
 }
 
 void free_spline_model(struct SplineModel *model)
@@ -145,6 +188,7 @@ void free_foreground_model(struct ForegroundModel *model)
 void free_sgwb_model(struct SGWBModel *model)
 {
     free_noise(model->psd);
+    free_sgwb_response(model->R);
     free(model->params);
     free(model);
 }
@@ -618,12 +662,12 @@ void generate_sgwb_model(struct SGWBModel *model)
         }
     }
 }
-void generate_sgwb_model_wavelet(struct Data* data, struct SGWBModel *model)
+void generate_sgwb_model_wavelet(struct Wavelets* wdm, struct SGWBModel *model)
 {
     double f;
     double Sgw;
     
-    for(int n=0; n<data->N; n++)
+    for(int n=0; n<wdm->N; n++)
     {
         f = model->psd->f[n];
         
@@ -638,6 +682,7 @@ void generate_sgwb_model_wavelet(struct Data* data, struct SGWBModel *model)
                 break;
         }
         
+        // TODO: include response!
         switch(model->psd->Nchannel)
         {
             case 1:
@@ -996,6 +1041,39 @@ void initialize_sgwb_model(struct Orbit *orbit, struct Data *data, struct SGWBMo
 
 }
 
+void initialize_sgwb_model_wavelet(struct Orbit *orbit, struct Data *data, struct SGWBModel *model, SGWB_t SGWB_type)
+{
+    struct Wavelets* wdm = data->wdm;
+
+    // initialize data models
+    alloc_sgwb_model(model, data->qmax - data->qmin, data->Nchannel, SGWB_type);
+    printf("qmax-qmin: %d\n",data->qmax - data->qmin);
+    printf("N: %d\n",data->N);
+    
+    // set up psd frequency grid
+    for(int n=0; n<model->psd->N; n++)
+        model->psd->f[n] = (data->qmin+n)*wdm->df;
+        //model->psd->f[n] = data->fmin + (double)n/data->T;
+
+    _Static_assert(SGWB_TEMPLATE_COUNT == 1, "Did you add an SGWB template? Edit this switch case, it needs to be exhaustive.");
+    // set default values
+    switch (SGWB_type) {
+        case SGWB_TEMPLATE_POWERLAW:
+            model->params[0] = -8.45;
+            model->params[1] = 0.66667;
+            break;
+        default:
+            fprintf(stderr,"need default values for SGWB type: %s", SGWB_TEMPLATE_NAMES[SGWB_type]);
+            exit(1);
+            break;
+    }
+    
+    model->Tobs  =  data->T;
+    // get covariance matrix for initial parameters
+    generate_sgwb_model_wavelet(wdm, model);
+
+}
+
 void initialize_foreground_model_wavelet(struct Orbit *orbit, struct Data *data, struct ForegroundModel *model)
 {
     //wavelet basis
@@ -1055,9 +1133,15 @@ void GetDynamicNoiseModel(struct Data *data, struct Orbit *orbit, struct Flags *
     initialize_foreground_model_wavelet(orbit, data, conf_noise);
 
     /**************************************************
+     * Compute SGWB noise levels
+    **************************************************/
+    struct SGWBModel *sgwb = malloc(sizeof(struct SGWBModel));
+    initialize_sgwb_model_wavelet(orbit, data, sgwb, flags->sgwbTemplate);
+
+    /**************************************************
      * Combine noise components
     **************************************************/
-    generate_full_dynamic_covariance_matrix(data->wdm, inst_noise, conf_noise, data->noise);
+    generate_full_dynamic_covariance_matrix(data->wdm, inst_noise, conf_noise, sgwb, data->noise);
     invert_noise_covariance_matrix(data->noise);
 
     char filename[128];
@@ -1097,9 +1181,16 @@ void GetStationaryNoiseModel(struct Data *data, struct Orbit *orbit, struct Flag
     initialize_foreground_model_wavelet(orbit, data, conf_noise);
 
     /**************************************************
+     * Compute SGWB noise levels
+    **************************************************/
+    struct SGWBModel *sgwb = malloc(sizeof(struct SGWBModel));
+    initialize_sgwb_model_wavelet(orbit, data, sgwb, flags->sgwbTemplate);
+
+
+    /**************************************************
      * Combine noise components
     **************************************************/
-    generate_full_stationary_covariance_matrix(data->wdm, inst_noise, conf_noise, noise);
+    generate_full_stationary_covariance_matrix(data->wdm, inst_noise, conf_noise, sgwb, noise);
     invert_noise_covariance_matrix(noise);
 
     char filename[128];

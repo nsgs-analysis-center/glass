@@ -109,6 +109,7 @@ struct SGWBModel
     double *params;    //!< SGWB parameters
     double logL;       //!< log Likelihood of model
     struct Noise *psd; //!< power and cross spectral densities
+    struct SGWBResponse *R; //!< response of the instrument to the isotropic SGWB
     SGWB_t SGWB_type;  //!< which SGWB template is used
 };
 
@@ -153,6 +154,11 @@ void alloc_foreground_model(struct ForegroundModel *model, int Ndata, int Nchann
  \brief Allocates SGWB model structure and contents.
  */
 void alloc_sgwb_model(struct SGWBModel *model, int Ndata, int Nchannel, SGWB_t SGWB_type);
+
+/**
+ \brief Allocates SGWB response.
+ */
+void alloc_pop_sgwb_response(struct SGWBResponse* sgwbr, char* fname);
 
 /**
  \brief Free allocated spline model.
@@ -270,7 +276,7 @@ void initialize_foreground_model_wavelet(struct Orbit *orbit, struct Data *data,
  \brief Set initial state of sgwb `model`
  */
 void initialize_sgwb_model(struct Orbit *orbit, struct Data *data, struct SGWBModel *model, SGWB_t SGWB_type);
-void initialize_sgwb_wavelet(struct Orbit *orbit, struct Data *data, struct SGWBModel *model, SGWB_t SGWB_type);
+void initialize_sgwb_model_wavelet(struct Orbit *orbit, struct Data *data, struct SGWBModel *model, SGWB_t SGWB_type);
 
 
 void GetDynamicNoiseModel(struct Data *data, struct Orbit *orbit, struct Flags *flags);

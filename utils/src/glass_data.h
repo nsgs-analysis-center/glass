@@ -369,6 +369,19 @@ struct Noise
 };
 
 /**
+\brief Structure containing the instrument's response to an isotropic SGWB
+ */
+struct SGWBResponse
+{
+    ///@name Each independent channel response 
+    ///@{
+    double *f;
+    double *XX; // with equal arms, all on  diagonal elements are equal
+    double *XY; // with equal arms, all off diagonal elements are equal
+    ///@}
+};
+
+/**
 \brief Structure containing calibration parameters
  */
 struct Calibration
