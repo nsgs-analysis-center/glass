@@ -1,4 +1,5 @@
 .DS_Store
+.vscode
 
 utils/src/gitversion.h
 gbmcmc/src/gitversion.h
