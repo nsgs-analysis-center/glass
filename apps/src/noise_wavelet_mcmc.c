@@ -138,8 +138,8 @@ int main(int argc, char *argv[])
         sgwb_trial[ic] = malloc(sizeof(struct SGWBModel));
         if(flags->sgwbTemplate>=0) 
         {
-           initialize_sgwb_model(orbit, data, sgwb_model[ic], flags->sgwbTemplate);
-           initialize_sgwb_model(orbit, data, sgwb_trial[ic], flags->sgwbTemplate);
+           initialize_sgwb_model_wavelet(orbit, data, sgwb_model[ic], flags->sgwbTemplate);
+           initialize_sgwb_model_wavelet(orbit, data, sgwb_trial[ic], flags->sgwbTemplate);
         }
     }
     if(flags->sgwbTemplate>=0)
@@ -159,14 +159,15 @@ int main(int argc, char *argv[])
             printf("error: only support conf and sgwb on!");
             return -1;
         }
-        generate_full_dynamic_covariance_matrix(data->wdm,inst_model[ic],conf_noise[ic],sgwb_model[ic],psd[ic]);
+        generate_full_dynamic_covariance_matrix(data->wdm,inst_model[ic],conf_model[ic],sgwb_model[ic],psd[ic]);
     }
 
     /* get initial likelihood */
     for(int ic=0; ic<chain->NC; ic++)
     {
-        invert_noise_covariance_matrix(psds[ic]);
-        psd[ic]->logL = noise_log_likelihood_wavelet(data, psd[ic]);
+        // TODO struct Noise doesn't have a logL... what's the point of getting the initial logLs anyway?
+        invert_noise_covariance_matrix(psd[ic]);
+        double logL = noise_log_likelihood_wavelet(data, psd[ic]);
     }
 
     sprintf(filename,"%s/full_noise_model.dat",data->dataDir);

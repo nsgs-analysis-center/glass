@@ -95,6 +95,18 @@ target_link_libraries(noise_mcmc ${GSL_LIBRARIES})
 target_link_libraries(noise_mcmc m)
 install(TARGETS noise_mcmc DESTINATION bin)
 
+
+#add_executable(noise_wavelet_mcmc noise_wavelet_mcmc.c)
+#target_link_libraries(noise_wavelet_mcmc glass_noise)
+#target_link_libraries(noise_wavelet_mcmc glass_utils)
+#if(APPLE)
+#   target_link_libraries(noise_wavelet_mcmc OpenMP::OpenMP_C)
+#endif()
+#target_link_libraries(noise_wavelet_mcmc ${HDF5_LIBRARIES})
+#target_link_libraries(noise_wavelet_mcmc ${GSL_LIBRARIES})
+#target_link_libraries(noise_wavelet_mcmc m)
+#install(TARGETS noise_wavelet_mcmc DESTINATION bin)
+
 add_executable(noise_spline_mcmc noise_spline_mcmc.c)
 target_link_libraries(noise_spline_mcmc glass_noise)
 target_link_libraries(noise_spline_mcmc glass_utils)
