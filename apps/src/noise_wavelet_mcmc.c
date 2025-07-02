@@ -168,6 +168,9 @@ int main(int argc, char *argv[])
         // TODO struct Noise doesn't have a logL... what's the point of getting the initial logLs anyway?
         invert_noise_covariance_matrix(psd[ic]);
         double logL = noise_log_likelihood_wavelet(data, psd[ic]);
+        inst_model[ic]->logL = logL;
+        sgwb_model[ic]->logL = logL;
+        conf_model[ic]->logL = logL;
     }
 
     sprintf(filename,"%s/full_noise_model.dat",data->dataDir);
@@ -220,7 +223,7 @@ int main(int argc, char *argv[])
             {
                 struct Noise *psd_ptr = psd[chain->index[ic]];
                 struct InstrumentModel *inst_model_ptr = inst_model[chain->index[ic]];
-                struct InstrumentModel *inst_trial_ptr = inst_trial[chain->index[ic]];
+                //struct InstrumentModel *inst_trial_ptr = inst_trial[chain->index[ic]];
                 struct ForegroundModel *conf_model_ptr = conf_model[chain->index[ic]];
                 //struct ForegroundModel *conf_trial_ptr = conf_trial[chain->index[ic]];
                 struct SGWBModel       *sgwb_model_ptr = sgwb_model[chain->index[ic]];
@@ -228,8 +231,11 @@ int main(int argc, char *argv[])
 
                 for(int mc=0; mc<10; mc++)
                 {
-                    noise_instrument_model_mcmc_wavelet(orbit, data, inst_model_ptr, inst_trial_ptr, conf_model_ptr, sgwb_model_ptr, psd_ptr, chain, flags, ic);
-                    //if(flags->confNoise) noise_foreground_model_mcmc(data, inst_model_ptr, conf_model_ptr, conf_trial_ptr, sgwb_model_ptr, psd_ptr, chain, flags, ic);
+                    // TODO implement this!
+                    // noise_instrument_model_mcmc_wavelet(orbit, data, inst_model_ptr, inst_trial_ptr, conf_model_ptr, sgwb_model_ptr, psd_ptr, chain, flags, ic);
+                    // TODO implement this!
+                    //if(flags->confNoise) noise_foreground_model_mcmc_wavelet(data, inst_model_ptr, conf_model_ptr, conf_trial_ptr, sgwb_model_ptr, psd_ptr, chain, flags, ic);
+                    // TODO implement this!
                     if(flags->sgwbTemplate>=0) noise_sgwb_model_mcmc_wavelet(data, inst_model_ptr, conf_model_ptr, sgwb_model_ptr, sgwb_trial_ptr, psd_ptr, chain, flags, ic);
                 }
             }// end (parallel) loop over chains
@@ -237,6 +243,7 @@ int main(int argc, char *argv[])
             //Next section is single threaded. Every thread must get here before continuing
             
             #pragma omp barrier
+            // TODO waveletify below
             
             if(threadID==0)
             {
