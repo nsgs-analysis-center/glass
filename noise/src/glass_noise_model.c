@@ -1175,6 +1175,7 @@ void GetDynamicNoiseModel(struct Data *data, struct Orbit *orbit, struct Flags *
 
     free_instrument_model(inst_noise);
     free_foreground_model(conf_noise);
+    free_sgwb_model(sgwb);
 }
 
 void GetStationaryNoiseModel(struct Data *data, struct Orbit *orbit, struct Flags *flags, struct Noise *noise)

@@ -25,6 +25,7 @@
 
 #include <glass_utils.h>
 #include <glass_noise.h>
+#include <glass_noise_sampler.h>
 
 
 static void print_usage()
@@ -235,7 +236,6 @@ int main(int argc, char *argv[])
                     // noise_instrument_model_mcmc_wavelet(orbit, data, inst_model_ptr, inst_trial_ptr, conf_model_ptr, sgwb_model_ptr, psd_ptr, chain, flags, ic);
                     // TODO implement this!
                     //if(flags->confNoise) noise_foreground_model_mcmc_wavelet(data, inst_model_ptr, conf_model_ptr, conf_trial_ptr, sgwb_model_ptr, psd_ptr, chain, flags, ic);
-                    // TODO implement this!
                     if(flags->sgwbTemplate>=0) noise_sgwb_model_mcmc_wavelet(data, inst_model_ptr, conf_model_ptr, sgwb_model_ptr, sgwb_trial_ptr, psd_ptr, chain, flags, ic);
                 }
             }// end (parallel) loop over chains
@@ -243,10 +243,10 @@ int main(int argc, char *argv[])
             //Next section is single threaded. Every thread must get here before continuing
             
             #pragma omp barrier
-            // TODO waveletify below
             
             if(threadID==0)
             {
+                // TODO why inst_model?
                 noise_ptmcmc(inst_model, chain, flags);
                 
                 if(step%(flags->NMCMC/10)==0)printf("noise_mcmc at step %i\n",step);
@@ -272,19 +272,19 @@ int main(int argc, char *argv[])
 
                 if(step%(flags->NMCMC/10)==0)
                 {
-                    generate_instrument_noise_model(orbit,inst_model[chain->index[0]]);
+                    generate_instrument_noise_model_wavelet(data->wdm, orbit, inst_model[chain->index[0]]);
                     sprintf(filename,"%s/current_instrument_noise_model.dat",data->dataDir);
                     print_noise_model(inst_model[chain->index[0]]->psd, filename);
 
                     if(flags->confNoise)
                     {
-                        generate_galactic_foreground_model(conf_model[chain->index[0]]);
+                        generate_galactic_foreground_model_wavelet(data->wdm, conf_model[chain->index[0]]);
                         sprintf(filename,"%s/current_foreground_noise_model.dat",data->dataDir);
                         print_noise_model(conf_model[chain->index[0]]->psd, filename);
                     }
                     if(flags->sgwbTemplate>=0) 
                     {
-                        generate_sgwb_model(sgwb_model[chain->index[0]]);
+                        generate_sgwb_model_wavelet(data->wdm, sgwb_model[chain->index[0]]);
                         sprintf(filename,"%s/current_sgwb_noise_model.dat",data->dataDir);
                         print_noise_model(sgwb_model[chain->index[0]]->psd, filename);
                     }
@@ -292,21 +292,23 @@ int main(int argc, char *argv[])
                 
                 if(step%data->downsample==0 && step/data->downsample < data->Nwave)
                 {
-                    generate_instrument_noise_model(orbit,inst_model[chain->index[0]]);
+                    fprintf(stderr, "Not implemented downsampling wavelet stuff\n");
+                    exit(-2);
+                    generate_instrument_noise_model_wavelet(data->wdm, orbit, inst_model[chain->index[0]]);
                     if(flags->confNoise)
                     {
-                        generate_galactic_foreground_model(conf_model[chain->index[0]]);
-                        generate_full_covariance_matrix(inst_model[chain->index[0]]->psd,conf_model[chain->index[0]]->psd, data->Nchannel);
+                        generate_galactic_foreground_model_wavelet(data->wdm, conf_model[chain->index[0]]);
                     }
                     if(flags->sgwbTemplate>=0) 
                     {
-                        generate_sgwb_model(sgwb_model[chain->index[0]]);
-                        generate_full_covariance_matrix(inst_model[chain->index[0]]->psd,sgwb_model[chain->index[0]]->psd, data->Nchannel);
+                        generate_sgwb_model_wavelet(data->wdm, sgwb_model[chain->index[0]]);
                     }
+                    generate_full_dynamic_covariance_matrix(data->wdm, inst_model[chain->index[0]], conf_model[chain->index[0]], sgwb_model[chain->index[0]], psd[chain->index[0]]);
                     
+                    // TODO wavelettify
                     for(int n=0; n<data->NFFT; n++)
                         for(int i=0; i<data->Nchannel; i++)
-                            data->S_pow[n][i][step/data->downsample] = inst_model[chain->index[0]]->psd->C[i][i][n];
+                            data->S_pow[n][i][step/data->downsample] = psd[chain->index[0]]->C[i][i][n];
                 }
 
                 step++;
@@ -324,28 +326,27 @@ int main(int argc, char *argv[])
     if(flags->confNoise)fclose(foregroundChainFile);
     if(flags->sgwbTemplate>=0)fclose(sgwbChainFile);
 
-    generate_instrument_noise_model(orbit,inst_model[chain->index[0]]);
-    sprintf(filename,"%s/final_instrument_noise_model.dat",data->dataDir);
+    generate_instrument_noise_model_wavelet(data->wdm, orbit, inst_model[chain->index[0]]);
+    sprintf(filename,"%s/final_instrument_noise_model.dat", data->dataDir);
     print_noise_model(inst_model[chain->index[0]]->psd, filename);
 
     if(flags->confNoise)
     {
-        generate_galactic_foreground_model(conf_model[chain->index[0]]);
+        generate_galactic_foreground_model_wavelet(data->wdm, conf_model[chain->index[0]]);
         sprintf(filename,"%s/final_foreground_noise_model.dat",data->dataDir);
         print_noise_model(conf_model[chain->index[0]]->psd, filename);
-        generate_full_covariance_matrix(inst_model[chain->index[0]]->psd, conf_model[chain->index[0]]->psd, data->Nchannel);
     }
     if(flags->sgwbTemplate>=0)
     {
-        generate_sgwb_model(sgwb_model[chain->index[0]]);
+        generate_sgwb_model_wavelet(data->wdm, sgwb_model[chain->index[0]]);
         sprintf(filename,"%s/final_sgwb_noise_model.dat",data->dataDir);
         print_noise_model(sgwb_model[chain->index[0]]->psd, filename);
-        generate_full_covariance_matrix(inst_model[chain->index[0]]->psd, sgwb_model[chain->index[0]]->psd, data->Nchannel);
     }
+    generate_full_dynamic_covariance_matrix(data->wdm, inst_model[chain->index[0]], conf_model[chain->index[0]], sgwb_model[chain->index[0]], psd[chain->index[0]]);
     if(flags->confNoise || flags->sgwbTemplate>=0)
     {
         sprintf(filename,"%s/final_full_noise_model.dat",data->dataDir);
-        print_noise_model(inst_model[chain->index[0]]->psd, filename);
+        print_noise_model(psd[chain->index[0]], filename);
     }
     
     print_noise_reconstruction(data, flags);
@@ -353,7 +354,7 @@ int main(int argc, char *argv[])
     sprintf(filename,"%s/whitened_data.dat",data->dataDir);
     // this was here, but it was already added??
     //if(flags->confNoise)generate_full_covariance_matrix(inst_model[chain->index[0]]->psd,conf_model[chain->index[0]]->psd, data->Nchannel);
-    print_whitened_data(data, inst_model[chain->index[0]]->psd, filename);
+    print_whitened_data(data, psd[chain->index[0]], filename);
 
     
     //print total run time

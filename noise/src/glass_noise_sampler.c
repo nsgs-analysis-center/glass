@@ -904,18 +904,17 @@ void noise_sgwb_model_mcmc_wavelet(struct Data *data, struct InstrumentModel *no
     struct SGWBModel *model_x = model;
     struct SGWBModel *model_y = trial;
     copy_sgwb_model(model_x, model_y);
-    //printf("copied first sgwb\n");
+    printf("copied first sgwb\n");
     
     //initialize likelhood
     //TODO: this shouldn't be necessary!
-    generate_sgwb_model(model_x);
-    copy_Cij(model_x->psd->C, psd->C, psd->Nchannel, psd->N);
-    generate_full_covariance_matrix(psd, noise->psd, data->Nchannel);
-    if(flags->confNoise) 
-        generate_full_covariance_matrix(psd,galaxy->psd, data->Nchannel);
+    generate_sgwb_model_wavelet(data->wdm, model_x);
+    //TODO not necessary to copy Cij?
+    //copy_Cij(model_x->psd->C, psd->C, psd->Nchannel, psd->N);
+    generate_full_dynamic_covariance_matrix(data->wdm, noise, galaxy, model_x, psd);
     invert_noise_covariance_matrix(psd);
-    model_x->logL = noise_log_likelihood(data, psd);
-    //printf("likelihood init\n");
+    model_x->logL = noise_log_likelihood_wavelet(data, psd);
+    printf("likelihood init\n");
 
     
     //set priors
@@ -946,7 +945,7 @@ void noise_sgwb_model_mcmc_wavelet(struct Data *data, struct InstrumentModel *no
             correlation_matrix[0][1] = correlation_matrix[1][0] = 0.0;
             break;
         default:
-            fprintf(stderr, "SGWB %s has no defined priors! Add them in noise_sgwb_model_mcmc", SGWB_TEMPLATE_NAMES[model_x->SGWB_type]);
+            fprintf(stderr, "SGWB %s has no defined priors! Add them in noise_sgwb_model_mcmc_wavelet", SGWB_TEMPLATE_NAMES[model_x->SGWB_type]);
             exit(1);
             break;
     }
@@ -1005,18 +1004,13 @@ void noise_sgwb_model_mcmc_wavelet(struct Data *data, struct InstrumentModel *no
         //get noise covariance matrix for initial parameters
         if(logPy > -INFINITY && !flags->prior)
         {
-            generate_sgwb_model(model_y);
-            copy_Cij(model_y->psd->C, psd->C, psd->Nchannel, psd->N);
+            generate_sgwb_model_wavelet(data->wdm, model_y);
             
-            //add instrument noise contribution
-            generate_full_covariance_matrix(psd, noise->psd, data->Nchannel);
-            //add confusion noise contribution
-            if(flags->confNoise) 
-                generate_full_covariance_matrix(psd,galaxy->psd, data->Nchannel);
-            
+            //add other stochastic contributions
+            generate_full_dynamic_covariance_matrix(data->wdm, noise, galaxy, model_y, psd);
             invert_noise_covariance_matrix(psd);
             
-            model_y->logL = noise_log_likelihood(data, psd);
+            model_y->logL = noise_log_likelihood_wavelet(data, psd);
             //printf("trial %g %g %g\n", model_y->params[0], model_y->params[1], model_y->logL);
             
             logH += (model_y->logL - model_x->logL)/chain->temperature[ic]; //delta logL
