@@ -64,5 +64,9 @@ void noise_foreground_model_mcmc(struct Data *data, struct InstrumentModel *nois
  */
 void noise_sgwb_model_mcmc(struct Data *data, struct InstrumentModel *noise, struct ForegroundModel *galaxy, struct SGWBModel* model, struct SGWBModel* trial, struct Noise *psd, struct Chain *chain, struct Flags *flags, int ic);
 
+/**
+ \brief Fixed-dimension update of each parallel tempered sgwb `model` state
+ */
+void noise_sgwb_model_mcmc_wavelet(struct Data *data, struct InstrumentModel *noise, struct ForegroundModel *galaxy, struct SGWBModel *model, struct SGWBModel *trial, struct Noise *psd, struct Chain *chain, struct Flags *flags, int ic);
 
 #endif /* glass_noise_sampler_h */

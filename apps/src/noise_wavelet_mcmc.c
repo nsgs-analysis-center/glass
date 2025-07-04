@@ -81,8 +81,22 @@ int main(int argc, char *argv[])
     initialize_orbit(data, orbit, flags);
     initialize_interpolated_analytic_orbits(orbit, data->T, data->t0);
 
+    printf("old fmin=%lg, fmax=%lg\n",data->fmin,data->fmax);
+    // TODO these are not initialized because the UCB sampler set them itself later!
+    // should probably have defaults... this does not feel like the source's job
+    data->qmin = 0;       // we'll use full wavelet frequency content
+    data->qmin = data->N; // we'll use full wavelet frequency content
+    //reset wavelet basis max and min ranges
+    wavelet_pixel_to_index(data->wdm,0,data->qmin,&data->wdm->kmin); 
+    wavelet_pixel_to_index(data->wdm,0,data->qmax,&data->wdm->kmax); 
+    
+    //recompute fmin and fmax so they align with a bin
+    data->fmin = data->qmin*WAVELET_BANDWIDTH;
+    data->fmax = data->qmax*WAVELET_BANDWIDTH;
+    printf("new fmin=%lg, fmax=%lg\n",data->fmin,data->fmax);
+
     /* Initialize chain structure and files */
-    initialize_chain(chain, flags, &data->cseed, "a");
+    initialize_chain(chain, flags, &data->cseed, "w");
 
 
     // okay, for now we're in the very weird situation of not trying to fit the foreground or instrument params, **only** the SGWB params
@@ -94,11 +108,14 @@ int main(int argc, char *argv[])
     struct InstrumentModel **inst_trial = malloc(chain->NC*sizeof(struct InstrumentModel *));
     for(int ic=0; ic<chain->NC; ic++)
     {
-        psd[ic] = malloc(sizeof(struct Noise));
+        psd[ic] = malloc(sizeof(struct Noise)); // not a "deep" alloc
         alloc_noise(psd[ic], data->N, data->Nchannel); // note is data->N in wavelet not data->NFFT
 
         inst_model[ic] = malloc(sizeof(struct InstrumentModel));
         inst_trial[ic] = malloc(sizeof(struct InstrumentModel));
+        printf("data->N: %d\n", data->N);
+        printf("data->qmin: %d\n", data->qmin);
+        printf("data->qmax: %d\n", data->qmax);
         initialize_instrument_model_wavelet(orbit, data, inst_model[ic]);
         initialize_instrument_model_wavelet(orbit, data, inst_trial[ic]);
     }
@@ -156,16 +173,14 @@ int main(int argc, char *argv[])
     // TODO need stationary flag
     for(int ic=0; ic<chain->NC; ic++)
     {
-        if(!flags->confNoise || flags->sgwbTemplate==0){
+        if(!flags->confNoise || flags->sgwbTemplate<0){
             printf("error: only support conf and sgwb on!");
             return -1;
         }
-        generate_full_dynamic_covariance_matrix(data->wdm,inst_model[ic],conf_model[ic],sgwb_model[ic],psd[ic]);
-    }
+        generate_full_dynamic_covariance_matrix(data->wdm, inst_model[ic], conf_model[ic], sgwb_model[ic], psd[ic]);
+        printf("past first dynamic cov matrix\n");
 
     /* get initial likelihood */
-    for(int ic=0; ic<chain->NC; ic++)
-    {
         // TODO struct Noise doesn't have a logL... what's the point of getting the initial logLs anyway?
         invert_noise_covariance_matrix(psd[ic]);
         double logL = noise_log_likelihood_wavelet(data, psd[ic]);
@@ -173,6 +188,7 @@ int main(int argc, char *argv[])
         sgwb_model[ic]->logL = logL;
         conf_model[ic]->logL = logL;
     }
+    printf("initial likelihood done\n");
 
     sprintf(filename,"%s/full_noise_model.dat",data->dataDir);
     // TODO do we need to fix this?? is wavelet. might work anyway
