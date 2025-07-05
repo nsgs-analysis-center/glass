@@ -32,7 +32,7 @@ static void print_usage()
 {
     print_glass_usage();
     fprintf(stdout,"EXAMPLE:\n");
-    fprintf(stdout,"noise_wavelet_mcmc --sim-noise --conf-noise --duration 7864320 --fmin 1e-4 --fmax 8e-3\n");
+    fprintf(stdout,"noise_wavelet_mcmc --sim-noise --conf-noise --sgwb-template 0 --duration 7864320 --fmin 1e-4 --fmax 8e-3\n");
     fprintf(stdout,"\n");
     exit(0);
 }
@@ -84,11 +84,13 @@ int main(int argc, char *argv[])
     printf("old fmin=%lg, fmax=%lg\n",data->fmin,data->fmax);
     // TODO these are not initialized because the UCB sampler set them itself later!
     // should probably have defaults... this does not feel like the source's job
-    data->qmin = 0;       // we'll use full wavelet frequency content
-    data->qmin = data->N; // we'll use full wavelet frequency content
+    data->qmin = 0;             // we'll use full wavelet frequency content
+    data->qmax = data->wdm->NF; // we'll use full wavelet frequency content
     //reset wavelet basis max and min ranges
     wavelet_pixel_to_index(data->wdm,0,data->qmin,&data->wdm->kmin); 
     wavelet_pixel_to_index(data->wdm,0,data->qmax,&data->wdm->kmax); 
+    //data->N = data->qmax - data->qmin;
+    // this points kmin/kmax to first time pixel of first/last freq layer
     
     //recompute fmin and fmax so they align with a bin
     data->fmin = data->qmin*WAVELET_BANDWIDTH;
@@ -106,21 +108,22 @@ int main(int argc, char *argv[])
     struct Noise **psd = malloc(chain->NC*sizeof(struct Noise *)); // will save total scalograms here
     struct InstrumentModel **inst_model = malloc(chain->NC*sizeof(struct InstrumentModel *));
     struct InstrumentModel **inst_trial = malloc(chain->NC*sizeof(struct InstrumentModel *));
+    int wN;
+    wavelet_pixel_to_index(wdm,0,data->qmax,&wN);
     for(int ic=0; ic<chain->NC; ic++)
     {
+        // okay, so this is wavelet-basis! time and freq pixels both here
         psd[ic] = malloc(sizeof(struct Noise)); // not a "deep" alloc
-        alloc_noise(psd[ic], data->N, data->Nchannel); // note is data->N in wavelet not data->NFFT
+
+        alloc_noise(psd[ic], wN, data->Nchannel); // note is data->N in wavelet not data->NFFT
 
         inst_model[ic] = malloc(sizeof(struct InstrumentModel));
         inst_trial[ic] = malloc(sizeof(struct InstrumentModel));
-        printf("data->N: %d\n", data->N);
-        printf("data->qmin: %d\n", data->qmin);
-        printf("data->qmax: %d\n", data->qmax);
         initialize_instrument_model_wavelet(orbit, data, inst_model[ic]);
         initialize_instrument_model_wavelet(orbit, data, inst_trial[ic]);
     }
     // TODO for now this works because the noise model is stationary
-    sprintf(filename,"%s/instrument_noise_model.dat",data->dataDir);
+    sprintf(filename,"%s/instrument_noise_model.dat", data->dataDir);
     print_noise_model(inst_model[0]->psd, filename);
 
     /* Initialize Galactic Foreground Model */

@@ -740,6 +740,7 @@ void generate_full_dynamic_covariance_matrix(struct Wavelets *wdm, struct Instru
             printf("jmin: %d\n",jmin);
             printf("jmax: %d\n",jmax);
             printf("kmin: %d\n",wdm->kmin);
+            printf("kmax: %d\n",wdm->kmax);
             printf("k:    %d\n",k);
 
             k-=wdm->kmin;
@@ -1063,11 +1064,7 @@ void initialize_sgwb_model_wavelet(struct Orbit *orbit, struct Data *data, struc
     struct Wavelets* wdm = data->wdm;
 
     // initialize data models
-    alloc_sgwb_model(model, data->wdm->NF, data->Nchannel, SGWB_type);
-    printf("qmax-qmin: %d\n",data->qmax - data->qmin);
-    printf("N: %d\n",data->N);
-    printf("NF: %d\n",data->wdm->NF);
-    printf("NT: %d\n",data->wdm->NT);
+    alloc_sgwb_model(model, data->qmax - data->qmin, data->Nchannel, SGWB_type);
     
     // set up psd frequency grid
     for(int n=0; n<model->psd->N; n++)
