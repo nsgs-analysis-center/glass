@@ -1255,7 +1255,7 @@ void build_fstatistic_proposal(struct Orbit *orbit, struct Data *data, struct Fl
 
         f += d_f/2; //evaluate logL in center of cell
         
-        //loop over colatitude bins
+        //parallel loop over colatitude bins
         #pragma omp parallel for num_threads(flags->threads)
         for (int j=0; j<n_theta; j++)
         {
@@ -1289,7 +1289,7 @@ void build_fstatistic_proposal(struct Orbit *orbit, struct Data *data, struct Fl
                 proposal->tensor[i][j][k] = logLmax*logLmax;
 
             }//end loop over longitude bins
-        }//end loop over colatitude bins
+        }//end (parallel) loop over colatitude bins
     }//end loop over sub-bins
 
     //get normalization

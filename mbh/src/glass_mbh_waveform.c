@@ -742,6 +742,41 @@ static void reconstruct_fd_waveform(double Tobs, double *params, double *freq_gr
 }
 
 
+static void build_interpolated_waveform(struct TimeFrequencyTrack *track, int layer, double Tobs, double tc, struct CubicSpline *amp_ssb_spline, struct CubicSpline *amp_tdi_spline, struct CubicSpline *phase_tdi_spline, double *waveform)
+{
+    double AmpSSB,Amp,Phase;
+    int Nspline = amp_ssb_spline->N;
+    double *freq_grid = amp_ssb_spline->x;
+    int Nsegment = track->segment_size[layer];
+    int nmid = track->segment_midpt[layer];
+    double delta_f = 1./(Nsegment*WAVELET_DURATION);
+    double delta_t = Tobs - tc + (nmid - Nsegment/2)*WAVELET_DURATION;
+    waveform[0] = 0.0;
+    waveform[1] = 0.0;
+    
+    for(int i=1; i<Nsegment; i++)
+    {
+        waveform[2*i]   = 0.0;
+        waveform[2*i+1] = 0.0;
+
+        double f = (double)(i - Nsegment/2)*delta_f + layer*WAVELET_BANDWIDTH;
+
+        if(f>freq_grid[0] && f<freq_grid[Nspline-1])
+        {
+            AmpSSB = spline_interpolation(amp_ssb_spline,f);
+            
+            Amp    = spline_interpolation(amp_tdi_spline,f)*AmpSSB;
+            Phase  = spline_interpolation(phase_tdi_spline,f);
+            Phase  = PI2 * f * delta_t - Phase;
+            
+            waveform[2*i]   = Amp * cos(Phase);
+            waveform[2*i+1] = Amp * sin(Phase);
+
+        }
+    }
+}
+
+
 void mbh_fd_waveform(struct Orbit *orbit, struct Wavelets *wdm, double Tobs, double t0, double *params, int *wavelet_list, int *Nwavelet, double *X, double *Y, double *Z)
 {
     
@@ -817,7 +852,6 @@ void mbh_fd_waveform(struct Orbit *orbit, struct Wavelets *wdm, double Tobs, dou
      */
     double tc = params[5];    // merger time
     
-    double Amp,AmpSSB,Phase;
     struct TDI *wave = malloc(sizeof(struct TDI));
     alloc_tdi(wave,wdm->NT*2,3); // we're going one layer at a time
     
@@ -842,64 +876,35 @@ void mbh_fd_waveform(struct Orbit *orbit, struct Wavelets *wdm, double Tobs, dou
     
     int N=0; //number of wavelet pixels
     int k;   //wavelet pixel index
+
+
     for(int layer=track->min_layer; layer<track->max_layer; layer++)
     {
         int Nsegment = track->segment_size[layer];
         int nmid = track->segment_midpt[layer];
-        double delta_f = 1./(Nsegment*WAVELET_DURATION);
-        double delta_t = Tobs - tc + (nmid - Nsegment/2)*WAVELET_DURATION;
-                
-        wave->X[0] = 0.0;
-        wave->X[1] = 0.0;
-        wave->Y[0] = 0.0;
-        wave->Y[1] = 0.0;
-        wave->Z[0] = 0.0;
-        wave->Z[1] = 0.0;
 
-        for(int i=1; i<Nsegment; i++)
-        {
-            wave->X[2*i]   = 0.0;
-            wave->X[2*i+1] = 0.0;
-            wave->Y[2*i]   = 0.0;
-            wave->Y[2*i+1] = 0.0;
-            wave->Z[2*i]   = 0.0;
-            wave->Z[2*i+1] = 0.0;
-
-            double f = (double)(i - Nsegment/2)*delta_f + layer*WAVELET_BANDWIDTH;
-
-            if(f>freq_grid[0] && f<freq_grid[Nspline-1])
-            {
-                AmpSSB = spline_interpolation(amp_ssb_spline,f);
-                
-                Amp    = spline_interpolation(amp_tdi_spline_X,f)*AmpSSB;
-                Phase  = spline_interpolation(phase_tdi_spline_X,f);
-                Phase  = PI2 * f * delta_t - Phase;
-                
-                wave->X[2*i]   = Amp * cos(Phase);
-                wave->X[2*i+1] = Amp * sin(Phase);
-                
-                Amp    = spline_interpolation(amp_tdi_spline_Y,f)*AmpSSB;
-                Phase  = spline_interpolation(phase_tdi_spline_Y,f);
-                Phase  = PI2 * f * delta_t - Phase;
-                
-                wave->Y[2*i]   = Amp * cos(Phase);
-                wave->Y[2*i+1] = Amp * sin(Phase);
-
-                Amp    = spline_interpolation(amp_tdi_spline_Z,f)*AmpSSB;
-                Phase  = spline_interpolation(phase_tdi_spline_Z,f);
-                Phase  = PI2 * f * delta_t - Phase;
-                
-                wave->Z[2*i]   = Amp * cos(Phase);
-                wave->Z[2*i+1] = Amp * sin(Phase);
-
-            }
-
-        }
-        
         //wavelet transfrom the piece of the track in this layer
-        wavelet_transform_segment(wdm, Nsegment, layer, wave->X);
-        wavelet_transform_segment(wdm, Nsegment, layer, wave->Y);
-        wavelet_transform_segment(wdm, Nsegment, layer, wave->Z);
+        #pragma omp parallel num_threads(3)
+        {
+            //perform different tasks based on thread ID
+            switch(omp_get_thread_num())
+            {
+                case 0:
+                    build_interpolated_waveform(track, layer, Tobs, tc, amp_ssb_spline, amp_tdi_spline_X, phase_tdi_spline_X, wave->X);
+                    wavelet_transform_segment(wdm, Nsegment, layer, wave->X);
+                    break;
+                case 1:
+                    build_interpolated_waveform(track, layer, Tobs, tc, amp_ssb_spline, amp_tdi_spline_Y, phase_tdi_spline_Y, wave->Y);
+                    wavelet_transform_segment(wdm, Nsegment, layer, wave->Y);
+                    break;
+                case 2:
+                    build_interpolated_waveform(track, layer, Tobs, tc, amp_ssb_spline, amp_tdi_spline_Z, phase_tdi_spline_Z, wave->Z);
+                    wavelet_transform_segment(wdm, Nsegment, layer, wave->Z);
+                    break;
+                default:
+                    break;
+            }
+        }
         
         //map to full tf grid
         for(int n=0; n<Nsegment; n++)

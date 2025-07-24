@@ -1045,25 +1045,51 @@ void LISA_spline_response(struct Orbit *orbit, double *tarray, int N, double cos
         }
         
         // build X, Y, Z responses
-        LISA_TDI_spline(X, Xf, 0, 1, 2, tarray, m, amp_spline, freq_spline, phase_spline, Aplus, Across, cos2psi, sin2psi, App, Apm, Acp, Acm, kdotr, L);
-        LISA_TDI_spline(Y, Yf, 1, 2, 0, tarray, m, amp_spline, freq_spline, phase_spline, Aplus, Across, cos2psi, sin2psi, App, Apm, Acp, Acm, kdotr, L);
-        LISA_TDI_spline(Z, Zf, 2, 0, 1, tarray, m, amp_spline, freq_spline, phase_spline, Aplus, Across, cos2psi, sin2psi, App, Apm, Acp, Acm, kdotr, L);
-
-    }
+        #pragma omp parallel num_threads(3)
+        {
+            int thread_id = omp_get_thread_num();
+            switch(thread_id)
+            {
+                case 0:
+                    LISA_TDI_spline(X, Xf, 0, 1, 2, tarray, m, amp_spline, freq_spline, phase_spline, Aplus, Across, cos2psi, sin2psi, App, Apm, Acp, Acm, kdotr, L);
+                    break;
+                case 1:
+                    LISA_TDI_spline(Y, Yf, 1, 2, 0, tarray, m, amp_spline, freq_spline, phase_spline, Aplus, Across, cos2psi, sin2psi, App, Apm, Acp, Acm, kdotr, L);
+                    break;
+                case 2:
+                    LISA_TDI_spline(Z, Zf, 2, 0, 1, tarray, m, amp_spline, freq_spline, phase_spline, Aplus, Across, cos2psi, sin2psi, App, Apm, Acp, Acm, kdotr, L);
+                    break;
+                default:
+                    break;
+            }
+        }//end parallel section
+    }//end loop over samples m
     
     /*
     Separate TDI responses back into terms of phase and amplitude
     */
 
     //extract_amplitude_and_phase() is removing the carrier phase
-    extract_amplitude_and_phase(N, tdi_amp->X, tdi_phase->X, R->X, Rf->X, phase_ref);
-    extract_amplitude_and_phase(N, tdi_amp->Y, tdi_phase->Y, R->Y, Rf->Y, phase_ref);
-    extract_amplitude_and_phase(N, tdi_amp->Z, tdi_phase->Z, R->Z, Rf->Z, phase_ref);
-    
-    // remove any phase wraps
-    unwrap_phase(N, tdi_phase->X);
-    unwrap_phase(N, tdi_phase->Y);
-    unwrap_phase(N, tdi_phase->Z);
+    #pragma omp parallel num_threads(3)
+    {
+        switch(omp_get_thread_num())
+        {
+            case 0:
+                extract_amplitude_and_phase(N, tdi_amp->X, tdi_phase->X, R->X, Rf->X, phase_ref);
+                unwrap_phase(N, tdi_phase->X);
+                break;
+            case 1:
+                extract_amplitude_and_phase(N, tdi_amp->Y, tdi_phase->Y, R->Y, Rf->Y, phase_ref);
+                unwrap_phase(N, tdi_phase->Y);
+                break;
+            case 2:
+                extract_amplitude_and_phase(N, tdi_amp->Z, tdi_phase->Z, R->Z, Rf->Z, phase_ref);
+                unwrap_phase(N, tdi_phase->Z);
+                break;
+            default:
+                break;
+        }
+    }
     
     free(App);
     free(Apm);

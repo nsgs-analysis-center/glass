@@ -121,7 +121,7 @@ int main(int argc, char* argv[])
     fclose(out);
     
     start = clock();
-    int Nwaveforms = 1;
+    int Nwaveforms = 100;
     for(int mc=0; mc<Nwaveforms; mc++)
     {
         ucb_waveform_wavelet(orbit, wdm, Tobs, 0.0, params, wavelet_list, &Nwavelet, tdi->X, tdi->Y, tdi->Z);
@@ -147,6 +147,19 @@ int main(int argc, char* argv[])
     end = clock();
     cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
     printf("tab wavelet calculation took %f seconds\n", cpu_time_used/(double)Nwaveforms);
+    
+    
+    int BW = 2*ucb_bandwidth(orbit->L, orbit->fstar, params[0]/Tobs, params[7]/Tobs/Tobs, params[1], exp(params[3]), Tobs, 2048);
+    ucb_waveform(orbit, "sangria", Tobs, 0.0, params, UCB_MODEL_NP, tdi->X, tdi->Y, tdi->Z, tdi->A, tdi->E, BW, 3);
+
+    start = clock();
+    for(int mc=0; mc<Nwaveforms; mc++)
+    {
+        ucb_waveform(orbit, "sangria", Tobs, 0.0, params, UCB_MODEL_NP, tdi->X, tdi->Y, tdi->Z, tdi->A, tdi->E, BW, 3);
+    }
+    end = clock();
+    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+    printf("fourier domain calculation took %f seconds\n", cpu_time_used/(double)Nwaveforms);
 
     
     return 0;

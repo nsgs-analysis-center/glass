@@ -830,13 +830,35 @@ void ucb_waveform(struct Orbit *orbit, char *format, double T, double t0, double
     }
     
     /*   Numerical Fourier transform of slowly evolving signal */
-    glass_forward_complex_fft(data12+1, BW);
-    glass_forward_complex_fft(data21+1, BW);
-    glass_forward_complex_fft(data31+1, BW);
-    glass_forward_complex_fft(data13+1, BW);
-    glass_forward_complex_fft(data23+1, BW);
-    glass_forward_complex_fft(data32+1, BW);
-     
+
+    #pragma omp parallel num_threads(6)
+    {
+        //perform different tasks based on thread ID
+        switch(omp_get_thread_num())
+        {
+            case 0:
+                glass_forward_complex_fft(data12+1, BW);
+                break;
+            case 1:
+                glass_forward_complex_fft(data21+1, BW);
+                break;
+            case 2:
+                glass_forward_complex_fft(data31+1, BW);
+                break;
+            case 3:
+                glass_forward_complex_fft(data13+1, BW);
+                break;
+            case 4:
+                glass_forward_complex_fft(data23+1, BW);
+                break;
+            case 5:
+                glass_forward_complex_fft(data32+1, BW);
+                break;
+            default:
+                break;
+        }
+    }
+
     //Unpack arrays from fft and normalize
     for(i=1; i<=BW; i++)
     {
@@ -900,8 +922,8 @@ static void ucb_wavelet_layers(double Tobs, double *params, struct Wavelets *wdm
     int jmin, jmax;
     
     //get start and stop frequencey of signal
-    double fstart = params[0];
-    double fstop  = (params[0]+params[7]*Tobs);//+0.5*params[8]*Tobs*Tobs);
+    double fstart = params[0]/Tobs;
+    double fstop  = (params[0]/Tobs+params[7]/Tobs/Tobs);//+0.5*params[8]*Tobs*Tobs);
     
     //find min and max frequencies including maximum possible Doppler shift
     if(fstart < fstop) //inspiral
@@ -933,6 +955,22 @@ static void ucb_wavelet_layers(double Tobs, double *params, struct Wavelets *wdm
     *jstart = jmin;
     *jwidth = jmax-jmin+1;
 }
+
+static void build_interpolated_waveform(struct CubicSpline *amp_spline, struct CubicSpline *phase_spline, double *time, double *phase_ref, double *phase_het, int N, double *waveform)
+{
+    double Amp, Phase;
+    
+    for(int n=0; n<N; n++)
+    {
+        Amp     = spline_interpolation(amp_spline, time[n]);   //amplitude
+        Phase   = spline_interpolation(phase_spline, time[n]); //slow part of phase
+        Phase  += phase_ref[n];                                //carrier phase
+        Phase  -= phase_het[n];                                //remove heterodyne phase
+        
+        waveform[n] = Amp*cos(Phase);
+    }
+}
+
 
 /* Heterodyne wavelet transform */
 void ucb_waveform_wavelet(struct Orbit *orbit, struct Wavelets *wdm, double Tobs, double t0, double *params, int *wavelet_list, int *Nwavelet, double *X, double *Y, double *Z)
@@ -1027,65 +1065,51 @@ void ucb_waveform_wavelet(struct Orbit *orbit, struct Wavelets *wdm, double Tobs
     /*
     Interpolate amplitude and phase for instrument response of each TDI channel onto wavelet grid
     */
-    double Amp,Phase;
     struct TDI *wave = malloc(sizeof(struct TDI));
     alloc_tdi(wave,N_ds,3);
 
-    struct CubicSpline *amp_interpolant   = alloc_cubic_spline(Nspline);
-    struct CubicSpline *phase_interpolant = alloc_cubic_spline(Nspline);
-    
-    initialize_cubic_spline(amp_interpolant,   time_ssb, tdi_amp->X);
-    initialize_cubic_spline(phase_interpolant, time_ssb, tdi_phase->X);
+    struct CubicSpline *amp_interpolant_X   = alloc_cubic_spline(Nspline);
+    struct CubicSpline *amp_interpolant_Y   = alloc_cubic_spline(Nspline);
+    struct CubicSpline *amp_interpolant_Z   = alloc_cubic_spline(Nspline);
+    struct CubicSpline *phase_interpolant_X = alloc_cubic_spline(Nspline);
+    struct CubicSpline *phase_interpolant_Y = alloc_cubic_spline(Nspline);
+    struct CubicSpline *phase_interpolant_Z = alloc_cubic_spline(Nspline);
 
-    for(int i=0; i<N_ds; i++)
-    {
-        Amp     = spline_interpolation(amp_interpolant, time_ds[i]);   //amplitude
-        Phase   = spline_interpolation(phase_interpolant, time_ds[i]); //slow part of phase
-        Phase  += phase_ds[i];                                         //carrier phase
-        Phase  -= phase_het[i];                                        //remove heterodyne phase
-        
-        wave->X[i] = Amp*cos(Phase);
-    }
-    
-    initialize_cubic_spline(amp_interpolant,   time_ssb, tdi_amp->Y);
-    initialize_cubic_spline(phase_interpolant, time_ssb, tdi_phase->Y);
+    initialize_cubic_spline(amp_interpolant_X,   time_ssb, tdi_amp->X);
+    initialize_cubic_spline(amp_interpolant_Y,   time_ssb, tdi_amp->Y);
+    initialize_cubic_spline(amp_interpolant_Z,   time_ssb, tdi_amp->Z);
+    initialize_cubic_spline(phase_interpolant_X, time_ssb, tdi_phase->X);
+    initialize_cubic_spline(phase_interpolant_Y, time_ssb, tdi_phase->Y);
+    initialize_cubic_spline(phase_interpolant_Z, time_ssb, tdi_phase->Z);
 
-    for(int i=0; i<N_ds; i++)
-    {
-        Amp    = spline_interpolation(amp_interpolant, time_ds[i]);
-        Phase  = spline_interpolation(phase_interpolant, time_ds[i]);
-        Phase += phase_ds[i];
-        Phase -= phase_het[i];
-        
-        wave->Y[i] = Amp*cos(Phase);
-    }
-    
-    initialize_cubic_spline(amp_interpolant,   time_ssb, tdi_amp->Z);
-    initialize_cubic_spline(phase_interpolant, time_ssb, tdi_phase->Z);
-
-    for(int i=0; i<N_ds; i++)
-    {
-        Amp    = spline_interpolation(amp_interpolant, time_ds[i]);
-        Phase  = spline_interpolation(phase_interpolant, time_ds[i]);
-        Phase += phase_ds[i];
-        Phase -= phase_het[i];
-        
-        wave->Z[i] = Amp*cos(Phase);
-    }
-    
-    /*
-     Compute wavelet coefficients for signal's TDI response
-     */
- 
     // get freqeuncy wavelet window function for downsampled data
     double *window = double_vector((wdm->NT/2+1));
     wavelet_window_frequency(wdm, window, Nlayers);
-
+        
     // wavelet transform on heterodyned data using downsampled windows.
-    wavelet_transform_by_layers(wdm, min_layer, Nlayers, window, wave->X);
-    wavelet_transform_by_layers(wdm, min_layer, Nlayers, window, wave->Y);
-    wavelet_transform_by_layers(wdm, min_layer, Nlayers, window, wave->Z);
-
+    #pragma omp parallel num_threads(3)
+    {
+        switch(omp_get_thread_num())
+        {
+            case 0:
+                build_interpolated_waveform(amp_interpolant_X, phase_interpolant_X, time_ds, phase_ds, phase_het, N_ds, wave->X);
+                wavelet_transform_by_layers(wdm, min_layer, Nlayers, window, wave->X);
+                break;
+            case 1:
+                build_interpolated_waveform(amp_interpolant_Y, phase_interpolant_Y, time_ds, phase_ds, phase_het, N_ds, wave->Y);
+                wavelet_transform_by_layers(wdm, min_layer, Nlayers, window, wave->Y);
+                
+                break;
+            case 2:
+                build_interpolated_waveform(amp_interpolant_Z, phase_interpolant_Z, time_ds, phase_ds, phase_het, N_ds, wave->Z);
+                wavelet_transform_by_layers(wdm, min_layer, Nlayers, window, wave->Z);
+                
+                break;
+            default:
+                break;
+        }
+    }
+    
     /*
      Properly re-index to undo the heterodyning
     */
@@ -1134,9 +1158,13 @@ void ucb_waveform_wavelet(struct Orbit *orbit, struct Wavelets *wdm, double Tobs
     free_tdi(tdi_amp);
     free_tdi(wave);
 
-    free_cubic_spline(amp_interpolant);
-    free_cubic_spline(phase_interpolant);
-    
+    free_cubic_spline(amp_interpolant_X);
+    free_cubic_spline(amp_interpolant_Y);
+    free_cubic_spline(amp_interpolant_Z);
+    free_cubic_spline(phase_interpolant_X);
+    free_cubic_spline(phase_interpolant_Y);
+    free_cubic_spline(phase_interpolant_Z);
+
     free_double_vector(window);
 }
 
