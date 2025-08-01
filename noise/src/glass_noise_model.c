@@ -637,6 +637,7 @@ void generate_sgwb_model(struct SGWBModel *model)
     double f;
     double Sgw;
 
+    // TODO: keep a cubic spline in SGWBModel so we don't have to alloc/dealloc all the time
     struct CubicSpline responseXX, responseXY;
     initialize_cubic_spline(&responseXX, model->R->f, model->R->XX);
     initialize_cubic_spline(&responseXY, model->R->f, model->R->XY);
@@ -673,6 +674,8 @@ void generate_sgwb_model(struct SGWBModel *model)
                 break;
         }
     }
+    free_cubic_spline(&responseXX);
+    free_cubic_spline(&responseXY);
 }
 void generate_sgwb_model_wavelet(struct Wavelets* wdm, struct SGWBModel *model)
 {
