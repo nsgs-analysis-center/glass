@@ -155,7 +155,7 @@ int main(int argc, char *argv[])
     // TODO need stationary flag
     for(int ic=0; ic<chain->NC; ic++)
     {
-        if(!flags->confNoise || flags->sgwbTemplate==0){
+        if(!flags->confNoise || flags->sgwbTemplate<0){
             printf("error: only support conf and sgwb on!");
             return -1;
         }
@@ -176,7 +176,6 @@ int main(int argc, char *argv[])
 
     //MCMC
     printf("\n==== Noise Wavelet MCMC Sampler ====\n");
-    // TODO not even slightly wavelet yet
     
     sprintf(filename,"%s/noise_chain.dat",chain->chainDir);
     FILE *noiseChainFile = fopen(filename,"w");

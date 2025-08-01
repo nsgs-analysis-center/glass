@@ -55,6 +55,11 @@ void noise_spline_model_rjmcmc(struct Orbit *orbit, struct Data *data, struct Sp
 void noise_instrument_model_mcmc(struct Orbit *orbit, struct Data *data, struct InstrumentModel *model, struct InstrumentModel *trial, struct ForegroundModel *galaxy, struct SGWBModel* sgwb, struct Noise *psd, struct Chain *chain, struct Flags *flags, int ic);
 
 /**
+ \brief Fixed-dimension update of each parallel tempered instrument noise `model` state in wavelet domain
+ */
+void noise_instrument_model_mcmc_wavelet(struct Orbit *orbit, struct Data *data, struct InstrumentModel *model, struct InstrumentModel *trial, struct ForegroundModel *galaxy, struct SGWBModel* sgwb, struct Noise *psd, struct Chain *chain, struct Flags *flags, int ic);
+
+/**
  \brief Fixed-dimension update of each parallel tempered galactic foreground noise `model` state
  */
 void noise_foreground_model_mcmc(struct Data *data, struct InstrumentModel *noise, struct ForegroundModel *model, struct ForegroundModel *trial, struct SGWBModel* sgwb, struct Noise *psd, struct Chain *chain, struct Flags *flags, int ic);
@@ -64,5 +69,9 @@ void noise_foreground_model_mcmc(struct Data *data, struct InstrumentModel *nois
  */
 void noise_sgwb_model_mcmc(struct Data *data, struct InstrumentModel *noise, struct ForegroundModel *galaxy, struct SGWBModel* model, struct SGWBModel* trial, struct Noise *psd, struct Chain *chain, struct Flags *flags, int ic);
 
+/**
+ \brief Fixed-dimension update of each parallel tempered sgwb `model` state in wavelet domain
+ */
+void noise_sgwb_model_mcmc_wavelet(struct Data *data, struct InstrumentModel *noise, struct ForegroundModel *galaxy, struct SGWBModel* model, struct SGWBModel* trial, struct Noise *psd, struct Chain *chain, struct Flags *flags, int ic);
 
 #endif /* glass_noise_sampler_h */
