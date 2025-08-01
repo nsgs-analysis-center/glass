@@ -1,21 +1,17 @@
-
 /*
- *  Copyright (C) 2021 Tyson B. Littenberg (MSFC-ST12), Neil J. Cornish
+ * Copyright 2021 Tyson B. Littenberg
  *
- *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *  This program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
+ *  http://www.apache.org/licenses/LICENSE-2.0
  *
- *  You should have received a copy of the GNU General Public License
- *  along with with program; see the file COPYING. If not, write to the
- *  Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- *  MA  02111-1307  USA
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 /**
@@ -24,20 +20,6 @@
  */
 
 /*  REQUIRED LIBRARIES  */
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <math.h>
-#include <time.h>
-#include <getopt.h>
-
-#include <sys/stat.h>
-
-#include <gsl/gsl_rng.h>
-#include <gsl/gsl_randist.h>
-
-#include <omp.h>
 
 #include <glass_utils.h>
 #include <glass_noise.h>
@@ -189,11 +171,17 @@ int main(int argc, char *argv[])
         else
             UCBInjectVerificationSet(data, orbit, flags, inj);
         
+        /* Get noise model */
+        GetNoiseModel(data,orbit,flags);
+
+        /* Add Gaussian noise realization */
+        if(flags->simNoise) AddNoise(data,data->tdi);
+
         /* set approximate f/fstar for segment */
         data->sine_f_on_fstar = sin((data->fmin + (data->fmax-data->fmin)/2.)/orbit->fstar);
 
         //print various data products for plotting
-        print_data(data, data->tdi, flags);
+        print_data(data, flags);
         
         //save parameters to file
         sprintf(filename,"%s/data/injection_parameters.dat",subDir);
@@ -232,7 +220,7 @@ int main(int argc, char *argv[])
         /* Initialize data models */
         trial_vec[n] = malloc(sizeof(struct Model*)*NC);
         model_vec[n] = malloc(sizeof(struct Model*)*NC);
-        initialize_ucb_state(data_vec[n], orbit, flags, chain_vec[n], proposal_vec[n], model_vec[n], trial_vec[n], inj_vec[n]);
+        initialize_ucb_state(data_vec[n], orbit, flags, chain_vec[n], proposal_vec[n], model_vec[n], trial_vec[n], inj_vec);
     }
     
     /* Start analysis from saved chain state */

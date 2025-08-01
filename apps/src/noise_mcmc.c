@@ -1,27 +1,23 @@
-//
-//  noise_mcmc.c
-//
-//
-//  Created by Tyson Littenberg on 4/06/21.
-//
+/*
+ * Copyright 2024 Tyson B. Littenberg
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *  http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 /**
  @file noise_mcmc.c
  \brief Main function for stand-alone Noise parameterized model sampler 
  */
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <math.h>
-#include <time.h>
-
-#include <sys/stat.h>
-
-#include <gsl/gsl_rng.h>
-#include <gsl/gsl_randist.h>
-
-#include <omp.h>
 
 #include <glass_utils.h>
 #include <glass_noise.h>
@@ -82,6 +78,9 @@ int main(int argc, char *argv[])
     else if (flags->simNoise)
         SimulateData(data, orbit, flags);
     
+    /* print various data products for plotting */
+    print_data(data, flags);
+    
     /* Initialize Instrument Noise Model */
     printf("   ...initialize instrument noise model\n");
     struct Noise **psd = malloc(chain->NC*sizeof(struct Noise *));
@@ -90,7 +89,7 @@ int main(int argc, char *argv[])
     for(int ic=0; ic<chain->NC; ic++)
     {
         psd[ic] = malloc(sizeof(struct Noise));
-        alloc_noise(psd[ic], data->NFFT, data->Nchannel);
+        alloc_noise(psd[ic], data->NFFT, data->Nlayer, data->Nchannel);
 
         inst_model[ic] = malloc(sizeof(struct InstrumentModel));
         inst_trial[ic] = malloc(sizeof(struct InstrumentModel));

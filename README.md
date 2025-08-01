@@ -1,19 +1,16 @@
-\mainpage
-
 Prototype data analysis software for LISA analysis
 
 # Doxygen code documentation
-https://tlittenberg.github.io/ldasoft/html/index.html
+https://tlittenberg.github.io/glass/html/index.html
 
 # Acknowledgment
 
 ```bibtex
-@misc{ldasoft,
-	author = "Tyson B. Littenberg, Neil J. Cornish, Kristen Lackeos, Travis Robson",
-	title = "LDASoft",
-	howpublished = "free software (GPL)"
-	doi = "10.5281/zenodo.2026177"
-	year = "2020"
+@misc{glass,
+	author = "Tyson B. Littenberg, Neil J. Cornish",
+	title = "GLASS",
+	howpublished = "free software (Apache 2.0)"
+	year = "2025"
 }
 ```
 
@@ -21,14 +18,12 @@ https://tlittenberg.github.io/ldasoft/html/index.html
 
 # C Dependencies 
 ```bash
-gsl
-gslcblas
 openmp
 mpi
 hdf5
+openblas
+lapack
 ```
-The `GlobalFit` pipeline additionally requires the `global-fit` branch of [`LISA-Massive-Black-Hole`](https://github.com/eXtremeGravityInstitute/LISA-Massive-Black-Hole/tree/global-fit) to be installed.
-
 # Installation
 
 Example build script:
@@ -36,16 +31,16 @@ Example build script:
 #!/bin/bash
 
 # set prefix for install directories
-export LDASOFT_PREFIX=<EDIT: path to desired install directories>
+export GLASS_PREFIX=<EDIT: path to desired install directories>
 
 # build codes
-./install.sh ${LDASOFT_PREFIX}
+./install.sh ${GLASS_PREFIX}
 
 # add location of binaries to PATH 
-export PATH=${LDASOFT_PREFIX}/bin:${PATH}
+export PATH=${GLASS_PREFIX}/bin:${PATH}
 ```
 
-Directory tree for the ldasoft installation:
+Directory tree for the GLASS installation:
 ```
 ├── bin
 │   ├── gaussian_mixture_model
@@ -89,8 +84,8 @@ Directory tree for the ldasoft installation:
 
 
 # Issue tracker
-https://github.com/tlittenberg/ldasoft/issues
+https://github.com/lisa-analysis-center/glass/issues
 
 # Other resources
- + [Example LISA analysis flow chart](https://www.draw.io/#Htlittenberg%2Fldasoft%2Fmaster%2FLISADataFlow.drawio)
- + [Global Fit block diagram](https://app.diagrams.net/#Htlittenberg%2Fldasoft%2Fmaster%2FGlobalFit.drawio)
+ + [Example LISA analysis flow chart](https://www.draw.io/#Hlisa-analysis-center%2Fglass%2Fmaster%2FLISADataFlow.drawio)
+ + [Global Fit block diagram](https://app.diagrams.net/#Htlisa-analysis-center%2Fglass%2Fmaster%2FGlobalFit.drawio)

@@ -1,3 +1,24 @@
+/*
+ * Copyright 2024 Tyson B. Littenberg & Neil J. Cornish
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *  http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+@file glass_galaxy.h
+\brief Modulated astrophysical foreground noise from unresolved galactic binaries.
+*/
+
 ///@name Galaxy Parameters
 ///@{
 #define GALAXY_RGC 7.2 //!< distance from SSB to GC (kpc)
@@ -9,9 +30,14 @@
 
 #define NSIDE 16 //!< Healpix resolution for galaxy modulation calculations
 #define LMAX 4   //!< Maximum l for spherical harmonic decomposition of galaxy modulation
+
+/*!
+ * \brief Metadata for constructing modulated foreground noise.= *
+ */
 struct GalaxyModulation
 {
-    int N;
+    int N;           //!<Number of time samples of orbit
+    double *t;       //!<Time grid of orbit samples
     double alpha_0;
     double alphamax;
     double ***Plm;
@@ -27,19 +53,17 @@ struct GalaxyModulation
     double ***YZI;
     double ***XZR;
     double ***XZI;
-    double *t;
 
-    gsl_spline *XX_spline;
-    gsl_spline *YY_spline;
-    gsl_spline *ZZ_spline;
-    gsl_spline *XY_spline;
-    gsl_spline *XZ_spline;
-    gsl_spline *YZ_spline;
-    gsl_interp_accel *acc;
+    struct CubicSpline *XX_spline; //!<Modulation in PSD of X channel
+    struct CubicSpline *YY_spline; //!<Modulation in PSD of Y channel
+    struct CubicSpline *ZZ_spline; //!<Modulation in PSD of X channel
+    struct CubicSpline *XY_spline; //!<Modulation in CSD of XY channels
+    struct CubicSpline *XZ_spline; //!<Modulation in PSD of XZ channels
+    struct CubicSpline *YZ_spline; //!<Modulation in PSD of YZ channels
 
-    long Npix;
-    double *skytheta;
-    double *skyphi;
+    long Npix;        //!<Number of pixels on the healpix grid
+    double *skytheta; //!<Latitude value of healpix grid pixels
+    double *skyphi;   //!<Longitude value of healpix grid pixels
 };
 
 double galaxy_distribution(double *x, double bulge_to_disk, double bulge_radius, double disk_radius, double disk_height);

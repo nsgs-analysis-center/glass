@@ -1,14 +1,19 @@
+/*
+ * Copyright 2019 Tyson B. Littenberg
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *  http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
-/***************************  REQUIRED LIBRARIES  ***************************/
-
-#include <stdlib.h>
-#include <stdio.h>
-#include <math.h>
-#include <time.h>
-#include <string.h>
-
-#include <gsl/gsl_sort.h>
-#include <gsl/gsl_randist.h>
 
 #include <glass_utils.h>
 
@@ -76,12 +81,7 @@ int main(int argc, char* argv[])
   }
   
   //set up RNG in case tidal params are used
-  const gsl_rng_type * T;
-  gsl_rng * r;
-  gsl_rng_env_setup();
-  T = gsl_rng_default;
-  r = gsl_rng_alloc (T);
-  
+  unsigned int r = 150914;
   
   
   char filename[128];
@@ -146,7 +146,7 @@ int main(int argc, char* argv[])
     {
       do
       {
-        alpha = alpha0+dalpha0*gsl_ran_gaussian(r,1.0);
+        alpha = alpha0+dalpha0*rand_r_N_0_1(&r);
       }while(alpha < 0.0);
     }
     else alpha = 0.0;

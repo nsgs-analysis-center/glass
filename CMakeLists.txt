@@ -1,9 +1,9 @@
-# ldasoft
+# glass
 
 # This minimum version is mostly set in order to get a newer version
 # of the FindMPI check.  Note that you can easily install a newer cmake version
 # using conda or pip.
-cmake_minimum_required(VERSION 3.0.0 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.10.0 FATAL_ERROR)
 
 foreach(policy
     CMP0048
@@ -17,22 +17,17 @@ endforeach()
 
 # Set compiler
 #set(CMAKE_C_COMPILER mpicc)
-set(CMAKE_C_COMPILER /opt/homebrew/Cellar/llvm/20.1.7/bin/clang)
+set(CMAKE_C_COMPILER /opt/homebrew/Cellar/llvm/20.1.8/bin/clang)
 
-project(ldasoft VERSION 1.0.0 LANGUAGES C)
-set(OpenMP_C_FLAGS "-fopenmp")
-#set(CMAKE_C_FLAGS "-I/usr/local/Cellar/libomp/19.1.2/include")
-set(CMAKE_C_FLAGS "-I/opt/homebrew/Cellar/libomp/20.1.7/include")
-set(OpenMP_C_LIB_NAMES "libomp")
-#set(OpenMP_libomp_LIBRARY "/usr/local/Cellar/libomp/19.1.2/lib/libomp.dylib")
-set(OpenMP_libomp_LIBRARY "/opt/homebrew/Cellar/libomp/20.1.7/lib/libomp.dylib")
+project(glass VERSION 2.0.0 LANGUAGES C)
 
 # External packages
-find_package(GSL REQUIRED)
+find_package(LAPACK REQUIRED)
+find_package(OpenBLAS REQUIRED)
 find_package(OpenMP REQUIRED)
 find_package(HDF5 REQUIRED)
 find_package(MPI REQUIRED)
-#find_package(MBH)
+#find_package(GSL REQUIRED)
 
 # set cflags
 if(APPLE)
@@ -67,8 +62,7 @@ configure_file (
   "${PROJECT_SOURCE_DIR}/utils/src/gitversion.h"
   )
 
-install (FILES "${PROJECT_SOURCE_DIR}/utils/src/gitversion.h"
-         DESTINATION include)
+install (FILES "${PROJECT_SOURCE_DIR}/utils/src/gitversion.h" DESTINATION include/glass)
 
 message(STATUS "Resolving GIT Version")
 
@@ -76,14 +70,22 @@ message(STATUS "Resolving GIT Version")
 set (GITVERSION "\"${_build_version}\"")
 
 # Internal products
-
-
+add_subdirectory(external)
 add_subdirectory(utils)
 add_subdirectory(ucb)
+add_subdirectory(mbh)
 add_subdirectory(noise)
+
+# Merge into a single library
+add_library(glass
+        $<TARGET_OBJECTS:glass_external>
+        $<TARGET_OBJECTS:glass_utils>
+        $<TARGET_OBJECTS:glass_ucb>
+        $<TARGET_OBJECTS:glass_mbh>
+        $<TARGET_OBJECTS:glass_noise>
+)
+install(TARGETS glass DESTINATION lib)
+
+# Applications
 add_subdirectory(apps)
-if(MBH_FOUND)
-  add_subdirectory(globalfit)
-else()
-   message(STATUS "MBH module not found, skipping GlobalFit install")
-endif()
+add_subdirectory(globalfit)

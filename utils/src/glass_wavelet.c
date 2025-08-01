@@ -1,38 +1,69 @@
 /*
- *  Copyright (C) 2024 Neil J. Cornish & Tyson B. Littenberg (MSFC-ST12)
+ * Copyright 2024 Neil J. Cornish & Tyson B. Littenberg
  *
- *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *  This program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
+ *  http://www.apache.org/licenses/LICENSE-2.0
  *
- *  You should have received a copy of the GNU General Public License
- *  along with with program; see the file COPYING. If not, write to the
- *  Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- *  MA  02111-1307  USA
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
+
 
 #include "glass_utils.h"
 
-static double phitilde(double om, double insDOM, double A, double B)
+struct TimeFrequencyTrack * malloc_time_frequency_track(struct Wavelets *wdm)
 {
+    struct TimeFrequencyTrack *track = malloc(sizeof(struct TimeFrequencyTrack));
+    track->min_layer = 1;
+    track->max_layer = wdm->NF;
+    track->segment_size  = int_vector(wdm->NF);
+    track->segment_midpt = int_vector(wdm->NF);
+    return track;
+}
+
+void free_time_frequency_track(struct TimeFrequencyTrack *track)
+{
+    free_int_vector(track->segment_size);
+    free_int_vector(track->segment_midpt);
+    free(track);
+}
+
+static void setup_wdm_basis(struct Wavelets *wdm, int NF)
+{
+    wdm->NF = NF;
+    wdm->cadence = WAVELET_DURATION/wdm->NF;
+    wdm->Omega = M_PI/wdm->cadence;
+    wdm->dOmega = wdm->Omega/(double)wdm->NF;
+    wdm->inv_root_dOmega = 1.0/sqrt(wdm->dOmega);
+    wdm->B = wdm->Omega/(double)(2*wdm->NF);
+    wdm->A = (wdm->dOmega-wdm->B)/2.0;
+    wdm->BW = (wdm->A+wdm->B)/M_PI;
+}
+
+static double phitilde(struct Wavelets *wdm, double omega)
+{
+    double insDOM = wdm->inv_root_dOmega;
+    double A = wdm->A;
+    double B = wdm->B;
+    
     double x, y, z;
     
     z = 0.0;
     
-    if(fabs(om) >= A && fabs(om) < A+B)
+    if(fabs(omega) >= A && fabs(omega) < A+B)
     {
-        x = (fabs(om)-A)/B;
-        y = gsl_sf_beta_inc(WAVELET_FILTER_CONSTANT, WAVELET_FILTER_CONSTANT, x);
+        x = (fabs(omega)-A)/B;
+        y = incomplete_beta_function(WAVELET_FILTER_CONSTANT, WAVELET_FILTER_CONSTANT, x);
         z = insDOM*cos(y*M_PI/2.0);
     }
     
-    if(fabs(om) < A) z = insDOM;
+    if(fabs(omega) < A) z = insDOM;
     
     return(z);
     
@@ -42,9 +73,6 @@ static void wavelet(struct Wavelets *wdm, int m, double *wave)
 {
     
     int N = wdm->N;
-    double A = wdm->A;
-    double B = wdm->B;
-    double insDOM = wdm->inv_root_dOmega;
     double dom = wdm->domega;
     double DOM = wdm->dOmega;
     
@@ -58,8 +86,8 @@ static void wavelet(struct Wavelets *wdm, int m, double *wave)
     {
         omega = (double)(i)*dom;
         
-        y = phitilde(omega+(double)(m)*DOM, insDOM, A, B);
-        z = phitilde(omega-(double)(m)*DOM, insDOM, A, B);
+        y = phitilde(wdm,omega+(double)(m)*DOM);
+        z = phitilde(wdm,omega-(double)(m)*DOM);
         
         x = y+z;
         
@@ -73,8 +101,8 @@ static void wavelet(struct Wavelets *wdm, int m, double *wave)
     {
         omega = -(double)(i)*dom;
         
-        y = phitilde(omega+(double)(m)*DOM, insDOM, A, B);
-        z = phitilde(omega-(double)(m)*DOM, insDOM, A, B);
+        y = phitilde(wdm,omega+(double)(m)*DOM);
+        z = phitilde(wdm,omega-(double)(m)*DOM);
         
         x = y+z;
         
@@ -83,19 +111,18 @@ static void wavelet(struct Wavelets *wdm, int m, double *wave)
         
     }
     
-    gsl_fft_complex_radix2_backward(DE, 1, N);
-        
+    glass_inverse_complex_fft(DE,N);
+
     for(int i=0; i < N/2; i++)
     {
         wave[i] = REAL(DE,N/2+i)/wdm->norm;
         wave[i+N/2] = REAL(DE,i)/wdm->norm;
     }
-    
+
     free(DE);
-    
 }
 
-static void wavelet_window(struct Wavelets *wdm)
+static void wavelet_window_time(struct Wavelets *wdm)
 {
     double *DX = (double*)malloc(sizeof(double)*(2*wdm->N));
     
@@ -109,17 +136,16 @@ static void wavelet_window(struct Wavelets *wdm)
         double omega = (double)(i)*wdm->domega;
         
         // postive frequencies
-        REAL(DX,i) = phitilde(omega, wdm->inv_root_dOmega, wdm->A, wdm->B);
+        REAL(DX,i) = phitilde(wdm,omega);
         IMAG(DX,i) =  0.0;
         
         // negative frequencies
-        REAL(DX,j) =  phitilde(-omega, wdm->inv_root_dOmega, wdm->A, wdm->B);
+        REAL(DX,j) =  phitilde(wdm,-omega);
         IMAG(DX,j) =  0.0;
     }
-    
-    gsl_fft_complex_radix2_backward(DX, 1, wdm->N);
-    
-    
+        
+    glass_inverse_complex_fft(DX, wdm->N);
+
     wdm->window = (double*)malloc(sizeof(double)* (wdm->N));
     for(int i=0; i < wdm->N/2; i++)
     {
@@ -127,9 +153,7 @@ static void wavelet_window(struct Wavelets *wdm)
         wdm->window[wdm->N/2+i] = REAL(DX,i);
     }
     
-    wdm->norm = 0.0;
-    for(int i=0; i < wdm->N; i++) wdm->norm += wdm->window[i]*wdm->window[i]*wdm->cadence;
-    wdm->norm = sqrt(wdm->norm);
+    wdm->norm = sqrt((double)wdm->N * wdm->cadence / wdm->domega);
 
     free(DX);
 }
@@ -157,11 +181,8 @@ static void wavelet_lookup_table(struct Wavelets *wdm)
     #pragma omp parallel for
     for(int j=0; j<wdm->fdot_steps; j++)  // loop over f-dot slices
     {
-        //char filename[128];
-        //sprintf(filename, "WDMcoeffs%d.bin", j);
-        //FILE *outstream = fopen(filename,"wb");
 
-        int NT = wdm->table[j]->size/2;
+        int NT = wdm->n_table[j];
         
         
         for(int n=0; n<NT; n++)  // loop of frequency slices
@@ -178,12 +199,9 @@ static void wavelet_lookup_table(struct Wavelets *wdm)
                 real_coeff += wave[i]*cos(phase)*wdm->cadence;
                 imag_coeff += wave[i]*sin(phase)*wdm->cadence;
             }
-            gsl_vector_set(wdm->table[j],2*n,real_coeff);
-            gsl_vector_set(wdm->table[j],2*n+1,imag_coeff);
+            wdm->table[j][2*n]   = real_coeff;
+            wdm->table[j][2*n+1] = imag_coeff;
         }
-        
-        //gsl_vector_fwrite(outstream, wdm->table[j]);
-        //fclose(outstream);
     }
     
     free(wave);
@@ -191,15 +209,13 @@ static void wavelet_lookup_table(struct Wavelets *wdm)
 void initialize_wavelet(struct Wavelets *wdm, double T)
 {
     fprintf(stdout,"\n======= Initialize Wavelet Basis =======\n");
-    //N = total number of data samples
-    //NF = number of frequency layers
-    //dt = sampling cadence
     
     wdm->NT = (int)ceil(T/WAVELET_DURATION);
     wdm->NF = WAVELET_DURATION/LISA_CADENCE;
-    wdm->cadence = LISA_CADENCE;//7.5;
     wdm->df = WAVELET_BANDWIDTH;
     wdm->dt = WAVELET_DURATION;
+
+    setup_wdm_basis(wdm, wdm->NF);
 
     wdm->frequency_steps = 400;
     wdm->fdot_steps = 50;
@@ -209,19 +225,14 @@ void initialize_wavelet(struct Wavelets *wdm, double T)
     wdm->N = wdm->oversample * 2 * wdm->NF;
     wdm->T = wdm->N*wdm->cadence;
 
-    wdm->Omega = M_PI/wdm->cadence;
-    wdm->dOmega = wdm->Omega/(double)wdm->NF;
     wdm->domega = PI2/wdm->T;
-    wdm->inv_root_dOmega = 1.0/sqrt(wdm->dOmega);
-    wdm->B = wdm->Omega/(double)(2*wdm->NF);
-    wdm->A = (wdm->dOmega-wdm->B)/2.0;
-    wdm->BW = (wdm->A+wdm->B)/M_PI;
+    
     wdm->deltaf = wdm->BW/(double)(wdm->frequency_steps);
 
-#ifdef PRECOMPUTE_FDOT
     wdm->fdot = malloc(wdm->fdot_steps*sizeof(double));
 
-    wdm->table   = malloc(wdm->fdot_steps*sizeof(gsl_vector *));
+    /* Only needed when using the lookup table waveform generator
+    wdm->table   = malloc(wdm->fdot_steps*sizeof(double *));
     wdm->n_table = malloc(wdm->fdot_steps*sizeof(int));
 
     double fdot_step = wdm->df/wdm->T*wdm->d_fdot; // sets the f-dot increment
@@ -232,24 +243,24 @@ void initialize_wavelet(struct Wavelets *wdm, double T)
         size_t N = (int)((wdm->BW+fabs(wdm->fdot[n])*wdm->T)/wdm->deltaf);
         if(N%2 != 0) N++; // makes sure it is an even number
         wdm->n_table[n] = N;
-        wdm->table[n] =  gsl_vector_alloc(2*N);
+        wdm->table[n] = double_vector(2*N);
     }
-    
-    //stores window function and normalization
-    wavelet_window(wdm);
-    
+        
     //stores lookup table of wavelet basis functions
     wavelet_lookup_table(wdm);
-#endif
+    */
+    
+    //stores window function and normalization
+    wavelet_window_time(wdm);
 
     //set defaults for min and maximum pixels
     wavelet_pixel_to_index(wdm,0,1,&wdm->kmin);         //first pixel of second layer
     wavelet_pixel_to_index(wdm,0,wdm->NF-1,&wdm->kmax); //first pixel of last layer
 
-    fprintf(stdout,"Number of time pixels:        %i\n", wdm->NT);
-    fprintf(stdout,"Duration of time pixels:      %g [hr]\n", wdm->dt/3600);
-    fprintf(stdout,"Number of frequency layers:   %i\n", wdm->NF);
-    fprintf(stdout,"Bandwidth of frequency layer: %g [uHz]\n", wdm->df*1e6);
+    fprintf(stdout,"  Number of time pixels:        %i\n", wdm->NT);
+    fprintf(stdout,"  Duration of time pixels:      %g [hr]\n", wdm->dt/3600);
+    fprintf(stdout,"  Number of frequency layers:   %i\n", wdm->NF);
+    fprintf(stdout,"  Bandwidth of frequency layer: %g [uHz]\n", wdm->df*1e6);
     fprintf(stdout,"\n========================================\n");
 }
 
@@ -286,9 +297,12 @@ void wavelet_transform(struct Wavelets *wdm, double *data)
     double **wave = double_matrix(wdm->NT,wdm->NF);
     
     //normalization factor
-    double fac = M_SQRT2*wdm->cadence/wdm->norm;
+    double fac = M_SQRT2*sqrt(wdm->cadence)/wdm->norm;
     
-    //do the wavelet transform by convolving data w/ window and iFFT
+    //normalization fudge factor
+    fac *= sqrt(wdm->cadence)/2;
+        
+    //do the wavelet transform by convolving data w/ window and FFT
     for(int i=0; i<wdm->NT; i++)
     {
         
@@ -299,17 +313,18 @@ void wavelet_transform(struct Wavelets *wdm, double *data)
             if(n >= ND) n -= ND;  // periodically wrap the data
             wdata[j] = data[n] * wdm->window[j];  // apply the window
         }
-        
-        gsl_fft_real_radix2_transform(wdata, 1, wdm->N);
-        
+                
+        glass_forward_real_fft(wdata, wdm->N);
+
         //unpack Fourier transform
-        wave[i][0] = M_SQRT2*fac*wdata[0];
+        wave[i][0] = wdata[0];
         for(int j=1; j<wdm->NF; j++)
         {
+            int n = j*wdm->oversample;
             if((i+j)%2 ==0)
-                wave[i][j] = fac*wdata[j*wdm->oversample];
+                wave[i][j] = wdata[2*n];
             else
-                wave[i][j] = -fac*wdata[wdm->N-j*wdm->oversample];
+                wave[i][j] = -wdata[2*n+1];
         }
     }
     
@@ -322,7 +337,7 @@ void wavelet_transform(struct Wavelets *wdm, double *data)
             wavelet_pixel_to_index(wdm,i,j,&k);
             
             //replace data array
-            data[k] = wave[i][j];
+            data[k] = wave[i][j]*fac;
         }
     }
     
@@ -330,20 +345,20 @@ void wavelet_transform(struct Wavelets *wdm, double *data)
     free_double_matrix(wave,wdm->NT);
 }
 
-void wavelet_transform_inverse(struct Wavelets *wdm, double *data)
+void wavelet_tansform_inverse_fourier(struct Wavelets *wdm, double *data)
 {
     int k;
     int N = wdm->NT*wdm->NF;
     double *phit  = double_vector(wdm->NT/2+1);
     double *row   = double_vector(wdm->NT*2);
-    double *dataf = double_vector(N); 
-    double *datat = double_vector(N);
-    double scale  = sqrt(M_PI)/wdm->cadence;
+    double *work  = double_vector(N);
+    double Tobs   = N*wdm->cadence;
     double sign;
-    
+
+
     for(int i=0; i<=wdm->NT/2; i++)
     {
-        phit[i] = phitilde(i*wdm->domega, wdm->inv_root_dOmega, wdm->A, wdm->B);
+        phit[i] = phitilde(wdm,i*PI2/Tobs);
     }
 
     for(int j=1; j<wdm->NF-1; j++)
@@ -353,9 +368,11 @@ void wavelet_transform_inverse(struct Wavelets *wdm, double *data)
 
         for(int i=0; i<wdm->NT; i++)
         {
-            wavelet_pixel_to_index(wdm,i,j,&k);
-            k-=wdm->kmin;
+            REAL(row,i) = 0.0;
+            IMAG(row,i) = 0.0;
             
+            wavelet_pixel_to_index(wdm,i,j,&k);
+                        
             if((i+j)%2==0)
             {
                 REAL(row,i) = data[k];
@@ -366,48 +383,168 @@ void wavelet_transform_inverse(struct Wavelets *wdm, double *data)
                 else       IMAG(row,i) =  data[k];
             }
         }
+        
+        glass_forward_complex_fft(row,wdm->NT);
 
-        gsl_fft_complex_radix2_forward (row, 1, wdm->NT);
         int jj = j*(wdm->NT/2);
-
+        
         // negative frequencies
         for(int i=wdm->NT/2-1; i>0; i--)
         {
+            double x = sign*phit[i];
             int kk = jj-i;
-            dataf[kk]   += sign*scale*phit[i]*REAL(row,wdm->NT-i);
-            dataf[N-kk] += sign*scale*phit[i]*IMAG(row,wdm->NT-i);
+            work[kk] += x*REAL(row,wdm->NT-i);
+            work[N-kk] += x*IMAG(row,wdm->NT-i);
         }
-        
+                
         // positive frequencies
         for(int i=0; i<wdm->NT/2; i++)
         {
-            int kk = jj+1;
-            dataf[kk]   += sign*scale*phit[i]*REAL(row,i);
-            dataf[N-kk] += sign*scale*phit[i]*IMAG(row,i);
+            double x = sign*phit[i];
+            int kk = i+jj;
+            work[kk] += x*REAL(row,i);
+            work[N-kk] += x*IMAG(row,i);
         }
-
     }
-
-    //print Fourier domain data
-    FILE *out = fopen("dataf.dat","w");
-    for(int n=1; n<N/2; n++) fprintf(out,"%e %e %e\n", n/wdm->T, dataf[n], dataf[N-n]);
-    fclose(out);
-
-    //print Time domain data
-    memcpy(datat,dataf,N*sizeof(double));
-    gsl_fft_halfcomplex_radix2_inverse(datat, 1, N);
     
-    out = fopen("datat.dat","w");
-    for(int n=0; n<N; n++)
-    {
-        fprintf(out,"%e %e\n", n*wdm->cadence, datat[n]);
-    }
-    fclose(out);
+    //unpack work vector into real and imaginary parts consistent w/ GLASS conventions
+    unpack_fft_output(data,work,N);
 
-    free_double_vector(datat);
-    free_double_vector(dataf);
-    free_double_vector(row);
+    //normalize -- wtf?
+    double fft_norm = 2.*sqrt(M_PI/Tobs);
+    for(int n=0; n<N; n++) data[n] *= fft_norm;
+
+
     free_double_vector(phit);
+    free_double_vector(work);
+    free_double_vector(row);
+}
+
+static void fourier_to_wavelet_transform_of_layer(struct Wavelets *wdm, double *window, double *data, int N, int layer)
+{
+    int i,n;
+    double *wdata = double_vector(2*N);
+    
+    // window data
+    for(i=-N/2; i<N/2; i++)
+    {
+        n = i+N/2;
+        
+        REAL(wdata,n) = 0.0;
+        IMAG(wdata,n) = 0.0;
+        
+        if(n > 0 && n < N)
+        {
+            REAL(wdata,n) = data[2*n]   * window[abs(i)];
+            IMAG(wdata,n) = data[2*n+1] * window[abs(i)];
+        }
+    }//end loop over window
+    
+    //get windowed data into time domain
+    //to get FFTed
+    glass_inverse_complex_fft(wdata, N);
+    
+    //normalization to match NJC's breadboard code
+    for(int n=0; n<2*N; n++) wdata[n]/=(double)N;
+
+    //populate layer
+    for(n=0; n<N; n++)
+    {
+        if(layer%2 == 0)
+        {
+            if((n+layer)%2==0) data[n] = REAL(wdata,n);
+            else               data[n] = IMAG(wdata,n);
+        }
+        else
+        {
+            if((n+layer)%2==0) data[n] =  REAL(wdata,n);
+            else               data[n] = -IMAG(wdata,n);
+        }
+    }//end loop over time slices
+    
+    free_double_vector(wdata);
+}
+
+void wavelet_transform_by_layers(struct Wavelets *wdm, int jmin, int Nlayers, double *window, double *data)
+{
+    int i,j,k,m,n;
+    
+    // size of input data
+    int N = (Nlayers+1)*wdm->NT;
+    
+    // transformed data
+    double *data_wdm = double_vector(N);
+    
+    //windowed data
+    double *wdata = double_vector(2*wdm->NT);
+
+    double norm = 1.0/sqrt(0.5*N);
+        
+    double alpha = 8.0/wdm->NT;
+    
+    // FFT incoming data (timeseries)
+    tukey(data, alpha, N);
+    glass_forward_real_fft(data, N);
+    
+    // loop over frequency layers
+    for(j=1; j<Nlayers+1; j++)
+    {
+        m = jmin + j - 1;
+        
+        // window data
+        for(i=-wdm->NT/2; i<wdm->NT/2; i++)
+        {
+            n = i+wdm->NT/2;
+            
+            REAL(wdata,n) = 0.0;
+            IMAG(wdata,n) = 0.0;
+            
+            k = i + j*wdm->NT/2;
+            
+            if(k > 0 && k < N/2)
+            {
+                REAL(wdata,n) = data[2*k]   * window[abs(i)];
+                IMAG(wdata,n) = data[2*k+1] * window[abs(i)];
+            }
+        }//end loop over window
+        
+        glass_inverse_complex_fft(wdata, wdm->NT);
+        
+        // index magic
+        for(i=0; i<wdm->NT; i++)
+        {
+            k = i*Nlayers + j - 1;
+            
+            if(m%2 == 0)
+            {
+                if((i+m)%2==0) data_wdm[k] = norm*REAL(wdata,i);
+                else           data_wdm[k] = norm*IMAG(wdata,i);
+            }
+            else
+            {
+                if((i+m)%2==0) data_wdm[k] =  norm*REAL(wdata,i);
+                else           data_wdm[k] = -norm*IMAG(wdata,i);
+            }
+        }//end loop over time slices
+    }
+    
+    //replace input data w/ WDM'ed data
+    memcpy(data, data_wdm, N*sizeof(double));
+    
+    free_double_vector(data_wdm);
+    free_double_vector(wdata);
+}
+
+
+void wavelet_transform_inverse_time(struct Wavelets *wdm, double *data)
+{
+    int N = wdm->NT*wdm->NF;
+    
+    //transform data from WDM to frequency domain
+    wavelet_tansform_inverse_fourier(wdm,data);
+    
+    //transform to time domain data
+    glass_inverse_real_fft(data,N);
 }
 
 void wavelet_transform_from_table(struct Wavelets *wdm, double *phase, double *freq, double *freqd, double *amp, int *jmin, int *jmax, double *wave, int *list, int *rlist, int Nmax)
@@ -460,15 +597,15 @@ void wavelet_transform_from_table(struct Wavelets *wdm, double *phase, double *f
             jj = kk + wdm->n_table[n]/2;
             if(jj>=0 && jj< wdm->n_table[n]-1)
             {
-                y = (1.0-dx)*gsl_vector_get(wdm->table[n],2*jj)   + dx*gsl_vector_get(wdm->table[n],2*(jj+1));
-                z = (1.0-dx)*gsl_vector_get(wdm->table[n],2*jj+1) + dx*gsl_vector_get(wdm->table[n],2*(jj+1)+1);
+                y = (1.0-dx)*wdm->table[n][2*jj]   + dx*wdm->table[n][2*(jj+1)];
+                z = (1.0-dx)*wdm->table[n][2*jj+1] + dx*wdm->table[n][2*(jj+1)+1];
             }
 
             jj = kk + wdm->n_table[n+1]/2;
-            if(jj >=0 && jj < wdm->n_table[n]-1)
+            if(jj >=0 && jj < wdm->n_table[n+1]-1)
             {
-                yy = (1.0-dx)*gsl_vector_get(wdm->table[n+1],2*jj)   + dx*gsl_vector_get(wdm->table[n+1],2*(jj+1));
-                zz = (1.0-dx)*gsl_vector_get(wdm->table[n+1],2*jj+1) + dx*gsl_vector_get(wdm->table[n+1],2*(jj+1)+1);
+                yy = (1.0-dx)*wdm->table[n+1][2*jj]   + dx*wdm->table[n+1][2*(jj+1)];
+                zz = (1.0-dx)*wdm->table[n+1][2*jj+1] + dx*wdm->table[n+1][2*(jj+1)+1];
             }
                 
             // interpolate over fdot
@@ -609,6 +746,59 @@ void active_wavelet_list(struct Wavelets *wdm, double *freqX, double *freqY, dou
     *Nwavelet = N;
 }
 
+void wavelet_window_frequency(struct Wavelets *wdm, double *window, int Nlayers)
+{
+    int i;
+    int N;
+    double T;
+    double domega;
+    double omega;
+    double norm=0.0;
+    
+    N = (Nlayers+1);
 
+    //mini wavelet structure for basis covering just N layers
+    struct Wavelets *wdm_temp = malloc(sizeof(struct Wavelets));
+    setup_wdm_basis(wdm_temp, N);
+    
+    T = wdm->dt*wdm->NT;
+    
+    domega = PI2/T;
 
+    //wdm window function
+    for(i=0; i<=wdm->NT/2; i++)
+    {
+        omega = i*domega;
+        window[i] = phitilde(wdm_temp,omega);
+    }
+    
+    //normalize
+    for(i=-wdm->NT/2; i<= wdm->NT/2; i++) norm += window[abs(i)]*window[abs(i)];
+    norm = sqrt(norm/wdm_temp->cadence);
+    
+    for(i=0; i<=wdm->NT/2; i++) window[i] /= norm;
+    
+    free(wdm_temp);
+    
+}
 
+void wavelet_transform_segment(struct Wavelets *wdm, int N, int layer, double *data)
+{
+    //wdm filter
+    double *window = double_vector(N/2+1);
+    
+    //normalization factor
+    double norm = 1./(2.0*wdm->NF*wdm->cadence);
+    
+    //layer-dependent factors
+    double domega = PI2/(N*WAVELET_DURATION);
+    
+    //get filter
+    for(int i=0; i<=N/2; i++)
+        window[i] = norm * phitilde(wdm, i*domega);
+        
+    //wdm transfrom from frequency domain
+    fourier_to_wavelet_transform_of_layer(wdm, window, data, N, layer);
+    
+    free_double_vector(window);
+}

@@ -1,21 +1,19 @@
 /*
- *  Copyright (C) 2023 Tyson B. Littenberg (MSFC-ST12)
+ * Copyright 2023 Tyson B. Littenberg & Neil J. Cornish
  *
- *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *  This program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
+ *  http://www.apache.org/licenses/LICENSE-2.0
  *
- *  You should have received a copy of the GNU General Public License
- *  along with with program; see the file COPYING. If not, write to the
- *  Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- *  MA  02111-1307  USA
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
+
 
 /**
  @file glass_noise_model.h
@@ -138,17 +136,17 @@ void map_array_to_foreground_params(struct ForegroundModel *model);
 /**
  \brief Allocates spline model structure and contents.
  */
-void alloc_spline_model(struct SplineModel *model, int Ndata, int Nchannel, int Nspline);
+void alloc_spline_model(struct SplineModel *model, int Ndata, int Nlayer, int Nchannel, int Nspline);
 
 /**
  \brief Allocates instrument model structure and contents.
  */
-void alloc_instrument_model(struct InstrumentModel *model, int Ndata, int Nchannel);
+void alloc_instrument_model(struct InstrumentModel *model, int Ndata, int Nlayer, int Nchannel);
 
 /**
  \brief Allocates galactic foreground model structure and contents.
  */
-void alloc_foreground_model(struct ForegroundModel *model, int Ndata, int Nchannel);
+void alloc_foreground_model(struct ForegroundModel *model, int Ndata, int Nlayer, int Nchannel);
 
 /**
  \brief Allocates SGWB model structure and contents.

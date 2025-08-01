@@ -1,20 +1,17 @@
 /*
- *  Copyright (C) 2019 Tyson B. Littenberg (MSFC-ST12), Neil J. Cornish
+ * Copyright 2019 Tyson B. Littenberg & Neil J. Cornish 
  *
- *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *  This program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
+ *  http://www.apache.org/licenses/LICENSE-2.0
  *
- *  You should have received a copy of the GNU General Public License
- *  along with with program; see the file COPYING. If not, write to the
- *  Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- *  MA  02111-1307  USA
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 #include <glass_utils.h>
@@ -80,8 +77,8 @@ void alloc_model(struct Data *data, struct Model *model, int Nmax)
     model->tdi         = malloc(sizeof(struct TDI)         );
     model->residual    = malloc(sizeof(struct TDI)         );
     
-    if(!strcmp(data->basis,"fourier")) alloc_noise(model->noise,data->NFFT, data->Nchannel);
-    if(!strcmp(data->basis,"wavelet")) alloc_noise(model->noise,data->N, data->Nchannel);
+    if(!strcmp(data->basis,"fourier")) alloc_noise(model->noise,data->NFFT, data->Nlayer, data->Nchannel);
+    if(!strcmp(data->basis,"wavelet")) alloc_noise(model->noise,data->N, data->Nlayer, data->Nchannel);
 
     alloc_tdi(model->tdi, data->N, data->Nchannel);
     alloc_tdi(model->residual, data->N, data->Nchannel);
@@ -722,11 +719,21 @@ void generate_noise_model(struct Data *data, struct Model *model)
 
 void generate_noise_model_wavelet(struct Data *data, struct Model *model)
 {
-    for(int n=0; n<data->N; n++)
+    int Nlayers = data->Nlayer;         //number of frequency layers
+    int Nslices = data->N/data->Nlayer; //number of time slices
+    for(int n=0; n<Nlayers; n++)
     {
-        for(int i=0; i<data->Nchannel; i++)
-            for(int j=i; j<data->Nchannel; j++)
-                model->noise->C[i][j][n] = model->noise->C[j][i][n] = data->noise->C[i][j][n]*sqrt(model->noise->eta[i]*model->noise->eta[j]);
+        for(int m=0; m<Nslices; m++)
+        {
+            int k = n*Nslices+m;
+            for(int i=0; i<data->Nchannel; i++)
+            {
+                for(int j=i; j<data->Nchannel; j++)
+                {
+                    model->noise->C[i][j][k] = model->noise->C[j][i][k] = data->noise->C[i][j][k]*sqrt(model->noise->eta[i*Nlayers+n]*model->noise->eta[j*Nlayers+n]);
+                }
+            }
+        }
 
     }
     invert_noise_covariance_matrix(model->noise);
@@ -970,7 +977,7 @@ double gaussian_log_likelihood_constant_norm(struct Data *data, struct Model *mo
     
     //loop over time segments
     if(!strcmp(data->basis,"fourier")) logLnorm -= (double)data->NFFT*log(model->noise->detC[0]);
-    if(!strcmp(data->basis,"wavelet")) logLnorm -= (double)data->N*log(model->noise->detC[0]);
+    if(!strcmp(data->basis,"wavelet")) logLnorm -= 0.5*(double)data->N*log(model->noise->detC[0]);
     
     return logLnorm;
 }
@@ -987,6 +994,8 @@ double gaussian_log_likelihood_model_norm(struct Data *data, struct Model *model
     for(int n=0; n<N; n++)
         logLnorm -= log(model->noise->detC[n]);
 
+    if(!strcmp(data->basis,"wavelet")) logLnorm *= 0.5;  //normalization of 1/2 for wavelet domain (sum over N, not N/2)
+    
     return logLnorm;
 }
 

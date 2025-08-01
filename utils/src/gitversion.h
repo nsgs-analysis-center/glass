@@ -1,1 +1,0 @@
-#define GITVERSION "a4f6685"

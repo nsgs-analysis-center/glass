@@ -1,3 +1,19 @@
+/*
+ * Copyright 2024 Tyson B. Littenberg & Neil J. Cornish 
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *  http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #include "glass_utils.h"
 
 
@@ -23,7 +39,7 @@ double galaxy_distribution(double *x, double bulge_to_disk, double bulge_radius,
 
 double galaxy_foreground(double f, double A, double f1, double alpha, double fk, double f2)
 {
-    double Sf = A*pow(f,5./3.) * exp(-pow(f/f1,alpha)) * 0.5*( 1. + tanh( (fk - f)/f2 ) );
+    double Sf = A*pow(f,-7./3.) * exp(-pow(f/f1,alpha)) * 0.5*( 1. + tanh( (fk - f)/f2 ) );
     return Sf;
 }
 
@@ -81,7 +97,7 @@ static void plms(double ***Plm, double *zlist)
     {
         for(m=0; m <= l; m++)
         {
-            x = (double)(2*l+1)/(4.0*M_PI)*gsl_sf_gamma((double)(l-m+1))/gsl_sf_gamma((double)(l+m+1));
+            x = (double)(2*l+1)/(4.0*M_PI)*tgamma((double)(l-m+1))/tgamma((double)(l+m+1));
             prefac[l][m] =  sqrt(x);
         }
     }
@@ -326,13 +342,12 @@ void initialize_galaxy_modulation(struct GalaxyModulation *gm, struct Wavelets *
     free(sa);
     
     //interpolants for modulation pattern
-    gm->XX_spline = gsl_spline_alloc (gsl_interp_cspline, gm->N);
-    gm->YY_spline = gsl_spline_alloc (gsl_interp_cspline, gm->N);
-    gm->ZZ_spline = gsl_spline_alloc (gsl_interp_cspline, gm->N);
-    gm->XY_spline = gsl_spline_alloc (gsl_interp_cspline, gm->N);
-    gm->XZ_spline = gsl_spline_alloc (gsl_interp_cspline, gm->N);
-    gm->YZ_spline = gsl_spline_alloc (gsl_interp_cspline, gm->N);
-    gm->acc       = gsl_interp_accel_alloc();
+    gm->XX_spline = alloc_cubic_spline(gm->N);
+    gm->YY_spline = alloc_cubic_spline(gm->N);
+    gm->ZZ_spline = alloc_cubic_spline(gm->N);
+    gm->XY_spline = alloc_cubic_spline(gm->N);
+    gm->XZ_spline = alloc_cubic_spline(gm->N);
+    gm->YZ_spline = alloc_cubic_spline(gm->N);
 
 
     double theta, phi;
@@ -354,7 +369,7 @@ void initialize_galaxy_modulation(struct GalaxyModulation *gm, struct Wavelets *
     for(i=0; i<gm->Npix; i++)
     {
         // get theta, phi coordinates of pixel (ecliptic)
-        pix2ang_ring(NSIDE,  i, &theta, &phi);
+        astropy_pix2ang_ring(NSIDE,  i, &theta, &phi);
         
         xe[0] = sin(theta)*cos(phi);
         xe[1] = sin(theta)*sin(phi);
@@ -389,23 +404,14 @@ static double galaxy_integrand(double *params, double r, double sintheta, double
     double Rgc = params[4];
     double *x = malloc(3*sizeof(double));
     
-    //conert from spherical SSB galactic coordinates to cartesian galacto-centric coordinates
+    //convert from spherical SSB galactic coordinates to cartesian galacto-centric coordinates
     double sinphi = sqrt(1.0-cosphi*cosphi);
     x[0] = r*cosphi*sintheta-Rgc;
     x[1] = r*sinphi*sintheta;
     x[2] = r*costheta;
 
-    /* 
-    volume element for integrand 
-    -- no sin(theta) dtheta dphi factor since Healpix uses equal area pixels
-    */
-    double r2 = x[0]*x[0] +x[1]*x[1] + x[2]*x[2];
-
     // unnomralized galactic mass density
     double rho = galaxy_distribution(x, A, Rb, Rd, Zd);
-
-    // volume element
-    rho /= sqrt(r2);
     
     free(x);
     return(rho);
@@ -419,23 +425,21 @@ static double galaxy_integration(double *params, double theta, double phi)
     double s5, s3;
     int i;
     double err, ferr, tol, min;
-    double Rd;
     
     double sintheta = sin(theta);
     double costheta = sqrt(1.0-sintheta*sintheta);
     double cosphi   = cos(phi);
     
     tol = 1.0e-6;
-    min = 1.0e-20;
+    min = 1.0e-10;
     
     double I5[5];
     double I3[3];
     
-    Rd = params[3];
+    rmax = 200.0;
+    h = rmax/10000.0;
 
-    rmax = 100.0*Rd;
-    h = Rd/100.0;
-    r = 0.0;
+    r = params[5]; //integration starts at Rcut (everything closer is resolved)
     
     IG = 0.0;
     
@@ -497,12 +501,12 @@ static void alm2map(double *skyrecon, double **almR, double **almI, double ***Pl
     
     x = (double)(Npix)/(4.0*M_PI);
     
-    pix2ang_ring(NSIDE, 0, &thold, &phi);
+    astropy_pix2ang_ring(NSIDE, 0, &thold, &phi);
     i = 1;
     
     for(pix=0; pix < Npix; pix++)
     {
-        pix2ang_ring(NSIDE, pix, &theta, &phi);
+        astropy_pix2ang_ring(NSIDE, pix, &theta, &phi);
         
         if(fabs(theta-thold) > 1.0e-6)
         {
@@ -555,12 +559,12 @@ static void map2alm(double *sky, double **almR, double **almI, double ***Plm)
         Npix = 12*NSIDE*NSIDE;
         
         // we use this to keep track of which theta ring were are on (not very efficient)
-        pix2ang_ring(NSIDE, 0, &thold, &phi);
+        astropy_pix2ang_ring(NSIDE, 0, &thold, &phi);
         i = 1;
         
         for(pix=0; pix < Npix; pix++)
         {
-            pix2ang_ring(NSIDE, pix, &theta, &phi);
+            astropy_pix2ang_ring(NSIDE, pix, &theta, &phi);
             
             if(fabs(theta-thold) > 1.0e-6)
             {
@@ -612,7 +616,7 @@ void sphharm(double ***Plm, double **almR, double **almI, double *sky)
     Npix = 12*NSIDE*NSIDE;
     
     // reconstructed map from the initial alms
-    skyrecon = double_vector(Npix);
+    skyrecon = double_vector((int)Npix);
     
     // initialize the alms
     for(l=0; l <= LMAX; l++)
@@ -657,7 +661,7 @@ void galaxy_modulation(struct GalaxyModulation *gm, double *params)
     double av;
     
     // galaxy in ecliptic coordinates
-    double *skyeclip = double_vector(gm->Npix);
+    double *skyeclip = double_vector((int)gm->Npix);
     for(int i=0; i<gm->Npix; i++)
         skyeclip[i] = galaxy_integration(params,gm->skytheta[i],gm->skyphi[i]);
 
@@ -725,12 +729,12 @@ void galaxy_modulation(struct GalaxyModulation *gm, double *params)
         xz[i] /= av;
     }
     
-    gsl_spline_init(gm->XX_spline, gm->t, xx, gm->N);
-    gsl_spline_init(gm->YY_spline, gm->t, yy, gm->N);
-    gsl_spline_init(gm->ZZ_spline, gm->t, zz, gm->N);
-    gsl_spline_init(gm->XY_spline, gm->t, xy, gm->N);
-    gsl_spline_init(gm->XZ_spline, gm->t, xz, gm->N);
-    gsl_spline_init(gm->YZ_spline, gm->t, yz, gm->N);
+    initialize_cubic_spline(gm->XX_spline, gm->t, xx);
+    initialize_cubic_spline(gm->YY_spline, gm->t, yy);
+    initialize_cubic_spline(gm->ZZ_spline, gm->t, zz);
+    initialize_cubic_spline(gm->XY_spline, gm->t, xy);
+    initialize_cubic_spline(gm->XZ_spline, gm->t, xz);
+    initialize_cubic_spline(gm->YZ_spline, gm->t, yz);
 
     FILE *out = fopen("modulation.dat", "w");
     for(int i=0; i<gm->N; i++)

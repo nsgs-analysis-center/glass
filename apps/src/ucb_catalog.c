@@ -1,20 +1,17 @@
 /*
- *  Copyright (C) 2019 Tyson B. Littenberg (MSFC-ST12), Kristen Lackeos, Neil J. Cornish
+ * Copyright 2019 Tyson B. Littenberg, Kristen Lackeos & Neil J. Cornish
  *
- *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *  This program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
+ *  http://www.apache.org/licenses/LICENSE-2.0
  *
- *  You should have received a copy of the GNU General Public License
- *  along with with program; see the file COPYING. If not, write to the
- *  Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- *  MA  02111-1307  USA
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 /**
@@ -373,7 +370,7 @@ int main(int argc, char *argv[])
     
     struct Noise *noise = NULL;
     noise = malloc(sizeof(struct Noise));
-    alloc_noise(noise, data->NFFT, data->Nchannel);
+    alloc_noise(noise, data->NFFT, data->Nlayer, data->Nchannel);
     
     //Noise model
     //Get noise spectrum for data segment
@@ -511,8 +508,8 @@ int main(int argc, char *argv[])
                         entryFlag[n] = 1;
                         Distance = waveform_distance(sample, entry->source[0], noise);
                         //append sample to entry
-                        entry->match[entry->I] = Match;
-                        entry->distance[entry->I] = Distance;
+                        entry->match[entry->Nchain] = Match;
+                        entry->distance[entry->Nchain] = Distance;
                         entry->stepFlag[i] = 1;
                         append_sample_to_entry(entry, sample, IMAX, data->N, data->Nchannel);
                         
@@ -552,7 +549,7 @@ int main(int argc, char *argv[])
     for(int n=0; n<catalog->N; n++)
     {
         
-        weight = (double)catalog->entry[n]->I/(double)(IMAX/downsample);
+        weight = (double)catalog->entry[n]->Nchain/(double)(IMAX/downsample);
         if(weight > weight_threshold)
         {
             //record index of catalog entry for detected source
@@ -579,7 +576,7 @@ int main(int argc, char *argv[])
     
     double f_med;
     double *f_vec;
-    size_t *index;
+    int *index;
     int i_med;
     
     fprintf(stdout,"\nPost processing events\n");
@@ -591,16 +588,17 @@ int main(int argc, char *argv[])
         entry = catalog->entry[n];
         
         //get sample containing median frequency as identifier of source
-        f_vec = calloc(entry->I,sizeof(double));
-        for(int i=0; i<entry->I; i++) f_vec[i] = entry->source[i]->f0;
+        f_vec = calloc(entry->Nchain,sizeof(double));
+        for(int i=0; i<entry->Nchain; i++) f_vec[i] = entry->source[i]->f0;
         
-        index = calloc(entry->I,(sizeof(size_t)));
-        gsl_sort_index(index,f_vec,1,entry->I);
-        i_med = (int)index[entry->I/2];
+        index = calloc(entry->Nchain,(sizeof(int)));
+        index_sort(index, f_vec, entry->Nchain);
+
+        i_med = (int)index[entry->Nchain/2];
         free(f_vec);
         free(index);
         
-        f_med = entry->source[i_med]->f0;//gsl_stats_median_from_sorted_data(f_vec, 1, entry->I);
+        f_med = entry->source[i_med]->f0;
         
         entry->i = i_med;
         
@@ -660,7 +658,7 @@ int main(int argc, char *argv[])
         fclose(out);
         
         //evidence for source related to number of visits in the chain
-        entry->evidence = (double)(entry->I-1)/(double)(IMAX/downsample);
+        entry->evidence = (double)(entry->Nchain-1)/(double)(IMAX/downsample);
         
         fprintf(catalogFile,"%s %lg %lg\n",entry->name, entry->SNR, entry->evidence);
     }
@@ -800,7 +798,7 @@ int main(int argc, char *argv[])
         out = fopen( filename, "w");
         
         //add parameters to file
-        for(int k=0; k<entry->I; k++)
+        for(int k=0; k<entry->Nchain; k++)
         {
             print_source_params(data,entry->source[k],out);
             
@@ -829,11 +827,11 @@ int main(int argc, char *argv[])
             
             //allocate and zero
             for(int k=0; k<data->Nchannel; k++)
-            hrec[j][k] = calloc(entry->I , sizeof(double));
+            hrec[j][k] = calloc(entry->Nchain , sizeof(double));
         }
         
         //insert waveform power
-        for(int i=0; i<entry->I; i++)
+        for(int i=0; i<entry->Nchain; i++)
         {
             
             source_waveform_wrapper(entry->source[i], data, orbit);
@@ -861,7 +859,7 @@ int main(int argc, char *argv[])
         {
             for(int k=0; k<data->Nchannel; k++)
             {
-                gsl_sort(hrec[j][k],1,entry->I);
+                double_sort(hrec[j][k],entry->Nchain);
             }
         }
         double A_med,A_lo_50,A_hi_50,A_lo_90,A_hi_90;
@@ -875,17 +873,17 @@ int main(int argc, char *argv[])
         {
             double f = (double)(j+data->qmin)/data->T;
             
-            A_med   = gsl_stats_median_from_sorted_data   (hrec[j][0], 1, entry->I);
-            A_lo_50 = gsl_stats_quantile_from_sorted_data (hrec[j][0], 1, entry->I, 0.25);
-            A_hi_50 = gsl_stats_quantile_from_sorted_data (hrec[j][0], 1, entry->I, 0.75);
-            A_lo_90 = gsl_stats_quantile_from_sorted_data (hrec[j][0], 1, entry->I, 0.05);
-            A_hi_90 = gsl_stats_quantile_from_sorted_data (hrec[j][0], 1, entry->I, 0.95);
+            A_med   = get_quantile_from_sorted_data (hrec[j][0], entry->Nchain, 0.50);
+            A_lo_50 = get_quantile_from_sorted_data (hrec[j][0], entry->Nchain, 0.25);
+            A_hi_50 = get_quantile_from_sorted_data (hrec[j][0], entry->Nchain, 0.75);
+            A_lo_90 = get_quantile_from_sorted_data (hrec[j][0], entry->Nchain, 0.05);
+            A_hi_90 = get_quantile_from_sorted_data (hrec[j][0], entry->Nchain, 0.95);
             
-            E_med   = gsl_stats_median_from_sorted_data   (hrec[j][1], 1, entry->I);
-            E_lo_50 = gsl_stats_quantile_from_sorted_data (hrec[j][1], 1, entry->I, 0.25);
-            E_hi_50 = gsl_stats_quantile_from_sorted_data (hrec[j][1], 1, entry->I, 0.75);
-            E_lo_90 = gsl_stats_quantile_from_sorted_data (hrec[j][1], 1, entry->I, 0.05);
-            E_hi_90 = gsl_stats_quantile_from_sorted_data (hrec[j][1], 1, entry->I, 0.95);
+            E_med   = get_quantile_from_sorted_data (hrec[j][1], entry->Nchain, 0.50);
+            E_lo_50 = get_quantile_from_sorted_data (hrec[j][1], entry->Nchain, 0.25);
+            E_hi_50 = get_quantile_from_sorted_data (hrec[j][1], entry->Nchain, 0.75);
+            E_lo_90 = get_quantile_from_sorted_data (hrec[j][1], entry->Nchain, 0.05);
+            E_hi_90 = get_quantile_from_sorted_data (hrec[j][1], entry->Nchain, 0.95);
             
             fprintf(out,"%.12g ",f);
             fprintf(out,"%lg ",A_med);
@@ -924,10 +922,7 @@ int main(int argc, char *argv[])
 
         /* Gaussian mixture model fit to posterior */
         //fprintf(stdout,"\nGaussian Mixture Model fit:\n");
-        const gsl_rng_type *T = gsl_rng_default;
-        gsl_rng *r = gsl_rng_alloc(T);
-        gsl_rng_env_setup();
-        gsl_rng_set (r, 190521);
+        unsigned int r = 190521;
 
         int counter;
         int CMAX = 10;
@@ -935,7 +930,7 @@ int main(int argc, char *argv[])
         double BIC;
         
         counter = 0;
-        while(gaussian_mixture_model_wrapper(model->prior, flags, entry, outdir, NMODE_start, NTHIN, r, &BIC))
+        while(gaussian_mixture_model_wrapper(model->prior, flags, entry, outdir, NMODE_start, NTHIN, &r, &BIC))
         {
             counter++;
             if(counter>CMAX)
@@ -947,7 +942,6 @@ int main(int argc, char *argv[])
             }
         }
         
-        gsl_rng_free(r);
     }//end loop over catalog entries
     
     

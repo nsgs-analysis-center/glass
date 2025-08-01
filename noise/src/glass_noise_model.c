@@ -1,21 +1,19 @@
 /*
- *  Copyright (C) 2023 Tyson B. Littenberg (MSFC-ST12) and Robbie Rosati (ST12 / UAH)
+ * Copyright 2023 Tyson B. Littenberg, Neil J. Cornish, Robert Rosati
  *
- *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *  This program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
+ *  http://www.apache.org/licenses/LICENSE-2.0
  *
- *  You should have received a copy of the GNU General Public License
- *  along with with program; see the file COPYING. If not, write to the
- *  Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- *  MA  02111-1307  USA
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
+
 
 #include <glass_utils.h>
 
@@ -83,32 +81,32 @@ void map_foreground_params_to_array(struct ForegroundModel *model)
     model->sgal[4] = log(model->f2);
 }
 
-void alloc_spline_model(struct SplineModel *model, int Ndata, int Nchannel, int Nspline)
+void alloc_spline_model(struct SplineModel *model, int Ndata, int Nlayer, int Nchannel, int Nspline)
 {
     model->Nchannel = Nchannel;
     
     model->psd = malloc(sizeof(struct Noise));
     model->spline=malloc(sizeof(struct Noise));
     
-    alloc_noise(model->psd, Ndata, Nchannel);
-    alloc_noise(model->spline, Nspline, Nchannel);
+    alloc_noise(model->psd, Ndata, Nlayer, Nchannel);
+    alloc_noise(model->spline, Nspline, Nlayer, Nchannel);
 }
 
-void alloc_instrument_model(struct InstrumentModel *model, int Ndata, int Nchannel)
+void alloc_instrument_model(struct InstrumentModel *model, int Ndata, int Nlayer, int Nchannel)
 {
     model->Nlink=6;
     model->soms = malloc(model->Nlink*sizeof(double));
     model->sacc = malloc(model->Nlink*sizeof(double));
     model->psd = malloc(sizeof(struct Noise));
-    alloc_noise(model->psd, Ndata, Nchannel);
+    alloc_noise(model->psd, Ndata, Nlayer, Nchannel);
 }
 
-void alloc_foreground_model(struct ForegroundModel *model, int Ndata, int Nchannel)
+void alloc_foreground_model(struct ForegroundModel *model, int Ndata, int Nlayer, int Nchannel)
 {
     model->Nparams=5;
     model->sgal = malloc(model->Nparams*sizeof(double));
     model->psd = malloc(sizeof(struct Noise));
-    alloc_noise(model->psd, Ndata, Nchannel);
+    alloc_noise(model->psd, Ndata, Nlayer, Nchannel);
 }
 
 struct SGWBResponse* global_SGWBResponse;
@@ -263,15 +261,13 @@ void update_spline_noise_model(struct SplineModel *model, int new_knot, int min_
     /* find location in data vector of knot */
     double T = 1./(psd->f[1] - psd->f[0]);
 
-    gsl_spline **cspline = malloc(model->Nchannel*sizeof(gsl_spline *));
-    gsl_interp_accel **acc = malloc(model->Nchannel*sizeof(gsl_interp_accel *));
+    struct CubicSpline **cspline = malloc(model->Nchannel*sizeof(struct CubicSpline *));
     
     /* have to recompute the spline everywhere (derivatives on boundary) */
     for(int n=0; n<model->Nchannel; n++)
     {
-        cspline[n] = gsl_spline_alloc(gsl_interp_akima, spline->N);
-        acc[n] = gsl_interp_accel_alloc();
-        gsl_spline_init(cspline[n],spline->f,spline->C[n][n],spline->N);
+        cspline[n] = alloc_cubic_spline(spline->N);
+        initialize_cubic_spline(cspline[n], spline->f, spline->C[n][n]);
     }
     
     int imin = (int)((spline->f[min_knot]-psd->f[0])*T);
@@ -282,7 +278,7 @@ void update_spline_noise_model(struct SplineModel *model, int new_knot, int min_
     {
         for(int n=0; n<model->Nchannel; n++)
         {
-            psd->C[n][n][i]=gsl_spline_eval(cspline[n],psd->f[i],acc[n]);
+            psd->C[n][n][i]=spline_interpolation(cspline[n],psd->f[i]);
             
             /*
              apply transfer function
@@ -296,12 +292,9 @@ void update_spline_noise_model(struct SplineModel *model, int new_knot, int min_
 
     for(int n=0; n<model->Nchannel; n++)
     {
-        gsl_spline_free(cspline[n]);
-        gsl_interp_accel_free(acc[n]);
+        free_cubic_spline(cspline[n]);
     }
     free(cspline);
-    free(acc);
-
 }
 
 
@@ -311,7 +304,7 @@ void generate_spline_noise_model(struct SplineModel *model)
     struct Noise *spline = model->spline;
     
     for(int i=0; i<model->Nchannel; i++)
-        CubicSplineGSL(spline->N, spline->f, spline->C[i][i], psd->N, psd->f, psd->C[i][i]);
+        CubicSplineGLASS(spline->N, spline->f, spline->C[i][i], psd->N, psd->f, psd->C[i][i]);
 
     //set a floor on Sn so likelihood doesn't go crazy
     for(int n=0; n<psd->N; n++)
@@ -470,9 +463,9 @@ void generate_instrument_noise_model(struct Orbit *orbit, struct InstrumentModel
         }
         
         //Normalization
-//        for(int i=0; i<data->Nchannel; i++)
-//            for(int j=0; j<data->Nchannel; j++)
-//                model->psd->C[i][j][n] *= 2.0;
+        for(int i=0; i<model->psd->Nchannel; i++)
+            for(int j=0; j<model->psd->Nchannel; j++)
+                model->psd->C[i][j][n] /= 2.0;
     }
 }
 
@@ -484,8 +477,12 @@ void generate_instrument_noise_model_wavelet(struct Wavelets *wdm, struct Orbit 
     */
     struct InstrumentModel *grid = malloc(sizeof(struct InstrumentModel));
 
+    // active layers
+    int imin = (int)round(model->psd->f[0]/wdm->df);
+    int imax = (int)round(model->psd->f[model->psd->N-1]/wdm->df)+1;
+
     // initialize data models
-    alloc_instrument_model(grid, 2*wdm->NF, 3);
+    alloc_instrument_model(grid, 2*wdm->NF, imax-imin, 3);
 
     // set up psd frequency grid
     for(int n=0; n<grid->psd->N; n++)
@@ -506,8 +503,6 @@ void generate_instrument_noise_model_wavelet(struct Wavelets *wdm, struct Orbit 
     */
     double ***C     = model->psd->C;
     double ***Cgrid = grid->psd->C;
-    int imin = (int)round(model->psd->f[0]/wdm->df);
-    int imax = (int)round(model->psd->f[model->psd->N-1]/wdm->df)+1;
     for(int i=imin; i<imax; i++)
     {
         int j = 2*i-2;
@@ -520,7 +515,7 @@ void generate_instrument_noise_model_wavelet(struct Wavelets *wdm, struct Orbit 
     for(int i=0; i<model->psd->N; i++)
         for(int n=0; n<3; n++)
             for(int m=n; m<3; m++)
-                C[n][m][i]/=4.;
+                C[n][m][i]/=8.;
 
     free_instrument_model(grid);
 
@@ -536,7 +531,10 @@ void generate_galactic_foreground_model(struct ForegroundModel *model)
     for(int n=0; n<model->psd->N; n++)
     {
         f = model->psd->f[n];
-        
+        double fstar=CLIGHT/(PI2*LARM);
+        double x = f/fstar;
+        double t = 4.*x*x*sin(x)*sin(x); //transfer function
+
         //skip confusion noise calculation at high frequencies where contribution is negligible
         int high_f_check = 0;
         if(f>model->f1*10) high_f_check = 1;
@@ -550,13 +548,13 @@ void generate_galactic_foreground_model(struct ForegroundModel *model)
                 model->psd->C[0][0][n] = Sgal;
                 break;
             case 2:
-                model->psd->C[0][0][n] = model->psd->C[1][1][n] = 1.5*Sgal;
+                model->psd->C[0][0][n] = model->psd->C[1][1][n] = 1.5*t*Sgal;
                 model->psd->C[0][1][n] = model->psd->C[1][0][n] = 0;
                 break;
             case 3:
-                model->psd->C[0][0][n] = model->psd->C[1][1][n] = model->psd->C[2][2][n] = Sgal;
-                model->psd->C[0][1][n] = model->psd->C[0][2][n] = model->psd->C[1][2][n] = -0.5*Sgal;
-                model->psd->C[1][0][n] = model->psd->C[2][0][n] = model->psd->C[2][1][n] = -0.5*Sgal;
+                model->psd->C[0][0][n] = model->psd->C[1][1][n] = model->psd->C[2][2][n] = t*Sgal;
+                model->psd->C[0][1][n] = model->psd->C[0][2][n] = model->psd->C[1][2][n] = -0.5*t*Sgal;
+                model->psd->C[1][0][n] = model->psd->C[2][0][n] = model->psd->C[2][1][n] = -0.5*t*Sgal;
                 break;
         }
     }
@@ -569,8 +567,12 @@ void generate_galactic_foreground_model_wavelet(struct Wavelets *wdm, struct For
     */
     struct ForegroundModel *grid = malloc(sizeof(struct ForegroundModel));
 
+    // active layers
+    int imin = (int)round(model->psd->f[0]/wdm->df);
+    int imax = (int)round(model->psd->f[model->psd->N-1]/wdm->df)+1;
+
     // initialize data models
-    alloc_foreground_model(grid, 2*wdm->NF, 3);
+    alloc_foreground_model(grid, 2*wdm->NF, imax-imin, 3);
 
     // set up psd frequency grid
     for(int n=0; n<grid->psd->N; n++)
@@ -593,8 +595,6 @@ void generate_galactic_foreground_model_wavelet(struct Wavelets *wdm, struct For
     */
     double ***C     = model->psd->C;
     double ***Cgrid = grid->psd->C;
-    int imin = (int)round(model->psd->f[0]/wdm->df);
-    int imax = (int)round(model->psd->f[model->psd->N-1]/wdm->df)+1;
 
     for(int i=imin; i<imax; i++)
     {
@@ -609,6 +609,14 @@ void generate_galactic_foreground_model_wavelet(struct Wavelets *wdm, struct For
         for(int n=0; n<3; n++)
             for(int m=n; m<3; m++)
                 if(n!=m) C[n][m][i]*=-2.;
+
+
+    //NOTE: normalization fudge factor
+    for(int i=0; i<model->psd->N; i++)
+        for(int n=0; n<3; n++)
+            for(int m=n; m<3; m++)
+                C[n][m][i]/=8.;
+
 
 
     free_foreground_model(grid);
@@ -756,12 +764,12 @@ void generate_full_dynamic_covariance_matrix(struct Wavelets *wdm, struct Instru
 
             printf("conf noise\n");
             //modulated galactic foreground
-            full->C[0][0][k] += conf->psd->C[0][0][j-jmin]*gsl_spline_eval(conf->modulation->XX_spline, t, conf->modulation->acc);
-            full->C[1][1][k] += conf->psd->C[1][1][j-jmin]*gsl_spline_eval(conf->modulation->YY_spline, t, conf->modulation->acc);
-            full->C[2][2][k] += conf->psd->C[2][2][j-jmin]*gsl_spline_eval(conf->modulation->ZZ_spline, t, conf->modulation->acc);
-            full->C[0][1][k] += conf->psd->C[0][1][j-jmin]*gsl_spline_eval(conf->modulation->XY_spline, t, conf->modulation->acc); 
-            full->C[0][2][k] += conf->psd->C[0][2][j-jmin]*gsl_spline_eval(conf->modulation->XZ_spline, t, conf->modulation->acc); 
-            full->C[1][2][k] += conf->psd->C[1][2][j-jmin]*gsl_spline_eval(conf->modulation->YZ_spline, t, conf->modulation->acc); 
+            full->C[0][0][k] += conf->psd->C[0][0][j-jmin]*spline_interpolation(conf->modulation->XX_spline, t);
+            full->C[1][1][k] += conf->psd->C[1][1][j-jmin]*spline_interpolation(conf->modulation->YY_spline, t);
+            full->C[2][2][k] += conf->psd->C[2][2][j-jmin]*spline_interpolation(conf->modulation->ZZ_spline, t);
+            full->C[0][1][k] += conf->psd->C[0][1][j-jmin]*spline_interpolation(conf->modulation->XY_spline, t);
+            full->C[0][2][k] += conf->psd->C[0][2][j-jmin]*spline_interpolation(conf->modulation->XZ_spline, t);
+            full->C[1][2][k] += conf->psd->C[1][2][j-jmin]*spline_interpolation(conf->modulation->YZ_spline, t);
 
 
             printf("sgwb noise\n");
@@ -926,7 +934,7 @@ void initialize_spline_model(struct Orbit *orbit, struct Data *data, struct Spli
 {
     
     // Initialize data models
-    alloc_spline_model(model, data->NFFT, data->Nchannel, Nspline);
+    alloc_spline_model(model, data->NFFT, data->Nlayer, data->Nchannel, Nspline);
     
     //set max and min spline points
     model->Nmin = MIN_SPLINE_STENCIL;
@@ -968,7 +976,7 @@ void initialize_spline_model(struct Orbit *orbit, struct Data *data, struct Spli
 void initialize_instrument_model(struct Orbit *orbit, struct Data *data, struct InstrumentModel *model)
 {
     // initialize data models
-    alloc_instrument_model(model, data->NFFT, data->Nchannel);
+    alloc_instrument_model(model, data->NFFT, data->Nlayer, data->Nchannel);
     
     // set up psd frequency grid
     for(int n=0; n<model->psd->N; n++)
@@ -991,17 +999,17 @@ void initialize_instrument_model_wavelet(struct Orbit *orbit, struct Data *data,
     struct Wavelets *wdm = data->wdm;
 
     // initialize data models
-    alloc_instrument_model(model, data->qmax - data->qmin, data->Nchannel);
+    alloc_instrument_model(model, data->lmax-data->lmin, data->Nlayer, data->Nchannel);
     
     // set up psd frequency grid
     for(int n=0; n<model->psd->N; n++)
-        model->psd->f[n] = (data->qmin+n)*wdm->df;
+        model->psd->f[n] = (data->lmin+n)*wdm->df;
 
     // initialize noise levels
     for(int i=0; i<model->Nlink; i++)
     {
-        model->soms[i] = 2.25e-22;
-        model->sacc[i] = 9.00e-30;
+        model->soms[i] = 1.28e-22;
+        model->sacc[i] = 5.76e-30;
     }
     
     // get noise covariance matrix for initial parameters
@@ -1011,19 +1019,27 @@ void initialize_instrument_model_wavelet(struct Orbit *orbit, struct Data *data,
 void initialize_foreground_model(struct Orbit *orbit, struct Data *data, struct ForegroundModel *model)
 {
     // initialize data models
-    alloc_foreground_model(model, data->NFFT, data->Nchannel);
+    alloc_foreground_model(model, data->NFFT, data->Nlayer, data->Nchannel);
     
     // set up psd frequency grid
     for(int n=0; n<model->psd->N; n++)
         model->psd->f[n] = data->fmin + (double)n/data->T;
 
-    // initialize foreground parameters levels
+    // initialize constant foreground parameters levels 
     model->Tobs  =  data->T;
-    model->Amp   =  2.27e-37;
-    model->f1    =  1.951343e-03;
-    model->alpha =  1.52;
-    model->fk    =  3.633222e-03;
-    model->f2    =  5.100000e-04;
+    model->Amp   =  1.2826e-44;
+    model->alpha =  1.629667;
+    model->f2    =  4.810781e-4;
+
+    // initialize time dependent foreground parameter elves
+    double af1 = -2.235e-1;
+    double bf1 = -2.7040844;
+    double afk = -3.60976122e-1;
+    double bfk = -2.37822436;
+
+    model->f1  =  pow(10., af1*log10(model->Tobs/YEAR) + bf1);
+    model->fk  =  pow(10., afk*log10(model->Tobs/YEAR) + bfk);
+
     map_foreground_params_to_array(model);
     
     // get noise covariance matrix for initial parameters
@@ -1096,19 +1112,26 @@ void initialize_foreground_model_wavelet(struct Orbit *orbit, struct Data *data,
     struct Wavelets *wdm = data->wdm;
 
     // initialize data models
-    alloc_foreground_model(model, data->qmax-data->qmin, data->Nchannel);
+    alloc_foreground_model(model, data->lmax-data->lmin, data->Nlayer, data->Nchannel);
     
     // set up psd frequency grid
     for(int n=0; n<model->psd->N; n++)
-        model->psd->f[n] = (data->qmin+n)*wdm->df;
+        model->psd->f[n] = (data->lmin+n)*wdm->df;
 
-    // initialize foreground parameters levels
+    // initialize constant foreground parameters levels 
     model->Tobs  =  data->T;
-    model->Amp   =  2.27e-37;
-    model->f1    =  1.951343e-03;
-    model->alpha =  1.52;
-    model->fk    =  3.633222e-03;
-    model->f2    =  5.100000e-04;
+    model->Amp   =  1.2826e-44;
+    model->alpha =  1.629667;
+    model->f2    =  4.810781e-4;
+
+    // initialize time dependent foreground parameter elves
+    double af1 = -2.235e-1;
+    double bf1 = -2.7040844;
+    double afk = -3.60976122e-1;
+    double bfk = -2.37822436;
+
+    model->f1  =  pow(10., af1*log10(model->Tobs/YEAR) + bf1);
+    model->fk  =  pow(10., afk*log10(model->Tobs/YEAR) + bfk);
     map_foreground_params_to_array(model);
     
     // get noise covariance matrix for initial parameters
@@ -1122,12 +1145,13 @@ void initialize_foreground_model_wavelet(struct Orbit *orbit, struct Data *data,
      * Compute galaxy modulation
     **************************************************/
     
-    double *galaxy_params = double_vector(5); // defines galaxy shape
-    galaxy_params[0] = 0.25; // A 0.25  bulge fraction
-    galaxy_params[1] = 0.8;  // Rb 0.8  bulge radius (kpc)
-    galaxy_params[2] = 2.5;  // Rd 2.5  disk radius (kpc)
-    galaxy_params[3] = 0.4;  // Zd 0.4  disk height (kpc)
-    galaxy_params[4] = 7.2;  // RGC 7.2 distance from solar BC to GC (kpc)
+    double *galaxy_params = double_vector(6); // defines galaxy shape
+    galaxy_params[0] = 0.25; // A 0.25    bulge fraction
+    galaxy_params[1] = 0.8;  // Rb 0.8    bulge radius (kpc)
+    galaxy_params[2] = 2.5;  // Rd 2.5    disk radius (kpc)
+    galaxy_params[3] = 0.4;  // Zd 0.4    disk height (kpc)
+    galaxy_params[4] = 7.2;  // RGC 7.2   distance from solar BC to GC (kpc)
+    galaxy_params[5] = 3.5;  // Rcut 3.5  radius out to which all sources are found (kpc)
 
     //computes the modulation of the confusion noise
     galaxy_modulation(model->modulation, galaxy_params);
@@ -1164,7 +1188,7 @@ void GetDynamicNoiseModel(struct Data *data, struct Orbit *orbit, struct Flags *
     sprintf(filename,"%s/power_noise.dat",data->dataDir);
     FILE *fptr=fopen(filename,"w");
     int k;
-    for(int j=data->qmin; j<data->qmax; j++)
+    for(int j=data->lmin; j<data->lmax; j++)
     {
         double f = j*data->wdm->df;
         for(int i=0; i<data->wdm->NT; i++)

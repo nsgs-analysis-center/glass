@@ -1,20 +1,17 @@
 /*
- *  Copyright (C) 2019 Tyson B. Littenberg (MSFC-ST12), Neil J. Cornish
+ * Copyright 2019 Tyson B. Littenberg & Neil J. Cornish
  *
- *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *  This program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
+ *  http://www.apache.org/licenses/LICENSE-2.0
  *
- *  You should have received a copy of the GNU General Public License
- *  along with with program; see the file COPYING. If not, write to the
- *  Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- *  MA  02111-1307  USA
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 /**
@@ -30,17 +27,14 @@
 #ifndef lisa_h
 #define lisa_h
 
-//#include <stdio.h>
-//#include <hdf5.h>
-//#include <gsl/gsl_errno.h>
-//#include <gsl/gsl_spline.h>
-//#include "glass_constants.h"
-
 /// Mean arm length of constellation (m) for baseline LISA configuration
 #define LARM 2.5e9
 
 /// Sample cadence for LISA (s)
-#define LISA_CADENCE 7.5
+#define LISA_CADENCE 5
+
+/// Number of orbit ephemerides samples per year
+#define LISA_ORBIT_SAMPLES_PER_YEAR 200
 
 /** @name Component Noise Levels For Phase Data */
 ///@{
@@ -96,12 +90,9 @@ struct Orbit
      Stores the derivatives for the cubic spline for the location of each spacecraft (\f$dx,dy,dz\f$) and some internal `GSL` workspace `acc`.
      */
     ///@{
-    gsl_spline **dx; //!<spline derivatives in x-coordinate
-    gsl_spline **dy; //!<spline derivatives in y-coordinate
-    gsl_spline **dz; //!<spline derivatives in z-coordinate
-    gsl_interp_accel *dx_acc; //!<gsl interpolation work space for x-coordinate
-    gsl_interp_accel *dy_acc; //!<gsl interpolation work space for y-coordinate
-    gsl_interp_accel *dz_acc; //!<gsl interpolation work space for z-coordinate
+    struct CubicSpline **dx; //!<spline derivatives in x-coordinate
+    struct CubicSpline **dy; //!<spline derivatives in y-coordinate
+    struct CubicSpline **dz; //!<spline derivatives in z-coordinate
     ///@}
     
     /**
@@ -216,6 +207,11 @@ void initialize_numeric_orbit(struct Orbit *orbit);
 void initialize_interpolated_analytic_orbits(struct Orbit *orbit, double Tobs, double t0);
 
 /**
+ \brief allocate memory for Orbit
+ */
+void alloc_orbit(struct Orbit *orbit, int Norb);
+
+/**
  \brief free memory allocated for Orbit
  */
 void free_orbit(struct Orbit *orbit);
@@ -246,25 +242,28 @@ void LISA_tdi(double L, double fstar, double T, double ***d, double f0, long q, 
 void LISA_tdi_FF(double L, double fstar, double T, double ***d, double f0, long q, double *X, double *Y, double *Z, double *A, double *E, int BW, int NI);
 /// LISA TDI (LDC Sangria data)
 void LISA_tdi_Sangria(double L, double fstar, double T, double ***d, double f0, long q, double *X, double *Y, double *Z, double *A, double *E, int BW, int NI);
-void LISA_TDI_spline(double *M, double *Mf, int a, int b, int c, double* tarray, int n, gsl_spline *amp_spline, gsl_spline *phase_spline, gsl_interp_accel *acc, double Aplus, double Across, double cos2psi, double sin2psi, double *App, double *Apm, double *Acp, double *Acm, double *kr, double *Larm);
 ///@}
 void LISA_polarization_tensor_njc(double costh, double phi, double eplus[4][4], double ecross[4][4], double k[4]);
 
 
 /**
- \brief Generic LISA response using interpolated signal phase and amplitude
+ \brief Generic LISA response using interpolated signal frequency or phase and amplitude
  
  @param[in] Orbit structure
  @param[in] tarray time array for response
  @param[in] N size of tarray
- @param[in] params signal parameters (need extrinsic for response)
+ @param[in] costheta cosine ecliptic co-latitude
+ @param[in] psi ecliptic longitude
+ @param[in] cosi cosine inclination
+ @param[in] psi polarization angle
  @param[in] amp_spline signal amplitude interpolant
+ @param[in] freq_spline signal frequency interpolant
  @param[in] phase_spline signal phase interpolant
- @param[in] acc interpolation acceleration
- @param[out] R TDI structure of Response
- @param[out] Rf TDI structure of Response with phase flipped
+ @param[in] phase_ref reference phase (i.e. fast part of waveform)
+ @param[out] amp TDI structure of amplitude response
+ @param[out] phase TDI structure of phase response
  */
-void LISA_spline_response(struct Orbit *orbit, double *tarray, int N, double *params,  gsl_spline *amp_spline, gsl_spline *phase_spline, gsl_interp_accel *acc, struct TDI *R, struct TDI *Rf);
+void LISA_spline_response(struct Orbit *orbit, double *tarray, int N, double costh, double phi, double cosi, double psi, struct CubicSpline *amp_spline, struct CubicSpline *freq_spline, struct CubicSpline *phase_spline, double *phase_ref, struct TDI *tdi_amp, struct TDI *tdi_phase);
 
 
 /** @name  LISA Noise Model for equal arm, TDI1.5 configuration */
@@ -290,18 +289,6 @@ double GBnoise_FF(double T, double fstar, double f);
 /// Noise transfer function \f$ sin^2(f/f_*)\f$
 double noise_transfer_function(double x);
 ///@}
-
-/**
- \brief Wrapper to `GSL` cubic spline interpolation routines.
-
- @param[in] N number of spline points
- @param[in] x vector of independent-variable spline points
- @param[in] y vector of dependent-variable spline points
- @param[in] Nint number of interpolated points
- @param[out] xint vector of interpolated independent-variable points
- @param[out] yint vector of interpolated dependent-variable points
- */
-void CubicSplineGSL(int N, double *x, double *y, int Nint, double *xint, double *yint);
 
 /**
  \brief Print full-spectrum noise model to compare against other models/documents.
@@ -370,6 +357,20 @@ void LISA_detector_tensor(double L, double eplus[4][4], double ecross[4][4], dou
  @param[out] k unit vector to source location \f$\hat{k}\f$
  */
 void LISA_polarization_tensor(double costh, double phi, double eplus[4][4], double ecross[4][4], double k[4]);
+
+/**
+ \brief convert between time at reference LISA S/C and solar system barycenter (SSB)
+ 
+ @param[in] orbit Orbit structure
+ @param[in] costh cosine ecliptic co-latitude
+ @param[in] phi ecliptic longitude
+ @param[in] time input time array
+ @param[in] time_shifted shifted time array
+ @param[in] N size of arrays
+ @param[in] flag direction of shift (-1: ssb -> s/c, +1 s/c -> ssb)
+ 
+ */
+void LISA_spacecraft_to_barycenter_time(struct Orbit *orbit, double costh, double phi, double *time, double *time_shifted, int N, int flag);
 
 /**
  \brief Convert noise-orthogonal AET channels from Michelson-like XYZ channels

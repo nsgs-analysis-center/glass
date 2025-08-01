@@ -1,21 +1,17 @@
-
 /*
- *  Copyright (C) 2021 Tyson B. Littenberg (MSFC-ST12), Neil J. Cornish
+ * Copyright 2021 Tyson B. Littenberg
  *
- *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *  This program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
+ *  http://www.apache.org/licenses/LICENSE-2.0
  *
- *  You should have received a copy of the GNU General Public License
- *  along with with program; see the file COPYING. If not, write to the
- *  Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- *  MA  02111-1307  USA
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 /**
@@ -24,19 +20,6 @@
  */
 
 /*  REQUIRED LIBRARIES  */
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <math.h>
-#include <time.h>
-
-#include <sys/stat.h>
-
-#include <gsl/gsl_rng.h>
-#include <gsl/gsl_randist.h>
-
-#include <omp.h>
 
 #include <glass_utils.h>
 #include <glass_noise.h>
@@ -66,6 +49,9 @@ int main(int argc, char *argv[])
     start = time(NULL);
     char filename[MAXSTRINGSIZE];
 
+    /* allow nested parallelization in mcmc loop (for rebuilding fstat proposal) */
+    omp_set_max_active_levels(2);
+
     /* check arguments */
     print_LISA_ASCII_art(stdout);
     print_version(stdout);
@@ -81,7 +67,6 @@ int main(int argc, char *argv[])
     sprintf(data->basis,"fourier");
     parse_data_args(argc,argv,data,orbit,flags,chain,"fourier");
     parse_ucb_args(argc,argv,flags);
-
     if(flags->help) print_usage();
 
     int NC = chain->NC;
@@ -108,6 +93,9 @@ int main(int argc, char *argv[])
     if(flags->strainData)
         ReadData(data,orbit,flags);
     
+    /* noise model */
+    GetNoiseModel(data,orbit,flags);
+
     struct Source **inj=NULL;
     if(flags->NINJ>0)
     {
@@ -123,9 +111,16 @@ int main(int argc, char *argv[])
         
         /* set approximate f/fstar for segment */
         data->sine_f_on_fstar = sin((data->fmin + (data->fmax-data->fmin)/2.)/orbit->fstar);
-
     }
+
+    /* Add Gaussian noise realization */
+    if(flags->simNoise) AddNoise(data,data->tdi);
     
+    /* Store DFT copy of simulated data */
+    copy_tdi(data->tdi, data->dft);
+
+    /* print various data products for plotting */
+    print_data(data, flags);
     
     /* Load catalog cache file for proposals/priors */
     struct Catalog *catalog=malloc(sizeof(struct Catalog));
@@ -202,132 +197,115 @@ int main(int argc, char *argv[])
     //exit(1);
     
     //test covariance proposal
-    if(flags->updateCov) test_covariance_proposal(data, flags, model[0], prior, proposal[8], chain->r[0]);
+    if(flags->updateCov) test_covariance_proposal(data, flags, model[0], prior, proposal[8], &chain->r[0]);
     
     
     /* Write example gb_catalog bash script in run directory */
     print_ucb_catalog_script(flags, data, orbit);
-    
-    //For saving the number of threads actually given
-    int numThreads;
+
+    /* The MCMC loop */
+
     int mcmc = mcmc_start;
-    #pragma omp parallel num_threads(flags->threads)
+    
+    for(; mcmc < flags->NMCMC;)
     {
-        int threadID;
-        //Save individual thread number
-        threadID = omp_get_thread_num();
+        flags->burnin   = (mcmc<0) ? 1 : 0;
+        flags->maximize = 0;//(mcmc<-flags->NBURN/2) ? 1 : 0;
         
-        //Only one thread runs this section
-        if(threadID==0)  numThreads = omp_get_num_threads();
         
-        #pragma omp barrier
-        
-        /* The MCMC loop */
-        for(; mcmc < flags->NMCMC;)
+        // (parallel) loop over chains
+        //set the number of threads
+        #pragma omp parallel for num_threads(flags->threads)
+        for(int ic=0; ic<NC; ic++)
         {
-            if(threadID==0)
-            {
-                flags->burnin   = (mcmc<0) ? 1 : 0;
-                flags->maximize = 0;//(mcmc<-flags->NBURN/2) ? 1 : 0;
-            }
             
+            //loop over frequency segments
+            struct Model *model_ptr = model[chain->index[ic]];
+            struct Model *trial_ptr = trial[chain->index[ic]];
+            copy_model(model_ptr,trial_ptr);
             
-            #pragma omp barrier
-            // (parallel) loop over chains
-            for(int ic=threadID; ic<NC; ic+=numThreads)
+            for(int steps=0; steps < 500; steps++)
             {
-                
-                //loop over frequency segments
-                struct Model *model_ptr = model[chain->index[ic]];
-                struct Model *trial_ptr = trial[chain->index[ic]];
-                copy_model(model_ptr,trial_ptr);
-
-                for(int steps=0; steps < 100; steps++)
+                //reverse jump birth/death or split/merge moves
+                if(rand_r_U_0_1(&chain->r[ic])<0.1 && flags->rj)
                 {
-                    //reverse jump birth/death or split/merge moves
-                    if(gsl_rng_uniform(chain->r[ic])<0.9 && flags->rj)
-                    {
-                        ucb_rjmcmc(orbit, data, model_ptr, trial_ptr, chain, flags, prior, proposal, ic);
-                    }
-                    //fixed dimension parameter updates
-                    else
-                    {
-                        for(int n=0; n<model_ptr->Nlive; n++)
-                            ucb_mcmc(orbit, data, model_ptr, trial_ptr, chain, flags, prior, proposal, ic);
-                    }     
-                }//loop over MCMC steps
-
-
+                    ucb_rjmcmc(orbit, data, model_ptr, trial_ptr, chain, flags, prior, proposal, ic);
+                }
+                //fixed dimension parameter updates
+                else
+                {
+                    ucb_mcmc(orbit, data, model_ptr, trial_ptr, chain, flags, prior, proposal, ic);
+                }
+                
                 if( (flags->strainData || flags->simNoise) && !flags->psd)
                     noise_model_mcmc(orbit, data, model_ptr, trial_ptr, chain, flags, ic);
-
-
-                //update fisher matrix for each chain
-                for(int n=0; n<model_ptr->Nlive; n++)
-                    ucb_fisher(orbit, data, model_ptr->source[n], data->noise);
-
-
                 
-            }// end (parallel) loop over chains
+            }//loop over MCMC steps
             
-            //Next section is single threaded. Every thread must get here before continuing
-            #pragma omp barrier
-            if(threadID==0){
-                ptmcmc(model,chain,flags);
-                adapt_temperature_ladder(chain, mcmc+flags->NBURN);
-                
-                print_chain_files(data, model, chain, flags, mcmc);
-                
-                //track maximum log Likelihood
-                if(mcmc%100)
-                {
-                    if(update_max_log_likelihood(model, chain, flags)) mcmc = -flags->NBURN;
-                }
-                
-                //store reconstructed waveform
-                if(!flags->quiet) print_waveform_draw(data, model[chain->index[0]], flags);
-                
-                //update run status
-                if(mcmc%data->downsample==0)
-                {
-                    
-                    if(!flags->quiet)
-                    {
-                        print_chain_state(data, chain, model[chain->index[0]], flags, stdout, mcmc); //writing to file
-                        fprintf(stdout,"Sources: %i/%i\n",model[chain->index[0]]->Nlive,model[chain->index[0]]->Neff-1);
-                        print_acceptance_rates(proposal, UCB_PROPOSAL_NPROP, 0, stdout);
-                    }
-                    
-                    //save chain state to resume sampler
-                    save_chain_state(data, model, chain, flags, mcmc);
-                    
-                }
-                
-                //dump waveforms to file, update avgLogL for thermodynamic integration
-                if(mcmc>0 && mcmc%data->downsample==0)
-                {
-                    save_waveforms(data, model[chain->index[0]], mcmc/data->downsample);
-                    
-                    for(int ic=0; ic<NC; ic++)
-                    {
-                        chain->dimension[ic][model[chain->index[ic]]->Nlive]++;
-                        chain->avgLogL[ic] += model[chain->index[ic]]->logL + model[chain->index[ic]]->logLnorm;
-                    }
-                }
-                
-                if(mcmc>-flags->NBURN+flags->NBURN/10. && model[0]->Neff < model[0]->Nmax && flags->rj)
-                {
-                    for(int ic=0; ic<NC; ic++) model[ic]->Neff++;
-                    mcmc = -flags->NBURN;
-                }
-                
-                mcmc++;
+            //update fisher matrix for each chain
+            for(int n=0; n<model_ptr->Nlive; n++)
+                ucb_fisher(orbit, data, model_ptr->source[n], data->noise);
+            
+        }// end (parallel) loop over chains
+        
+        //Next section is single threaded. Every thread must get here before continuing
+        ptmcmc(model,chain,flags);
+        adapt_temperature_ladder(chain, mcmc+flags->NBURN);
+        
+        print_chain_files(data, model, chain, flags, mcmc);
+        
+        //track maximum log Likelihood
+        if(mcmc%100)
+        {
+            if(update_max_log_likelihood(model, chain, flags)) mcmc = -flags->NBURN;
+        }
+        
+        //store reconstructed waveform
+        if(!flags->quiet)
+        {
+            print_waveform_draw(data, model[chain->index[0]], flags);
+            print_psd_draw(data, model[chain->index[0]], flags);
+        }
+        
+        //update run status
+        if(mcmc%data->downsample==0)
+        {
+            
+            if(!flags->quiet)
+            {
+                print_chain_state(data, chain, model[chain->index[0]], flags, stdout, mcmc); //writing to file
+                fprintf(stdout,"Sources: %i/%i\n",model[chain->index[0]]->Nlive,model[chain->index[0]]->Neff-1);
+                print_acceptance_rates(proposal, UCB_PROPOSAL_NPROP, 0, stdout);
             }
-            //Can't continue MCMC until single thread is finished
-            #pragma omp barrier
             
-        }// end MCMC loop
-    }// End of parallelization
+            //save chain state to resume sampler
+            save_chain_state(data, model, chain, flags, mcmc);
+            
+        }
+        
+        //dump waveforms to file, update avgLogL for thermodynamic integration
+        if(mcmc>0 && mcmc%data->downsample==0)
+        {
+            save_waveforms(data, model[chain->index[0]], mcmc/data->downsample);
+            
+            for(int ic=0; ic<NC; ic++)
+            {
+                chain->dimension[ic][model[chain->index[ic]]->Nlive]++;
+                chain->avgLogL[ic] += model[chain->index[ic]]->logL + model[chain->index[ic]]->logLnorm;
+            }
+        }
+        
+        if(mcmc>-flags->NBURN+flags->NBURN/10. && model[0]->Neff < model[0]->Nmax && flags->rj)
+        {
+            for(int ic=0; ic<NC; ic++) model[ic]->Neff++;
+            mcmc = -flags->NBURN;
+            
+            rebuild_fstatistic_proposal(orbit, data, model[chain->index[0]], flags, proposal[1]);
+        }
+        
+        mcmc++;
+    
+    }// end MCMC loop
     
     //store final state of sampler
     save_chain_state(data, model, chain, flags, mcmc);
@@ -350,10 +328,10 @@ int main(int argc, char *argv[])
     //print total run time
     stop = time(NULL);
     
-    printf(" ELAPSED TIME = %g seconds on %i thread(s)\n",(double)(stop-start),numThreads);
+    printf(" ELAPSED TIME = %g seconds on %i thread(s)\n",(double)(stop-start),flags->threads);
     sprintf(filename,"%s/ucb_mcmc.log",flags->runDir);
     FILE *runlog = fopen(filename,"a");
-    fprintf(runlog," ELAPSED TIME = %g seconds on %i thread(s)\n",(double)(stop-start),numThreads);
+    fprintf(runlog," ELAPSED TIME = %g seconds on %i thread(s)\n",(double)(stop-start),flags->threads);
     fclose(runlog);
         
     return 0;

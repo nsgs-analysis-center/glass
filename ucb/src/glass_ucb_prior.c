@@ -1,20 +1,17 @@
 /*
- *  Copyright (C) 2019 Tyson B. Littenberg (MSFC-ST12), Neil J. Cornish
+ * Copyright 2019 Tyson B. Littenberg & Neil J. Cornish
  *
- *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *  This program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
+ *  http://www.apache.org/licenses/LICENSE-2.0
  *
- *  You should have received a copy of the GNU General Public License
- *  along with with program; see the file COPYING. If not, write to the
- *  Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- *  MA  02111-1307  USA
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 #include <glass_utils.h>
@@ -64,12 +61,7 @@ void set_galaxy_prior(struct Flags *flags, struct Prior *prior)
         MCMC/=10;
     }
     
-    const gsl_rng_type * T;
-    gsl_rng * r;
-    gsl_rng_env_setup();
-    
-    T = gsl_rng_default;
-    r = gsl_rng_alloc (T);
+    unsigned int r = 150914;
     
     x =  (double*)calloc(D,sizeof(double));
     xe = (double*)calloc(D,sizeof(double));
@@ -107,20 +99,20 @@ void set_galaxy_prior(struct Flags *flags, struct Prior *prior)
     {
         if(mc%(MCMC/100)==0)printProgress((double)mc/(double)MCMC);
         
-        alpha = gsl_rng_uniform(r);
+        alpha = rand_r_U_0_1(&r);
         
         if(alpha > 0.7)  // uniform draw from a big box
         {
             
-            y[0] = 20.0*GALAXY_Rd*(-1.0+2.0*gsl_rng_uniform(r));
-            y[1] = 20.0*GALAXY_Rd*(-1.0+2.0*gsl_rng_uniform(r));
-            y[2] = 40.0*GALAXY_Zd*(-1.0+2.0*gsl_rng_uniform(r));
+            y[0] = 20.0*GALAXY_Rd*(-1.0+2.0*rand_r_U_0_1(&r));
+            y[1] = 20.0*GALAXY_Rd*(-1.0+2.0*rand_r_U_0_1(&r));
+            y[2] = 40.0*GALAXY_Zd*(-1.0+2.0*rand_r_U_0_1(&r));
             
         }
         else
         {
             
-            beta = gsl_rng_uniform(r);
+            beta = rand_r_U_0_1(&r);
             
             if(beta > 0.8)
             {
@@ -134,8 +126,8 @@ void set_galaxy_prior(struct Flags *flags, struct Prior *prior)
             {
                 xx = 0.001;
             }
-            for(j=0; j< 2; j++) y[j] = x[j] + gsl_ran_gaussian(r,xx);
-            y[2] = x[2] + 0.1*gsl_ran_gaussian(r,xx);
+            for(j=0; j< 2; j++) y[j] = x[j] + rand_r_N_0_1(&r)*xx;
+            y[2] = x[2] + 0.1*rand_r_N_0_1(&r)*xx;
             
         }
         
@@ -143,7 +135,7 @@ void set_galaxy_prior(struct Flags *flags, struct Prior *prior)
         logLy = loglike(y, D);
         
         H = logLy - logLx;
-        beta = gsl_rng_uniform(r);
+        beta = rand_r_U_0_1(&r);
         beta = log(beta);
         
         if(H > beta)
@@ -171,15 +163,8 @@ void set_galaxy_prior(struct Flags *flags, struct Prior *prior)
             
             if(phi<0.0) phi += 2.0*M_PI;
             
-            //      if(mc%1000 == 0 && flags->verbose) fprintf(chain,"%d %e %e %e %e %e %e %e\n", mc/1000, logLx, x[0], x[1], x[2], theta, phi, r_ec);
-            
             ith = (int)(0.5*(1.0+sin(theta))*(double)(Nth));
-            //iph = (int)(phi/(2.0*M_PI)*(double)(Nph));
-            //ith = (int)(0.5*(1.0-sin(theta))*(double)(Nth));
             iph = (int)((2*M_PI-phi)/(2.0*M_PI)*(double)(Nph));
-            
-            //ith = (int)floor(Nth*gsl_rng_uniform(r));
-            //iph = (int)floor(Nph*gsl_rng_uniform(r));
             
             cnt++;
             
@@ -232,7 +217,6 @@ void set_galaxy_prior(struct Flags *flags, struct Prior *prior)
     free(y);
     free(xe);
     free(xg);
-    gsl_rng_free (r);
     if(!flags->quiet)fprintf(stdout,"\n================================================\n\n");
     fflush(stdout);
     
@@ -257,15 +241,9 @@ void set_uniform_prior(struct Flags *flags, struct Model *model, struct Data *da
     //TODO: assign priors by parameter name, use mapper to get into vector (more robust to changes)
     
     //frequency bin
-    model->prior[0][0] = data->fmin*data->T;//data->qmin;
-    model->prior[0][1] = data->fmax*data->T;//data->qmax;
+    model->prior[0][0] = data->fmin*data->T;
+    model->prior[0][1] = data->fmax*data->T;
     
-    if(!strcmp(data->basis,"wavelet"))
-    {
-        model->prior[0][0] = (data->fmin + data->wdm->df/2)*data->T;//data->qmin;
-        model->prior[0][1] = (data->fmax - data->wdm->df/2)*data->T;//data->qmax;
-    }
-
     //colatitude
     model->prior[1][0] = -1.0;
     model->prior[1][1] =  1.0;
@@ -299,12 +277,7 @@ void set_uniform_prior(struct Flags *flags, struct Model *model, struct Data *da
     /* emprical envelope functions from Gijs' MLDC catalog */
     double fdotmin = -0.000005*pow(fmin,(13./3.));
     double fdotmax = 0.0000008*pow(fmax,(11./3.));
-    
-    /* unphysically broad priors
-    double fdotmin = -pow(fmin,(13./3.));
-    double fdotmax = pow(fmax,(13./3.)); */
-     
-    
+        
     /* use prior on chirp mass to convert to priors on frequency evolution */
     if(flags->detached)
     {
@@ -508,46 +481,46 @@ void set_gmm_prior(struct Flags *flags, struct Data *data, struct Prior *prior, 
 
 double evaluate_gmm_prior(struct Data *data, struct GMM *gmm, double *params)
 {
-    gsl_vector *x = gsl_vector_alloc(UCB_MODEL_NP);
+    double *x = double_vector(UCB_MODEL_NP);
     
     /* pointers to GMM contents */
     struct MVG **modes = gmm->modes;
     size_t NMODES = gmm->NMODE;
     
 
-    //pack parameters into gsl_vector with correct units
+    //pack parameters into source with correct units
     struct Source *source = malloc(sizeof(struct Source));
     alloc_source(source, data->N, data->Nchannel);
     
     map_array_to_params(source, params, data->T);
-    gsl_vector_set(x,0,source->f0);
-    gsl_vector_set(x,1,source->costheta);
-    gsl_vector_set(x,2,source->phi);
-    gsl_vector_set(x,3,log(source->amp));
-    gsl_vector_set(x,4,source->cosi);
-    gsl_vector_set(x,5,source->psi);
-    gsl_vector_set(x,6,source->phi0);
+    x[0] = source->f0;
+    x[1] = source->costheta;
+    x[2] = source->phi;
+    x[3] = log(source->amp);
+    x[4] = source->cosi;
+    x[5] = source->psi;
+    x[6] = source->phi0;
     if(UCB_MODEL_NP>7)
-        gsl_vector_set(x,7,source->dfdt);
+        x[7] = source->dfdt;
     if(UCB_MODEL_NP>8)
-        gsl_vector_set(x,8,source->d2fdt2);
+        x[8] = source->d2fdt2;
 
     //map parameters to R
     double xmin,xmax,xn,yn, logJ = 0;
     for(size_t n=0; n<UCB_MODEL_NP; n++)
     {
-        xmin = gsl_matrix_get(modes[0]->minmax,n,0);
-        xmax = gsl_matrix_get(modes[0]->minmax,n,1);
-        xn = gsl_vector_get(x,n);
+        xmin = modes[0]->minmax[n][0];
+        xmax = modes[0]->minmax[n][1];
+        xn = x[n];
         if(xn < xmin || xn >= xmax)
         {            
             //clean up
-            gsl_vector_free(x);
+            free_double_vector(x);
             free_source(source);
             return -INFINITY;
         }
         yn = logit(xn,xmin,xmax);
-        gsl_vector_set(x,n,yn);
+        x[n] = yn;
         
         //Jacobian
         //logJ -= log(dsigmoid(yn, xmin, xmax));
@@ -556,10 +529,10 @@ double evaluate_gmm_prior(struct Data *data, struct GMM *gmm, double *params)
     //sum over modes
     double P=0.0;
     for(size_t k=0; k<NMODES; k++)
-        P += modes[k]->p*multivariate_gaussian(x,modes[k]);
+        P += modes[k]->p*multivariate_gaussian(x,modes[k],UCB_MODEL_NP);
     
     //clean up
-    gsl_vector_free(x);
+    free_double_vector(x);
     free_source(source);
     
     return log(P) + logJ;
@@ -675,75 +648,76 @@ double evalaute_sky_location_prior(double *params, double **uniform_prior, doubl
     return logP;
 }
 
+
 double evaluate_calibration_prior(struct Data *data, struct Model *model)
 {
     
-    double dA,dphi;
     double logP = 0.0;
     
-    //apply calibration error to full signal model
+    /* apply calibration error to full signal model */
+    double dA,dphi;
     switch(data->Nchannel)
     {
         case 1:
             
             //amplitude
             dA   = model->calibration->dampX;
-            logP += log(gsl_ran_gaussian_pdf(dA,CAL_SIGMA_AMP));
+            logP += log(gaussian_pdf(dA,0,CAL_SIGMA_AMP));
             
             //phase
             dphi = model->calibration->dphiX;
-            logP += log(gsl_ran_gaussian_pdf(dphi,CAL_SIGMA_PHASE));
+            logP += log(gaussian_pdf(dphi,0,CAL_SIGMA_PHASE));
             
             break;
         case 2:
             
             //amplitude
             dA   = model->calibration->dampA;
-            logP += log(gsl_ran_gaussian_pdf(dA,CAL_SIGMA_AMP));
+            logP += log(gaussian_pdf(dA,0,CAL_SIGMA_AMP));
             
             //phase
             dphi = model->calibration->dphiA;
-            logP += log(gsl_ran_gaussian_pdf(dphi,CAL_SIGMA_PHASE));
+            logP += log(gaussian_pdf(dphi,0,CAL_SIGMA_PHASE));
             
             //amplitude
             dA   = model->calibration->dampE;
-            logP += log(gsl_ran_gaussian_pdf(dA,CAL_SIGMA_AMP));
+            logP += log(gaussian_pdf(dA,0,CAL_SIGMA_AMP));
             
             //phase
             dphi = model->calibration->dphiE;
-            logP += log(gsl_ran_gaussian_pdf(dphi,CAL_SIGMA_PHASE));
+            logP += log(gaussian_pdf(dphi,0,CAL_SIGMA_PHASE));
             break;
         case 3:
             
             //amplitude
             dA   = model->calibration->dampX;
-            logP += log(gsl_ran_gaussian_pdf(dA,CAL_SIGMA_AMP));
+            logP += log(gaussian_pdf(dA,0,CAL_SIGMA_AMP));
             
             //phase
             dphi = model->calibration->dphiX;
-            logP += log(gsl_ran_gaussian_pdf(dphi,CAL_SIGMA_PHASE));
+            logP += log(gaussian_pdf(dphi,0,CAL_SIGMA_PHASE));
             
             //amplitude
             dA   = model->calibration->dampY;
-            logP += log(gsl_ran_gaussian_pdf(dA,CAL_SIGMA_AMP));
+            logP += log(gaussian_pdf(dA,0,CAL_SIGMA_AMP));
             
             //phase
             dphi = model->calibration->dphiY;
-            logP += log(gsl_ran_gaussian_pdf(dphi,CAL_SIGMA_PHASE));
+            logP += log(gaussian_pdf(dphi,0,CAL_SIGMA_PHASE));
 
             //amplitude
             dA   = model->calibration->dampZ;
-            logP += log(gsl_ran_gaussian_pdf(dA,CAL_SIGMA_AMP));
+            logP += log(gaussian_pdf(dA,0,CAL_SIGMA_AMP));
             
             //phase
             dphi = model->calibration->dphiZ;
-            logP += log(gsl_ran_gaussian_pdf(dphi,CAL_SIGMA_PHASE));
+            logP += log(gaussian_pdf(dphi,0,CAL_SIGMA_PHASE));
             break;
 
         default:
             break;
     }//end switch
-    
+
     return logP;
 }
 
