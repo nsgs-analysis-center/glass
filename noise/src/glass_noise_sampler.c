@@ -903,19 +903,18 @@ void noise_sgwb_model_mcmc_wavelet(struct Data *data, struct InstrumentModel *no
     //shorthand pointers
     struct SGWBModel *model_x = model;
     struct SGWBModel *model_y = trial;
-    copy_sgwb_model(model_x,model_y);
-    //printf("copied first sgwb\n");
+    copy_sgwb_model(model_x, model_y);
+    printf("copied first sgwb\n");
     
     //initialize likelhood
     //TODO: this shouldn't be necessary!
-    generate_sgwb_model(model_x);
-    copy_Cij(model_x->psd->C, psd->C, psd->Nchannel, psd->N);
-    generate_full_covariance_matrix(psd, noise->psd, data->Nchannel);
-    if(flags->confNoise) 
-        generate_full_covariance_matrix(psd,galaxy->psd, data->Nchannel);
+    generate_sgwb_model_wavelet(data->wdm, model_x);
+    //TODO not necessary to copy Cij?
+    //copy_Cij(model_x->psd->C, psd->C, psd->Nchannel, psd->N);
+    generate_full_dynamic_covariance_matrix(data->wdm, noise, galaxy, model_x, psd);
     invert_noise_covariance_matrix(psd);
-    model_x->logL = noise_log_likelihood(data, psd);
-    //printf("likelihood init\n");
+    model_x->logL = noise_log_likelihood_wavelet(data, psd);
+    printf("likelihood init\n");
 
     
     //set priors
@@ -946,7 +945,7 @@ void noise_sgwb_model_mcmc_wavelet(struct Data *data, struct InstrumentModel *no
             correlation_matrix[0][1] = correlation_matrix[1][0] = 0.0;
             break;
         default:
-            fprintf(stderr, "SGWB %s has no defined priors! Add them in noise_sgwb_model_mcmc", SGWB_TEMPLATE_NAMES[model_x->SGWB_type]);
+            fprintf(stderr, "SGWB %s has no defined priors! Add them in noise_sgwb_model_mcmc_wavelet", SGWB_TEMPLATE_NAMES[model_x->SGWB_type]);
             exit(1);
             break;
     }
@@ -1005,18 +1004,13 @@ void noise_sgwb_model_mcmc_wavelet(struct Data *data, struct InstrumentModel *no
         //get noise covariance matrix for initial parameters
         if(logPy > -INFINITY && !flags->prior)
         {
-            generate_sgwb_model(model_y);
-            copy_Cij(model_y->psd->C, psd->C, psd->Nchannel, psd->N);
+            generate_sgwb_model_wavelet(data->wdm, model_y);
             
-            //add instrument noise contribution
-            generate_full_covariance_matrix(psd, noise->psd, data->Nchannel);
-            //add confusion noise contribution
-            if(flags->confNoise) 
-                generate_full_covariance_matrix(psd,galaxy->psd, data->Nchannel);
-            
+            //add other stochastic contributions
+            generate_full_dynamic_covariance_matrix(data->wdm, noise, galaxy, model_y, psd);
             invert_noise_covariance_matrix(psd);
             
-            model_y->logL = noise_log_likelihood(data, psd);
+            model_y->logL = noise_log_likelihood_wavelet(data, psd);
             //printf("trial %g %g %g\n", model_y->params[0], model_y->params[1], model_y->logL);
             
             logH += (model_y->logL - model_x->logL)/chain->temperature[ic]; //delta logL
@@ -1038,201 +1032,4 @@ void noise_sgwb_model_mcmc_wavelet(struct Data *data, struct InstrumentModel *no
     for(int n=0; n<model_x->Nparams; n++)
         free(correlation_matrix[n]);
     free(correlation_matrix);
-}
-
-void noise_instrument_model_mcmc_wavelet(struct Orbit *orbit, struct Data *data, struct InstrumentModel *model, struct InstrumentModel *trial, struct ForegroundModel *galaxy, struct SGWBModel *sgwb, struct Noise *psd, struct Chain *chain, struct Flags *flags, int ic)
-{
-    double logH  = 0.0; //(log) Hastings ratio
-    double loga  = 1.0; //(log) transition probability
-    
-    double logPx  = 0.0; //(log) prior density for model x (current state)
-    double logPy  = 0.0; //(log) prior density for model y (proposed state)
-    
-    //shorthand pointers
-    struct InstrumentModel *model_x = model;
-    struct InstrumentModel *model_y = trial;
-    copy_instrument_model(model_x,model_y);
-
-    //initialize likelihood
-    //TODO: this shouldn't be necessary
-    generate_instrument_noise_model(orbit,model_x);
-    copy_Cij(model_x->psd->C, psd->C, psd->Nchannel, psd->N);
-    if(flags->confNoise) 
-        generate_full_covariance_matrix(psd,galaxy->psd, data->Nchannel);
-    if(flags->sgwbTemplate>=0) 
-        generate_full_covariance_matrix(psd,sgwb->psd, data->Nchannel);
-    invert_noise_covariance_matrix(psd);
-    
-    model_x->logL = noise_log_likelihood(data, psd);
-    
-    
-    //set priors
-    double Sacc = 9.00e-30;
-    double Soms = 2.25e-22;
-    double Sacc_min = 9.00e-30/10;
-    double Sacc_max = 9.00e-30*10;
-    double Soms_min = 2.25e-22/10;
-    double Soms_max = 2.25e-22*10;
-    
-    //set correlation matrix
-    double *acc_jump_vec = malloc(model_x->Nlink*sizeof(double));
-    double **correlation_matrix = malloc(model_x->Nlink*sizeof(double *));
-    for(int n=0; n<model_x->Nlink; n++)
-    {
-        correlation_matrix[n] = malloc(model_x->Nlink*sizeof(double));
-        correlation_matrix[n][n] = +1.0;
-    }
-    correlation_matrix[0][1] = correlation_matrix[1][0] = -1.0;
-    correlation_matrix[2][3] = correlation_matrix[3][2] = -1.0;
-    correlation_matrix[4][5] = correlation_matrix[5][4] = -1.0;
-
-    correlation_matrix[0][2] = correlation_matrix[2][0] = +1.0;
-    correlation_matrix[0][3] = correlation_matrix[3][0] = -1.0;
-    correlation_matrix[0][4] = correlation_matrix[4][0] = -1.0;
-    correlation_matrix[0][5] = correlation_matrix[5][0] = +1.0;
-
-    correlation_matrix[1][2] = correlation_matrix[2][1] = -1.0;
-    correlation_matrix[1][3] = correlation_matrix[3][1] = +1.0;
-    correlation_matrix[1][4] = correlation_matrix[4][1] = +1.0;
-    correlation_matrix[1][5] = correlation_matrix[5][1] = -1.0;
-
-    correlation_matrix[2][4] = correlation_matrix[4][2] = -1.0;
-    correlation_matrix[2][5] = correlation_matrix[5][2] = +1.0;
-
-    correlation_matrix[3][4] = correlation_matrix[4][3] = +1.0;
-    correlation_matrix[3][5] = correlation_matrix[5][3] = -1.0;
-
-    for(int mc=0; mc<10; mc++)
-    {
-        //get jump sizes
-        double acc_jump,oms_jump;
-        double scale;
-        if(gsl_rng_uniform(chain->r[ic])>0.75)
-            scale = 1;
-        else if(gsl_rng_uniform(chain->r[ic])>0.5)
-            scale = 0.1;
-        else if(gsl_rng_uniform(chain->r[ic])>0.25)
-            scale = 0.01;
-        else
-            scale = 0.001;
-        
-        /* get proposed noise parameters */
-        
-        int type;
-        
-        int i;
-        int j;
-        type = (int)(gsl_rng_uniform(chain->r[ic])*3.);
-        
-        switch(type)
-        {
-            case 0:
-                //update one link at a time
-                i = (int)(gsl_rng_uniform(chain->r[ic])* (double)model_x->Nlink);
-                model_y->sacc[i] = model_x->sacc[i] + scale * Sacc * gsl_ran_gaussian(chain->r[ic],1);
-                model_y->soms[i] = model_x->soms[i] + scale * Soms * gsl_ran_gaussian(chain->r[ic],1);
-                
-                //OMS noise is degenerate on a link
-                if(i%2==0) model_y->soms[i+1] = model_y->soms[i];
-                else model_y->soms[i-1] = model_y->soms[i];
-                
-                //check priors
-                if(model_y->sacc[i] < Sacc_min || model_y->sacc[i] > Sacc_max) logPy = -INFINITY;
-                if(model_y->soms[i] < Soms_min || model_y->soms[i] > Soms_max) logPy = -INFINITY;
-                
-                break;
-            case 1:
-                //update pair of links according to correlations
-                i = (int)(gsl_rng_uniform(chain->r[ic])* (double)model_x->Nlink);
-                do
-                {
-                    j = (int)(gsl_rng_uniform(chain->r[ic])* (double)model_x->Nlink);
-                }while(i!=j);
-                
-                acc_jump = scale * Sacc * gsl_ran_gaussian(chain->r[ic],1);
-                oms_jump = scale * Soms * gsl_ran_gaussian(chain->r[ic],1);
-                
-                if(abs(i-j)==1)
-                {
-                    model_y->sacc[i] = model_x->sacc[i] + acc_jump;
-                    model_y->sacc[j] = model_x->sacc[j] - acc_jump;
-                    model_y->soms[i] = model_x->soms[i] + oms_jump;
-                }
-                else
-                {
-                    model_y->sacc[i] = model_x->sacc[i] + acc_jump;
-                    model_y->sacc[j] = model_x->sacc[j] + acc_jump;
-                    model_y->soms[i] = model_x->soms[i] + oms_jump;
-                    model_y->soms[j] = model_x->soms[j] - oms_jump;
-                }
-                
-                //OMS noise is degenerate on a link
-                if(i%2==0) model_y->soms[i+1] = model_y->soms[i];
-                else model_y->soms[i-1] = model_y->soms[i];
-                
-                if(j%2==0) model_y->soms[j+1] = model_y->soms[j];
-                else model_y->soms[j-1] = model_y->soms[j];
-                
-                //check priors
-                if(model_y->sacc[i] < Sacc_min || model_y->sacc[i] > Sacc_max) logPy = -INFINITY;
-                if(model_y->sacc[j] < Sacc_min || model_y->sacc[j] > Sacc_max) logPy = -INFINITY;
-                if(model_y->soms[i] < Soms_min || model_y->soms[i] > Soms_max) logPy = -INFINITY;
-                if(model_y->soms[j] < Soms_min || model_y->soms[j] > Soms_max) logPy = -INFINITY;
-                
-                break;
-            case 2:
-                //update acceleration noise using correlation matrix
-                for(i=0; i<model_x->Nlink; i++)
-                {
-                    acc_jump_vec[i] = scale * Sacc * gsl_ran_gaussian(chain->r[ic],1);
-                    model_y->sacc[i] = model_x->sacc[i];
-                }
-                
-                
-                for(i=0; i<model_x->Nlink; i++)
-                {
-                    for(j=0; j<model_x->Nlink; j++)
-                    {
-                        model_y->sacc[i] += correlation_matrix[i][j] * acc_jump_vec[j];
-                    }
-                    //check priors
-                    if(model_y->sacc[i] < Sacc_min || model_y->sacc[i] > Sacc_max) logPy = -INFINITY;
-                }
-                break;
-        }
-        
-        //get noise covariance matrix for initial parameters
-        if(logPy > -INFINITY && !flags->prior)
-        {
-            generate_instrument_noise_model(orbit,model_y);
-            copy_Cij(model_y->psd->C, psd->C, psd->Nchannel, psd->N);
-            
-            //add foreground noise contribution
-            if(flags->confNoise)
-                generate_full_covariance_matrix(psd,galaxy->psd, data->Nchannel);
-            //add sgwb contribution
-            if(flags->sgwbTemplate>=0) 
-                generate_full_covariance_matrix(psd,sgwb->psd, data->Nchannel);
-            
-            invert_noise_covariance_matrix(psd);
-            
-            model_y->logL = noise_log_likelihood(data, psd);
-            
-            logH += (model_y->logL - model_x->logL)/chain->temperature[ic]; //delta logL
-        }
-        logH += logPy - logPx; //priors
-        
-        loga = log(gsl_rng_uniform(chain->r[ic]));
-        if(logH > loga)
-        {
-            copy_instrument_model(model_y, model_x);
-            if(flags->confNoise) galaxy->logL = model_x->logL;
-        }
-    }
-
-    free(acc_jump_vec);
-    for(int n=0; n<model_x->Nlink; n++)
-        free(correlation_matrix[n]);
-    free(correlation_matrix);
-
 }

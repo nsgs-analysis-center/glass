@@ -218,6 +218,7 @@ void initialize_wavelet(struct Wavelets *wdm, double T)
     wdm->BW = (wdm->A+wdm->B)/M_PI;
     wdm->deltaf = wdm->BW/(double)(wdm->frequency_steps);
 
+#ifdef PRECOMPUTE_FDOT
     wdm->fdot = malloc(wdm->fdot_steps*sizeof(double));
 
     wdm->table   = malloc(wdm->fdot_steps*sizeof(gsl_vector *));
@@ -239,6 +240,7 @@ void initialize_wavelet(struct Wavelets *wdm, double T)
     
     //stores lookup table of wavelet basis functions
     wavelet_lookup_table(wdm);
+#endif
 
     //set defaults for min and maximum pixels
     wavelet_pixel_to_index(wdm,0,1,&wdm->kmin);         //first pixel of second layer

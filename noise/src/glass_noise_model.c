@@ -737,9 +737,15 @@ void generate_full_dynamic_covariance_matrix(struct Wavelets *wdm, struct Instru
         for(int j=jmin; j<jmax; j++)
         {
             wavelet_pixel_to_index(wdm,i,j,&k);
+            printf("jmin: %d\n",jmin);
+            printf("jmax: %d\n",jmax);
+            printf("kmin: %d\n",wdm->kmin);
+            printf("kmax: %d\n",wdm->kmax);
+            printf("k:    %d\n",k);
 
             k-=wdm->kmin;
 
+            printf("inst noise %d\n",k);
             //stationary instrument noise 
             full->C[0][0][k] = inst->psd->C[0][0][j-jmin];
             full->C[1][1][k] = inst->psd->C[1][1][j-jmin];
@@ -748,6 +754,7 @@ void generate_full_dynamic_covariance_matrix(struct Wavelets *wdm, struct Instru
             full->C[0][2][k] = inst->psd->C[0][2][j-jmin];
             full->C[1][2][k] = inst->psd->C[1][2][j-jmin];
 
+            printf("conf noise\n");
             //modulated galactic foreground
             full->C[0][0][k] += conf->psd->C[0][0][j-jmin]*gsl_spline_eval(conf->modulation->XX_spline, t, conf->modulation->acc);
             full->C[1][1][k] += conf->psd->C[1][1][j-jmin]*gsl_spline_eval(conf->modulation->YY_spline, t, conf->modulation->acc);
@@ -757,6 +764,7 @@ void generate_full_dynamic_covariance_matrix(struct Wavelets *wdm, struct Instru
             full->C[1][2][k] += conf->psd->C[1][2][j-jmin]*gsl_spline_eval(conf->modulation->YZ_spline, t, conf->modulation->acc); 
 
 
+            printf("sgwb noise\n");
             //stationary stochastic background
             full->C[0][0][k] += sgwb->psd->C[0][0][j-jmin];
             full->C[1][1][k] += sgwb->psd->C[1][1][j-jmin];
@@ -765,6 +773,7 @@ void generate_full_dynamic_covariance_matrix(struct Wavelets *wdm, struct Instru
             full->C[0][2][k] += sgwb->psd->C[0][2][j-jmin];
             full->C[1][2][k] += sgwb->psd->C[1][2][j-jmin];
 
+            printf("full noise\n");
             //noise covariance matrix is symmetric
             full->C[1][0][k] = full->C[0][1][k]; 
             full->C[2][0][k] = full->C[0][2][k]; 
@@ -982,7 +991,7 @@ void initialize_instrument_model_wavelet(struct Orbit *orbit, struct Data *data,
     struct Wavelets *wdm = data->wdm;
 
     // initialize data models
-    alloc_instrument_model(model, data->qmax-data->qmin, data->Nchannel);
+    alloc_instrument_model(model, data->qmax - data->qmin, data->Nchannel);
     
     // set up psd frequency grid
     for(int n=0; n<model->psd->N; n++)
@@ -1055,11 +1064,7 @@ void initialize_sgwb_model_wavelet(struct Orbit *orbit, struct Data *data, struc
     struct Wavelets* wdm = data->wdm;
 
     // initialize data models
-    alloc_sgwb_model(model, data->wdm->NF, data->Nchannel, SGWB_type);
-    printf("qmax-qmin: %d\n",data->qmax - data->qmin);
-    printf("N: %d\n",data->N);
-    printf("NF: %d\n",data->wdm->NF);
-    printf("NT: %d\n",data->wdm->NT);
+    alloc_sgwb_model(model, data->qmax - data->qmin, data->Nchannel, SGWB_type);
     
     // set up psd frequency grid
     for(int n=0; n<model->psd->N; n++)
@@ -1175,6 +1180,7 @@ void GetDynamicNoiseModel(struct Data *data, struct Orbit *orbit, struct Flags *
 
     free_instrument_model(inst_noise);
     free_foreground_model(conf_noise);
+    free_sgwb_model(sgwb);
 }
 
 void GetStationaryNoiseModel(struct Data *data, struct Orbit *orbit, struct Flags *flags, struct Noise *noise)
