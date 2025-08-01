@@ -807,19 +807,19 @@ void noise_sgwb_model_mcmc(struct Data *data, struct InstrumentModel *noise, str
         
         //get jump sizes
         double scale;
-        if(gsl_rng_uniform(chain->r[ic])>0.75)
+        if(rand_r_U_0_1(chain->r[ic])>0.75)
             scale = 0.1;
-        else if(gsl_rng_uniform(chain->r[ic])>0.5)
+        else if(rand_r_U_0_1(chain->r[ic])>0.5)
             scale = 0.01;
-        else if(gsl_rng_uniform(chain->r[ic])>0.25)
+        else if(rand_r_U_0_1(chain->r[ic])>0.25)
             scale = 0.001;
         else
             scale = 0.0001;
         
-        if(gsl_rng_uniform(chain->r[ic])<0.5)
+        if(rand_r_U_0_1(chain->r[ic])<0.5)
         {
             //pick which parameter to update
-            int i = (int)(gsl_rng_uniform(chain->r[ic])* (double)model_x->Nparams);
+            int i = (int)(rand_r_U_0_1(chain->r[ic])* (double)model_x->Nparams);
             model_y->params[i] = model_x->params[i] + scale * 0.5*(prior[i][1]+prior[i][0]) * gsl_ran_gaussian(chain->r[ic],1);
         }
         else
@@ -833,7 +833,7 @@ void noise_sgwb_model_mcmc(struct Data *data, struct InstrumentModel *noise, str
             }
             
             //pick which vector
-            int i = (int)(gsl_rng_uniform(chain->r[ic])* (double)model_x->Nparams);
+            int i = (int)(rand_r_U_0_1(chain->r[ic])* (double)model_x->Nparams);
             
             //jump
             for(int j=0; j<model_x->Nparams; j++)
@@ -871,7 +871,7 @@ void noise_sgwb_model_mcmc(struct Data *data, struct InstrumentModel *noise, str
         }
         logH += logPy - logPx; //priors
         
-        loga = log(gsl_rng_uniform(chain->r[ic]));
+        loga = log(rand_r_U_0_1(chain->r[ic]));
         if(logH > loga)
         {
             //printf("accepted %g %g %g\n", model_x->params[0], model_x->params[1], model_x->logL);
@@ -955,19 +955,19 @@ void noise_sgwb_model_mcmc_wavelet(struct Data *data, struct InstrumentModel *no
         
         //get jump sizes
         double scale;
-        if(gsl_rng_uniform(chain->r[ic])>0.75)
+        if(rand_r_U_0_1(chain->r[ic])>0.75)
             scale = 0.1;
-        else if(gsl_rng_uniform(chain->r[ic])>0.5)
+        else if(rand_r_U_0_1(chain->r[ic])>0.5)
             scale = 0.01;
-        else if(gsl_rng_uniform(chain->r[ic])>0.25)
+        else if(rand_r_U_0_1(chain->r[ic])>0.25)
             scale = 0.001;
         else
             scale = 0.0001;
         
-        if(gsl_rng_uniform(chain->r[ic])<0.5)
+        if(rand_r_U_0_1(chain->r[ic])<0.5)
         {
             //pick which parameter to update
-            int i = (int)(gsl_rng_uniform(chain->r[ic])* (double)model_x->Nparams);
+            int i = (int)(rand_r_U_0_1(chain->r[ic])* (double)model_x->Nparams);
             model_y->params[i] = model_x->params[i] + scale * 0.5*(prior[i][1]+prior[i][0]) * gsl_ran_gaussian(chain->r[ic],1);
         }
         else
@@ -981,7 +981,7 @@ void noise_sgwb_model_mcmc_wavelet(struct Data *data, struct InstrumentModel *no
             }
             
             //pick which vector
-            int i = (int)(gsl_rng_uniform(chain->r[ic])* (double)model_x->Nparams);
+            int i = (int)(rand_r_U_0_1(chain->r[ic])* (double)model_x->Nparams);
             
             //jump
             for(int j=0; j<model_x->Nparams; j++)
@@ -1014,7 +1014,7 @@ void noise_sgwb_model_mcmc_wavelet(struct Data *data, struct InstrumentModel *no
         }
         logH += logPy - logPx; //priors
         
-        loga = log(gsl_rng_uniform(chain->r[ic]));
+        loga = log(rand_r_U_0_1(chain->r[ic]));
         if(logH > loga)
         {
             //printf("accepted %g %g %g\n", model_x->params[0], model_x->params[1], model_x->logL);

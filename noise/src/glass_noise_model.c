@@ -637,11 +637,9 @@ void generate_sgwb_model(struct SGWBModel *model)
     double f;
     double Sgw;
 
-    gsl_interp_accel *acc = gsl_interp_accel_alloc();
-    gsl_spline *responseXX = gsl_spline_alloc(gsl_interp_cspline, model->R->N);
-    gsl_spline *responseXY = gsl_spline_alloc(gsl_interp_cspline, model->R->N);
-    gsl_spline_init(responseXX, model->R->f, model->R->XX, model->R->N);
-    gsl_spline_init(responseXY, model->R->f, model->R->XY, model->R->N);
+    struct CubicSpline responseXX, responseXY;
+    initialize_cubic_spline(&responseXX, model->R->f, model->R->XX);
+    initialize_cubic_spline(&responseXY, model->R->f, model->R->XY);
     
     for(int n=0; n<model->psd->N; n++)
     {
@@ -666,8 +664,8 @@ void generate_sgwb_model(struct SGWBModel *model)
                 exit(-3);
                 break;
             case 3:
-                double Rxx = gsl_spline_eval(responseXX,f,acc);
-                double Rxy = gsl_spline_eval(responseXY,f,acc);
+                double Rxx = spline_interpolation(&responseXX,f);
+                double Rxy = spline_interpolation(&responseXY,f);
                 // note that, in equal-arm LISA, XYZ: Rxx = Ryy = Rzz, and Rxy = Rxz = Ryz = -0.5*Rxx
                 model->psd->C[0][0][n] = model->psd->C[1][1][n] = model->psd->C[2][2][n] = Rxx*Sgw;
                 model->psd->C[0][1][n] = model->psd->C[0][2][n] = model->psd->C[1][2][n] = Rxy*Sgw;
@@ -675,9 +673,6 @@ void generate_sgwb_model(struct SGWBModel *model)
                 break;
         }
     }
-    gsl_spline_free(responseXX);
-    gsl_spline_free(responseXY);
-    gsl_interp_accel_free(acc);
 }
 void generate_sgwb_model_wavelet(struct Wavelets* wdm, struct SGWBModel *model)
 {
