@@ -90,8 +90,8 @@ int main(int argc, char *argv[])
     // this points kmin/kmax to first time pixel of first/last freq layer
     
     //recompute fmin and fmax so they align with a bin
-    data->fmin = data->qmin*WAVELET_BANDWIDTH;
-    data->fmax = data->qmax*WAVELET_BANDWIDTH;
+    data->fmin = data->lmin*WAVELET_BANDWIDTH;
+    data->fmax = data->lmax*WAVELET_BANDWIDTH;
     printf("new fmin=%lg, fmax=%lg\n",data->fmin,data->fmax);
 
     /* Initialize chain structure and files */
@@ -106,13 +106,13 @@ int main(int argc, char *argv[])
     struct InstrumentModel **inst_model = malloc(chain->NC*sizeof(struct InstrumentModel *));
     struct InstrumentModel **inst_trial = malloc(chain->NC*sizeof(struct InstrumentModel *));
     int wN;
-    wavelet_pixel_to_index(wdm,0,data->qmax,&wN);
+    wavelet_pixel_to_index(data->wdm,0,data->lmax,&wN);
     for(int ic=0; ic<chain->NC; ic++)
     {
         // okay, so this is wavelet-basis! time and freq pixels both here
         psd[ic] = malloc(sizeof(struct Noise)); // not a "deep" alloc
 
-        alloc_noise(psd[ic], wN, data->Nchannel); // note is data->N in wavelet not data->NFFT
+        alloc_noise(psd[ic], wN, data->Nlayer, data->Nchannel); // note is data->N in wavelet not data->NFFT
 
         inst_model[ic] = malloc(sizeof(struct InstrumentModel));
         inst_trial[ic] = malloc(sizeof(struct InstrumentModel));

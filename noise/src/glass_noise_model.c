@@ -109,17 +109,17 @@ void alloc_foreground_model(struct ForegroundModel *model, int Ndata, int Nlayer
     alloc_noise(model->psd, Ndata, Nlayer, Nchannel);
 }
 
-struct SGWBResponse* global_SGWBResponse;
+struct SGWBResponse* global_SGWBResponse = NULL;
 
-void alloc_sgwb_model(struct SGWBModel *model, int Ndata, int Nchannel, SGWB_t SGWB_type)
+void alloc_sgwb_model(struct SGWBModel *model, int Ndata, int Nlayer, int Nchannel, SGWB_t SGWB_type)
 {
     model->SGWB_type = SGWB_type;
     model->Nparams = SGWB_TEMPLATE_NPARAMS[SGWB_type];
     model->params = malloc(model->Nparams*sizeof(double));
     model->psd = malloc(sizeof(struct Noise));
-    alloc_noise(model->psd, Ndata, Nchannel);
+    alloc_noise(model->psd, Ndata, Nlayer, Nchannel);
     if (global_SGWBResponse == NULL) {
-        model->R = malloc(sizeof(struct SGWBResponse));
+        model->R = malloc(sizeof(struct SGWBResponse)); // memory leak
         alloc_pop_sgwb_response(model->R,"./sgwb_response_xyz1.dat");
         global_SGWBResponse = model->R;
     } else {
@@ -145,19 +145,29 @@ void alloc_pop_sgwb_response(struct SGWBResponse* sgwbr, char* fname) {
         exit(-2);
     }
 
-    sgwbr->f = malloc(sizeof(double) * *N);
+    // memory leak
+    sgwbr->f = malloc(sizeof(double) * *N); 
     sgwbr->XX = malloc(sizeof(double) * *N);
     sgwbr->XY = malloc(sizeof(double) * *N);
     for (int i=0;i<*N;i++) {
         fscanf(ff,"%lf %lf %lf\n",&sgwbr->f[i],&sgwbr->XX[i],&sgwbr->XY[i]);
     }
     fclose(ff);
+
+    // memory leak
+    sgwbr->spline_XX = malloc(sizeof(struct CubicSpline));
+    sgwbr->spline_XY = malloc(sizeof(struct CubicSpline));
+    initialize_cubic_spline(sgwbr->spline_XX, sgwbr->f, sgwbr->XX);
+    initialize_cubic_spline(sgwbr->spline_XY, sgwbr->f, sgwbr->XY);
+
 }
 
 void free_sgwb_response(struct SGWBResponse *sgwbr) {
     free(sgwbr->f);
     free(sgwbr->XX);
     free(sgwbr->XY);
+    free_cubic_spline(sgwbr->spline_XX);
+    free_cubic_spline(sgwbr->spline_XY);
     free(sgwbr);
 }
 
@@ -637,10 +647,6 @@ void generate_sgwb_model(struct SGWBModel *model)
     double f;
     double Sgw;
 
-    // TODO: keep a cubic spline in SGWBModel so we don't have to alloc/dealloc all the time
-    struct CubicSpline responseXX, responseXY;
-    initialize_cubic_spline(&responseXX, model->R->f, model->R->XX);
-    initialize_cubic_spline(&responseXY, model->R->f, model->R->XY);
     
     for(int n=0; n<model->psd->N; n++)
     {
@@ -659,14 +665,15 @@ void generate_sgwb_model(struct SGWBModel *model)
         
         switch(model->psd->Nchannel)
         {
+            double Rxx, Rxy;
             case 1:
             case 2:
                 fprintf(stderr, "Unimplemented error! SGWB covariance generation with Nchannels = %d\n",model->psd->Nchannel);
                 exit(-3);
                 break;
             case 3:
-                double Rxx = spline_interpolation(&responseXX,f);
-                double Rxy = spline_interpolation(&responseXY,f);
+                Rxx = spline_interpolation(model->R->spline_XX,f);
+                Rxy = spline_interpolation(model->R->spline_XY,f);
                 // note that, in equal-arm LISA, XYZ: Rxx = Ryy = Rzz, and Rxy = Rxz = Ryz = -0.5*Rxx
                 model->psd->C[0][0][n] = model->psd->C[1][1][n] = model->psd->C[2][2][n] = Rxx*Sgw;
                 model->psd->C[0][1][n] = model->psd->C[0][2][n] = model->psd->C[1][2][n] = Rxy*Sgw;
@@ -674,8 +681,6 @@ void generate_sgwb_model(struct SGWBModel *model)
                 break;
         }
     }
-    free_cubic_spline(&responseXX);
-    free_cubic_spline(&responseXY);
 }
 void generate_sgwb_model_wavelet(struct Wavelets* wdm, struct SGWBModel *model)
 {
@@ -683,6 +688,7 @@ void generate_sgwb_model_wavelet(struct Wavelets* wdm, struct SGWBModel *model)
     double f;
     double Sgw;
     
+    // TODO integrate over frequencies?
     for(int n=0; n<wdm->NF; n++)
     {
         f = model->psd->f[n];
@@ -698,20 +704,21 @@ void generate_sgwb_model_wavelet(struct Wavelets* wdm, struct SGWBModel *model)
                 break;
         }
         
-        // TODO: include response!
         switch(model->psd->Nchannel)
         {
+            double Rxx, Rxy;
             case 1:
-                model->psd->C[0][0][n] = Sgw;
-                break;
             case 2:
-                model->psd->C[0][0][n] = model->psd->C[1][1][n] = 1.5*Sgw;
-                model->psd->C[0][1][n] = model->psd->C[1][0][n] = 0;
+                fprintf(stderr, "Unimplemented error! SGWB covariance generation with Nchannels = %d\n",model->psd->Nchannel);
+                exit(-3);
                 break;
             case 3:
-                model->psd->C[0][0][n] = model->psd->C[1][1][n] = model->psd->C[2][2][n] = Sgw;
-                model->psd->C[0][1][n] = model->psd->C[0][2][n] = model->psd->C[1][2][n] = -0.5*Sgw;
-                model->psd->C[1][0][n] = model->psd->C[2][0][n] = model->psd->C[2][1][n] = -0.5*Sgw;
+                Rxx = spline_interpolation(model->R->spline_XX,f);
+                Rxy = spline_interpolation(model->R->spline_XY,f);
+                // note that, in equal-arm LISA, XYZ: Rxx = Ryy = Rzz, and Rxy = Rxz = Ryz = -0.5*Rxx
+                model->psd->C[0][0][n] = model->psd->C[1][1][n] = model->psd->C[2][2][n] = Rxx*Sgw;
+                model->psd->C[0][1][n] = model->psd->C[0][2][n] = model->psd->C[1][2][n] = Rxy*Sgw;
+                model->psd->C[1][0][n] = model->psd->C[2][0][n] = model->psd->C[2][1][n] = Rxy*Sgw;
                 break;
         }
     }
@@ -1048,7 +1055,7 @@ void initialize_foreground_model(struct Orbit *orbit, struct Data *data, struct 
 void initialize_sgwb_model(struct Orbit *orbit, struct Data *data, struct SGWBModel *model, SGWB_t SGWB_type)
 {
     // initialize data models
-    alloc_sgwb_model(model, data->NFFT, data->Nchannel, SGWB_type);
+    alloc_sgwb_model(model, data->NFFT, data->Nlayer, data->Nchannel, SGWB_type);
     
     // set up psd frequency grid
     for(int n=0; n<model->psd->N; n++)
@@ -1078,11 +1085,11 @@ void initialize_sgwb_model_wavelet(struct Orbit *orbit, struct Data *data, struc
     struct Wavelets* wdm = data->wdm;
 
     // initialize data models
-    alloc_sgwb_model(model, data->qmax - data->qmin, data->Nchannel, SGWB_type);
+    alloc_sgwb_model(model, data->lmax - data->lmin, data->Nlayer, data->Nchannel, SGWB_type);
     
     // set up psd frequency grid
     for(int n=0; n<model->psd->N; n++)
-        model->psd->f[n] = (data->qmin+n)*wdm->df;
+        model->psd->f[n] = (data->lmin+n)*wdm->df;
         //model->psd->f[n] = data->fmin + (double)n/data->T;
 
     _Static_assert(SGWB_TEMPLATE_COUNT == 1, "Did you add an SGWB template? Edit this switch case, it needs to be exhaustive.");

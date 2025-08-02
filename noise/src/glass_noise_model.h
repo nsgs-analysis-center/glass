@@ -151,7 +151,7 @@ void alloc_foreground_model(struct ForegroundModel *model, int Ndata, int Nlayer
 /**
  \brief Allocates SGWB model structure and contents.
  */
-void alloc_sgwb_model(struct SGWBModel *model, int Ndata, int Nchannel, SGWB_t SGWB_type);
+void alloc_sgwb_model(struct SGWBModel *model, int Ndata, int Nlayer, int Nchannel, SGWB_t SGWB_type);
 
 /**
  \brief Allocates SGWB response.
