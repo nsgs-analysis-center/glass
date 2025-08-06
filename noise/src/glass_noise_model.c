@@ -154,9 +154,10 @@ void alloc_pop_sgwb_response(struct SGWBResponse* sgwbr, char* fname) {
     }
     fclose(ff);
 
+
     // memory leak
-    sgwbr->spline_XX = malloc(sizeof(struct CubicSpline));
-    sgwbr->spline_XY = malloc(sizeof(struct CubicSpline));
+    sgwbr->spline_XX = alloc_cubic_spline(*N);
+    sgwbr->spline_XY = alloc_cubic_spline(*N);
     initialize_cubic_spline(sgwbr->spline_XX, sgwbr->f, sgwbr->XX);
     initialize_cubic_spline(sgwbr->spline_XY, sgwbr->f, sgwbr->XY);
 
