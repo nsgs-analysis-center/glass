@@ -215,6 +215,7 @@ void alloc_data(struct Data *data, struct Flags *flags)
     
     //downsampling rate of post-burn-in samples
     data->downsample = NMCMC/data->Nwave;
+    if (!data->downsample) data->downsample=1;
     
     if(!strcmp(data->basis,"fourier"))
     {
