@@ -37,7 +37,7 @@ if(APPLE)
   link_directories("/opt/homebrew/lib/")
 endif()
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fopenmp -Wall -std=gnu99 -g -O3 -march=native")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fopenmp -Wall -std=gnu99 -glldb -O0 -march=native")
 
 # Set git version header file
 message(STATUS "Resolving GIT Version")

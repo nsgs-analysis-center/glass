@@ -81,12 +81,11 @@ int main(int argc, char *argv[])
     printf("old fmin=%lg, fmax=%lg\n",data->fmin,data->fmax);
     // TODO these are not initialized because the UCB sampler set them itself later!
     // should probably have defaults... this does not feel like the source's job
-    data->qmin = 0;             // we'll use full wavelet frequency content
-    data->qmax = data->wdm->NF; // we'll use full wavelet frequency content
+    data->lmin = 0;                 // we'll use full wavelet frequency content
+    data->lmax = data->wdm->NF - 1; // we'll use full wavelet frequency content
     //reset wavelet basis max and min ranges
-    wavelet_pixel_to_index(data->wdm,0,data->qmin,&data->wdm->kmin); 
-    wavelet_pixel_to_index(data->wdm,0,data->qmax,&data->wdm->kmax); 
-    //data->N = data->qmax - data->qmin;
+    wavelet_pixel_to_index(data->wdm,0,data->lmin,&data->wdm->kmin); 
+    wavelet_pixel_to_index(data->wdm,0,data->lmax,&data->wdm->kmax); 
     // this points kmin/kmax to first time pixel of first/last freq layer
     
     //recompute fmin and fmax so they align with a bin
@@ -182,16 +181,25 @@ int main(int argc, char *argv[])
 
     /* get initial likelihood */
         // TODO struct Noise doesn't have a logL... what's the point of getting the initial logLs anyway?
+        printf("dynamic cov matrix inversion\n");
         invert_noise_covariance_matrix(psd[ic]);
+        printf("wavelet loglike\n");
         double logL = noise_log_likelihood_wavelet(data, psd[ic]);
+        printf("finished loglike %lf\n", logL);
+        printf("inst model\n");
         inst_model[ic]->logL = logL;
+        printf("sgwb model\n");
+        fflush(stdout);
         sgwb_model[ic]->logL = logL;
+        printf("conf model\n");
+        fflush(stdout);
         conf_model[ic]->logL = logL;
     }
     printf("initial likelihood done\n");
 
     sprintf(filename,"%s/full_noise_model.dat",data->dataDir);
     // TODO do we need to fix this?? is wavelet. might work anyway
+    printf("write noise model\n");
     print_noise_model(psd[0], filename);
 
     //MCMC

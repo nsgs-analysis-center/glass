@@ -881,6 +881,7 @@ double noise_log_likelihood_wavelet(struct Data *data, struct Noise *noise)
     struct TDI *tdi = data->tdi;
     
     int N = data->N;
+    printf("alloc list\n");
     int *list = int_vector(data->N);
     for(int n=0; n<data->N; n++) list[n]=n;
     
@@ -894,7 +895,9 @@ double noise_log_likelihood_wavelet(struct Data *data, struct Noise *noise)
             logL += -0.5*wavelet_nwip(tdi->E, tdi->E, noise->invC[1][1], list, N);
             break;
         case 3:
+            printf("XX\n");
             logL += -0.5*wavelet_nwip(tdi->X, tdi->X, noise->invC[0][0], list, N);
+            printf("YY\n");
             logL += -0.5*wavelet_nwip(tdi->Y, tdi->Y, noise->invC[1][1], list, N);
             logL += -0.5*wavelet_nwip(tdi->Z, tdi->Z, noise->invC[2][2], list, N);
             logL += -wavelet_nwip(tdi->X, tdi->Y, noise->invC[0][1], list, N);
@@ -902,9 +905,11 @@ double noise_log_likelihood_wavelet(struct Data *data, struct Noise *noise)
             logL += -wavelet_nwip(tdi->Y, tdi->Z, noise->invC[1][2], list, N);
             break;
     }
+    printf("detC\n");
     for(int n=0; n<N; n++)
         logL -= log(noise->detC[n]);
     
+    printf("ret\n");
     return logL;
     // this comment constitutes an offering to the diety responsible for the correct factors of 2
 }
@@ -1005,7 +1010,7 @@ void initialize_instrument_model_wavelet(struct Orbit *orbit, struct Data *data,
     struct Wavelets *wdm = data->wdm;
 
     // initialize data models
-    alloc_instrument_model(model, data->lmax-data->lmin, data->Nlayer, data->Nchannel);
+    alloc_instrument_model(model, data->lmax - data->lmin, data->Nlayer, data->Nchannel);
     
     // set up psd frequency grid
     for(int n=0; n<model->psd->N; n++)
@@ -1118,7 +1123,7 @@ void initialize_foreground_model_wavelet(struct Orbit *orbit, struct Data *data,
     struct Wavelets *wdm = data->wdm;
 
     // initialize data models
-    alloc_foreground_model(model, data->lmax-data->lmin, data->Nlayer, data->Nchannel);
+    alloc_foreground_model(model, data->lmax - data->lmin, data->Nlayer, data->Nchannel);
     
     // set up psd frequency grid
     for(int n=0; n<model->psd->N; n++)
@@ -1244,6 +1249,7 @@ void GetStationaryNoiseModel(struct Data *data, struct Orbit *orbit, struct Flag
     sprintf(filename,"%s/power_stationary_noise.dat",data->dataDir);
     FILE *fptr=fopen(filename,"w");
     int k;
+    // TODO: need to convince myself that qmin/qmax are correct here
     for(int j=data->qmin; j<data->qmax; j++)
     {
         double f = j*data->wdm->df;
