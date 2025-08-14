@@ -177,29 +177,18 @@ int main(int argc, char *argv[])
             return -1;
         }
         generate_full_dynamic_covariance_matrix(data->wdm, inst_model[ic], conf_model[ic], sgwb_model[ic], psd[ic]);
-        printf("past first dynamic cov matrix\n");
 
     /* get initial likelihood */
         // TODO struct Noise doesn't have a logL... what's the point of getting the initial logLs anyway?
-        printf("dynamic cov matrix inversion\n");
         invert_noise_covariance_matrix(psd[ic]);
-        printf("wavelet loglike\n");
         double logL = noise_log_likelihood_wavelet(data, psd[ic]);
-        printf("finished loglike %lf\n", logL);
-        printf("inst model\n");
         inst_model[ic]->logL = logL;
-        printf("sgwb model\n");
-        fflush(stdout);
         sgwb_model[ic]->logL = logL;
-        printf("conf model\n");
-        fflush(stdout);
         conf_model[ic]->logL = logL;
     }
-    printf("initial likelihood done\n");
 
     sprintf(filename,"%s/full_noise_model.dat",data->dataDir);
     // TODO do we need to fix this?? is wavelet. might work anyway
-    printf("write noise model\n");
     print_noise_model(psd[0], filename);
 
     //MCMC
@@ -225,6 +214,7 @@ int main(int argc, char *argv[])
     int step = 0;
     int NC = chain->NC;
     
+    // TODO improve paralellization
     #pragma omp parallel num_threads(flags->threads)
     {
         int threadID;
@@ -272,7 +262,7 @@ int main(int argc, char *argv[])
                 // TODO why inst_model?
                 noise_ptmcmc(inst_model, chain, flags);
                 
-                if(step%(flags->NMCMC/10)==0)printf("noise_mcmc at step %i\n",step);
+                if(step%(flags->NMCMC/10)==0)printf("noise_wavelet_mcmc at step %i\n",step);
                 
                 // print chain files
                 fprintf(noiseChainFile,"%i %.12g ",step,inst_model[chain->index[0]]->logL);
@@ -315,8 +305,6 @@ int main(int argc, char *argv[])
                 
                 if(step%data->downsample==0 && step/data->downsample < data->Nwave)
                 {
-                    fprintf(stderr, "Not implemented downsampling wavelet stuff\n");
-                    exit(-2);
                     generate_instrument_noise_model_wavelet(data->wdm, orbit, inst_model[chain->index[0]]);
                     if(flags->confNoise)
                     {
@@ -328,8 +316,7 @@ int main(int argc, char *argv[])
                     }
                     generate_full_dynamic_covariance_matrix(data->wdm, inst_model[chain->index[0]], conf_model[chain->index[0]], sgwb_model[chain->index[0]], psd[chain->index[0]]);
                     
-                    // TODO wavelettify
-                    for(int n=0; n<data->NFFT; n++)
+                    for(int n=0; n<data->N; n++)
                         for(int i=0; i<data->Nchannel; i++)
                             data->S_pow[n][i][step/data->downsample] = psd[chain->index[0]]->C[i][i][n];
                 }

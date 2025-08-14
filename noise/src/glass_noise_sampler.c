@@ -902,7 +902,6 @@ void noise_sgwb_model_mcmc_wavelet(struct Data *data, struct InstrumentModel *no
     struct SGWBModel *model_x = model;
     struct SGWBModel *model_y = trial;
     copy_sgwb_model(model_x, model_y);
-    printf("copied first sgwb\n");
     
     //initialize likelhood
     //TODO: this shouldn't be necessary!
@@ -912,7 +911,6 @@ void noise_sgwb_model_mcmc_wavelet(struct Data *data, struct InstrumentModel *no
     generate_full_dynamic_covariance_matrix(data->wdm, noise, galaxy, model_x, psd);
     invert_noise_covariance_matrix(psd);
     model_x->logL = noise_log_likelihood_wavelet(data, psd);
-    printf("likelihood init\n");
 
     
     //set priors

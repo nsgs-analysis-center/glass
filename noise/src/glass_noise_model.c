@@ -197,7 +197,9 @@ void free_foreground_model(struct ForegroundModel *model)
 void free_sgwb_model(struct SGWBModel *model)
 {
     free_noise(model->psd);
-    free_sgwb_response(model->R);
+    // TODO should actually only do this if we're the last SGWBModel instance. 
+    // for now, leak this memory
+    // free_sgwb_response(model->R);
     free(model->params);
     free(model);
 }
@@ -685,44 +687,54 @@ void generate_sgwb_model(struct SGWBModel *model)
 }
 void generate_sgwb_model_wavelet(struct Wavelets* wdm, struct SGWBModel *model)
 {
-    // see notes, need to cover jmin to jmax in C
-    double f;
-    double Sgw;
-    
-    // TODO integrate over frequencies?
-    for(int n=0; n<wdm->NF; n++)
+    /* 
+    oversampled frequency grid 
+    */
+    struct SGWBModel *grid = malloc(sizeof(struct SGWBModel));
+    // active layers
+    int imin = (int)round(model->psd->f[0]/wdm->df);
+    int imax = (int)round(model->psd->f[model->psd->N-1]/wdm->df)+1;
+
+    // initialize data models
+    alloc_sgwb_model(grid, 2*wdm->NF, imax-imin, 3, model->SGWB_type);
+
+    // set up psd frequency grid
+    for(int n=0; n<grid->psd->N; n++)
+        grid->psd->f[n] = wdm->df/2.0*(n+1);
+    // intialize grid parameter levels
+    grid->Nparams = model->Nparams;
+    grid->Tobs = model->Tobs;
+    for (int i=0; i<model->Nparams; i++)
+        grid->params[i] = model->params[i]; 
+
+    // get noise covariance matrix for initial parameters
+    generate_sgwb_model(grid);
+
+    /*
+    integrate SGWB over each frequency layer
+    */
+    double ***C     = model->psd->C;
+    double ***Cgrid = grid->psd->C;
+
+    for(int i=imin+1; i<imax-1; i++)
     {
-        f = model->psd->f[n];
-        
-        _Static_assert(SGWB_TEMPLATE_COUNT == 1, "Did you add an SGWB template? Edit this switch case, it needs to be exhaustive.");
-        switch(model->SGWB_type) {
-            case SGWB_TEMPLATE_POWERLAW:
-                Sgw = sgwb_powerlaw(f,model->params);
-                break;
-            default:
-                fprintf(stderr,"Unimplemented SGWB type?\n\tTemplate index: %d\n\tTemplate name: %s\n",model->SGWB_type,SGWB_TEMPLATE_NAMES[model->SGWB_type]);
-                exit(1);
-                break;
-        }
-        
-        switch(model->psd->Nchannel)
-        {
-            double Rxx, Rxy;
-            case 1:
-            case 2:
-                fprintf(stderr, "Unimplemented error! SGWB covariance generation with Nchannels = %d\n",model->psd->Nchannel);
-                exit(-3);
-                break;
-            case 3:
-                Rxx = spline_interpolation(model->R->spline_XX,f);
-                Rxy = spline_interpolation(model->R->spline_XY,f);
-                // note that, in equal-arm LISA, XYZ: Rxx = Ryy = Rzz, and Rxy = Rxz = Ryz = -0.5*Rxx
-                model->psd->C[0][0][n] = model->psd->C[1][1][n] = model->psd->C[2][2][n] = Rxx*Sgw;
-                model->psd->C[0][1][n] = model->psd->C[0][2][n] = model->psd->C[1][2][n] = Rxy*Sgw;
-                model->psd->C[1][0][n] = model->psd->C[2][0][n] = model->psd->C[2][1][n] = Rxy*Sgw;
-                break;
-        }
+        // note that the galactic foreground version of this assumes there are layers before and after imin/imax!
+        // maybe this is the case for galactic foreground, but not for us...
+        // we'll center the integral instead
+        int j = 2*i-1;
+        for(int n=0; n<3; n++)
+            for(int m=n; m<3; m++)
+                C[n][m][i-imin] = simpson_integration_3(Cgrid[n][m][j-1],Cgrid[n][m][j],Cgrid[n][m][j+1],1.0);
     }
+    // TODO: don't think we need this???
+    /*
+    //NOTE: normalization fudge factor
+    for(int i=0; i<model->psd->N; i++)
+        for(int n=0; n<3; n++)
+            for(int m=n; m<3; m++)
+                C[n][m][i]/=8.;
+    */
+    free_sgwb_model(grid);
 }
 
 void generate_full_covariance_matrix(struct Noise *full, struct Noise *component, int Nchannel)
@@ -751,15 +763,9 @@ void generate_full_dynamic_covariance_matrix(struct Wavelets *wdm, struct Instru
         for(int j=jmin; j<jmax; j++)
         {
             wavelet_pixel_to_index(wdm,i,j,&k);
-            printf("jmin: %d\n",jmin);
-            printf("jmax: %d\n",jmax);
-            printf("kmin: %d\n",wdm->kmin);
-            printf("kmax: %d\n",wdm->kmax);
-            printf("k:    %d\n",k);
 
             k-=wdm->kmin;
 
-            printf("inst noise %d\n",k);
             //stationary instrument noise 
             full->C[0][0][k] = inst->psd->C[0][0][j-jmin];
             full->C[1][1][k] = inst->psd->C[1][1][j-jmin];
@@ -768,7 +774,6 @@ void generate_full_dynamic_covariance_matrix(struct Wavelets *wdm, struct Instru
             full->C[0][2][k] = inst->psd->C[0][2][j-jmin];
             full->C[1][2][k] = inst->psd->C[1][2][j-jmin];
 
-            printf("conf noise\n");
             //modulated galactic foreground
             full->C[0][0][k] += conf->psd->C[0][0][j-jmin]*spline_interpolation(conf->modulation->XX_spline, t);
             full->C[1][1][k] += conf->psd->C[1][1][j-jmin]*spline_interpolation(conf->modulation->YY_spline, t);
@@ -778,7 +783,6 @@ void generate_full_dynamic_covariance_matrix(struct Wavelets *wdm, struct Instru
             full->C[1][2][k] += conf->psd->C[1][2][j-jmin]*spline_interpolation(conf->modulation->YZ_spline, t);
 
 
-            printf("sgwb noise\n");
             //stationary stochastic background
             full->C[0][0][k] += sgwb->psd->C[0][0][j-jmin];
             full->C[1][1][k] += sgwb->psd->C[1][1][j-jmin];
@@ -787,7 +791,6 @@ void generate_full_dynamic_covariance_matrix(struct Wavelets *wdm, struct Instru
             full->C[0][2][k] += sgwb->psd->C[0][2][j-jmin];
             full->C[1][2][k] += sgwb->psd->C[1][2][j-jmin];
 
-            printf("full noise\n");
             //noise covariance matrix is symmetric
             full->C[1][0][k] = full->C[0][1][k]; 
             full->C[2][0][k] = full->C[0][2][k]; 
@@ -881,7 +884,6 @@ double noise_log_likelihood_wavelet(struct Data *data, struct Noise *noise)
     struct TDI *tdi = data->tdi;
     
     int N = data->N;
-    printf("alloc list\n");
     int *list = int_vector(data->N);
     for(int n=0; n<data->N; n++) list[n]=n;
     
@@ -895,9 +897,7 @@ double noise_log_likelihood_wavelet(struct Data *data, struct Noise *noise)
             logL += -0.5*wavelet_nwip(tdi->E, tdi->E, noise->invC[1][1], list, N);
             break;
         case 3:
-            printf("XX\n");
             logL += -0.5*wavelet_nwip(tdi->X, tdi->X, noise->invC[0][0], list, N);
-            printf("YY\n");
             logL += -0.5*wavelet_nwip(tdi->Y, tdi->Y, noise->invC[1][1], list, N);
             logL += -0.5*wavelet_nwip(tdi->Z, tdi->Z, noise->invC[2][2], list, N);
             logL += -wavelet_nwip(tdi->X, tdi->Y, noise->invC[0][1], list, N);
@@ -905,11 +905,9 @@ double noise_log_likelihood_wavelet(struct Data *data, struct Noise *noise)
             logL += -wavelet_nwip(tdi->Y, tdi->Z, noise->invC[1][2], list, N);
             break;
     }
-    printf("detC\n");
     for(int n=0; n<N; n++)
         logL -= log(noise->detC[n]);
     
-    printf("ret\n");
     return logL;
     // this comment constitutes an offering to the diety responsible for the correct factors of 2
 }
