@@ -716,6 +716,9 @@ void generate_sgwb_model_wavelet(struct Wavelets* wdm, struct SGWBModel *model)
     double ***C     = model->psd->C;
     double ***Cgrid = grid->psd->C;
 
+    for(int n=0; n<3; n++)
+        for(int m=n; m<3; m++)
+            C[n][m][0] = simpson_integration_3(Cgrid[n][m][0],Cgrid[n][m][1],Cgrid[n][m][2],1.0);
     for(int i=imin+1; i<imax-1; i++)
     {
         // note that the galactic foreground version of this assumes there are layers before and after imin/imax!
@@ -726,6 +729,9 @@ void generate_sgwb_model_wavelet(struct Wavelets* wdm, struct SGWBModel *model)
             for(int m=n; m<3; m++)
                 C[n][m][i-imin] = simpson_integration_3(Cgrid[n][m][j-1],Cgrid[n][m][j],Cgrid[n][m][j+1],1.0);
     }
+    for(int n=0; n<3; n++)
+        for(int m=n; m<3; m++)
+            C[n][m][imax-imin-1] = simpson_integration_3(Cgrid[n][m][2*(imax-imin) - 3],Cgrid[n][m][2*(imax-imin) - 2],Cgrid[n][m][2*(imax-imin) - 1],1.0);
     // TODO: don't think we need this???
     /*
     //NOTE: normalization fudge factor

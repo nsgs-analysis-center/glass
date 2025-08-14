@@ -56,6 +56,7 @@ int main(int argc, char *argv[])
     struct Chain *chain = malloc(sizeof(struct Chain));
     
     parse_data_args(argc,argv,data,orbit,flags,chain,"wavelet");
+    printf("old fmin=%lg, fmax=%lg\n",data->fmin,data->fmax);
     if(flags->help) print_usage();
 
     /* Setup output directories for data and chain files */
@@ -81,8 +82,9 @@ int main(int argc, char *argv[])
     printf("old fmin=%lg, fmax=%lg\n",data->fmin,data->fmax);
     // TODO these are not initialized because the UCB sampler set them itself later!
     // should probably have defaults... this does not feel like the source's job
-    data->lmin = 0;                 // we'll use full wavelet frequency content
-    data->lmax = data->wdm->NF - 1; // we'll use full wavelet frequency content
+    // we'll approximate command line choices
+    data->lmin = (int)floor(data->fmin / data->wdm->df);
+    data->lmax =  (int)ceil(data->fmax / data->wdm->df);
     //reset wavelet basis max and min ranges
     wavelet_pixel_to_index(data->wdm,0,data->lmin,&data->wdm->kmin); 
     wavelet_pixel_to_index(data->wdm,0,data->lmax,&data->wdm->kmax); 

@@ -1715,6 +1715,7 @@ void parse_data_args(int argc, char **argv, struct Data *data, struct Orbit *orb
         data->fmax = data->fmin + (double)(data->Nlayer)*WAVELET_BANDWIDTH;
 
     }
+    printf("old fmin=%lg, fmax=%lg\n",data->fmin,data->fmax);
 
     //after all of that resize data
     if(!strcmp(data->basis,"fourier")) data->N = data->NFFT*2;
