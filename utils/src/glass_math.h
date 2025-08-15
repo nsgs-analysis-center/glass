@@ -36,7 +36,14 @@ struct CubicSpline
     double *y3;   //!<3rd order coefficient
 };
 
+struct CubicSplineEvenSampling
+{
+    struct CubicSpline *cspline; //!<Internal cubic spline, same methods can be used on it
+    double ds; //!<Spacing between x-axis samples. E.g., dt for time samples, df for frequency, etc
+};
+
 struct CubicSpline* alloc_cubic_spline(int N);
+struct CubicSplineEvenSampling* alloc_cubic_spline_even_sampling(int N);
 
 /**
  \brief Computes cubic spline coefficients for input data {x,y}
@@ -46,8 +53,18 @@ struct CubicSpline* alloc_cubic_spline(int N);
  @param[in] y dependent variable of interpolant
 */
 void initialize_cubic_spline(struct CubicSpline *spline, double *x, double *y);
+/**
+ \brief Computes cubic spline coefficients for input data {x,y}
+ 
+ @param[in,out] spline cubic spline structure
+ @param[in] x independent variable of interpolant
+ @param[in] y dependent variable of interpolant
+ @param[in] ds spacing in units of x between samples
+*/
+void initialize_cubic_spline_even_sampling(struct CubicSplineEvenSampling *spline, double *x, double *y, double ds);
 
 void free_cubic_spline(struct CubicSpline *spline);
+void free_cubic_spline_even_sampling(struct CubicSplineEvenSampling *spline);
 
 /**
 \brief GLASS implementation of solving for cubic spline interpolation coefficients
@@ -79,9 +96,13 @@ void spline_coefficients(struct CubicSpline *spline);
 
  */
 double spline_interpolation(struct CubicSpline *spline, double x);
+double spline_interpolation_even_sampling(struct CubicSplineEvenSampling *spline, double x);
 double spline_interpolation_deriv(struct CubicSpline *spline, double x);
 double spline_interpolation_deriv2(struct CubicSpline *spline, double x);
 double spline_integration(struct CubicSpline *spline, double xi, double xf);
+double spline_interpolation_deriv_even_sampling(struct CubicSplineEvenSampling *spline, double x);
+double spline_interpolation_deriv2_even_sampling(struct CubicSplineEvenSampling *spline, double x);
+double spline_integration_even_sampling(struct CubicSplineEvenSampling *spline, double xi, double xf);
 
 /**
  \brief Analytic in-place inversion of noise covariance matrix
