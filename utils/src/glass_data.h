@@ -371,11 +371,11 @@ struct SGWBResponse
     ///@name Each independent channel response 
     ///@{
     int N; // length of channel response
-    struct CubicSpline* spline_XX; // for now, only store XX and XY. Only indep combinations with equal arms
-    struct CubicSpline* spline_XY;
-    double *f;
-    double *XX;
-    double *XY;
+    struct CubicSplineEvenSampling* spline_logRXX; // for now, only store XX and XY. Only indep combinations with equal arms
+    struct CubicSplineEvenSampling* spline_logRXY;
+    double *logf;
+    double *logXX;
+    double *logXY;
     ///@}
 };
 

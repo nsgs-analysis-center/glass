@@ -16,6 +16,7 @@
 
 
 #include <glass_utils.h>
+#include <glass_math.h>
 
 #include "glass_noise.h"
 
@@ -146,29 +147,34 @@ void alloc_pop_sgwb_response(struct SGWBResponse* sgwbr, char* fname) {
     }
 
     // memory leak
-    sgwbr->f = malloc(sizeof(double) * *N); 
-    sgwbr->XX = malloc(sizeof(double) * *N);
-    sgwbr->XY = malloc(sizeof(double) * *N);
+    sgwbr->logf = malloc(sizeof(double) * *N); 
+    sgwbr->logXX = malloc(sizeof(double) * *N);
+    sgwbr->logXY = malloc(sizeof(double) * *N);
     for (int i=0;i<*N;i++) {
-        fscanf(ff,"%lf %lf %lf\n",&sgwbr->f[i],&sgwbr->XX[i],&sgwbr->XY[i]);
+        double f,XX,XY;
+        fscanf(ff,"%lf %lf %lf\n",&f,&XX,&XY);
+        sgwbr->logf[i] = log(f);
+        sgwbr->logXX[i] = log(XX);
+        sgwbr->logXY[i] = log(XY);
     }
     fclose(ff);
 
 
     // memory leak
-    sgwbr->spline_XX = alloc_cubic_spline(*N);
-    sgwbr->spline_XY = alloc_cubic_spline(*N);
-    initialize_cubic_spline(sgwbr->spline_XX, sgwbr->f, sgwbr->XX);
-    initialize_cubic_spline(sgwbr->spline_XY, sgwbr->f, sgwbr->XY);
+    sgwbr->spline_logRXX = alloc_cubic_spline_even_sampling(*N);
+    sgwbr->spline_logRXY = alloc_cubic_spline_even_sampling(*N);
+    double dlogf = sgwbr->logf[1] - sgwbr->logf[0];
+    initialize_cubic_spline_even_sampling(sgwbr->spline_logRXX, sgwbr->logf, sgwbr->logXX, dlogf);
+    initialize_cubic_spline_even_sampling(sgwbr->spline_logRXY, sgwbr->logf, sgwbr->logXY, dlogf);
 
 }
 
 void free_sgwb_response(struct SGWBResponse *sgwbr) {
-    free(sgwbr->f);
-    free(sgwbr->XX);
-    free(sgwbr->XY);
-    free_cubic_spline(sgwbr->spline_XX);
-    free_cubic_spline(sgwbr->spline_XY);
+    free(sgwbr->logf);
+    free(sgwbr->logXX);
+    free(sgwbr->logXY);
+    free_cubic_spline_even_sampling(sgwbr->spline_logRXX);
+    free_cubic_spline_even_sampling(sgwbr->spline_logRXY);
     free(sgwbr);
 }
 
@@ -675,8 +681,9 @@ void generate_sgwb_model(struct SGWBModel *model)
                 exit(-3);
                 break;
             case 3:
-                Rxx = spline_interpolation(model->R->spline_XX,f);
-                Rxy = spline_interpolation(model->R->spline_XY,f);
+                double logf = log(f);
+                Rxx = exp(spline_interpolation_even_sampling(model->R->spline_logRXX, logf));
+                Rxy = exp(spline_interpolation_even_sampling(model->R->spline_logRXY, logf));
                 // note that, in equal-arm LISA, XYZ: Rxx = Ryy = Rzz, and Rxy = Rxz = Ryz = -0.5*Rxx
                 model->psd->C[0][0][n] = model->psd->C[1][1][n] = model->psd->C[2][2][n] = Rxx*Sgw;
                 model->psd->C[0][1][n] = model->psd->C[0][2][n] = model->psd->C[1][2][n] = Rxy*Sgw;
