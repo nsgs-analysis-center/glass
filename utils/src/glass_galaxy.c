@@ -342,12 +342,12 @@ void initialize_galaxy_modulation(struct GalaxyModulation *gm, struct Wavelets *
     free(sa);
     
     //interpolants for modulation pattern
-    gm->XX_spline = alloc_cubic_spline(gm->N);
-    gm->YY_spline = alloc_cubic_spline(gm->N);
-    gm->ZZ_spline = alloc_cubic_spline(gm->N);
-    gm->XY_spline = alloc_cubic_spline(gm->N);
-    gm->XZ_spline = alloc_cubic_spline(gm->N);
-    gm->YZ_spline = alloc_cubic_spline(gm->N);
+    gm->XX_spline = alloc_cubic_spline_even_sampling(gm->N);
+    gm->YY_spline = alloc_cubic_spline_even_sampling(gm->N);
+    gm->ZZ_spline = alloc_cubic_spline_even_sampling(gm->N);
+    gm->XY_spline = alloc_cubic_spline_even_sampling(gm->N);
+    gm->XZ_spline = alloc_cubic_spline_even_sampling(gm->N);
+    gm->YZ_spline = alloc_cubic_spline_even_sampling(gm->N);
 
 
     double theta, phi;
@@ -729,12 +729,13 @@ void galaxy_modulation(struct GalaxyModulation *gm, double *params)
         xz[i] /= av;
     }
     
-    initialize_cubic_spline(gm->XX_spline, gm->t, xx);
-    initialize_cubic_spline(gm->YY_spline, gm->t, yy);
-    initialize_cubic_spline(gm->ZZ_spline, gm->t, zz);
-    initialize_cubic_spline(gm->XY_spline, gm->t, xy);
-    initialize_cubic_spline(gm->XZ_spline, gm->t, xz);
-    initialize_cubic_spline(gm->YZ_spline, gm->t, yz);
+    double dt = gm->t[1] - gm->t[0];
+    initialize_cubic_spline_even_sampling(gm->XX_spline, gm->t, xx, dt);
+    initialize_cubic_spline_even_sampling(gm->YY_spline, gm->t, yy, dt);
+    initialize_cubic_spline_even_sampling(gm->ZZ_spline, gm->t, zz, dt);
+    initialize_cubic_spline_even_sampling(gm->XY_spline, gm->t, xy, dt);
+    initialize_cubic_spline_even_sampling(gm->XZ_spline, gm->t, xz, dt);
+    initialize_cubic_spline_even_sampling(gm->YZ_spline, gm->t, yz, dt);
 
     FILE *out = fopen("modulation.dat", "w");
     for(int i=0; i<gm->N; i++)
