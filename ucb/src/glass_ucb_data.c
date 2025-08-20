@@ -17,13 +17,7 @@
 #include <glass_utils.h>
 #include <glass_noise.h>
 
-#include "glass_ucb_model.h"
-#include "glass_ucb_io.h"
-#include "glass_ucb_catalog.h"
-#include "glass_ucb_waveform.h"
-#include "glass_ucb_fstatistic.h"
-#include "glass_ucb_data.h"
-
+#include "glass_ucb.h"
 
 void UCBInjectVerificationSet(struct Data *data, struct Orbit *orbit, struct Flags *flags, struct Source *inj)
 {
@@ -73,7 +67,7 @@ void UCBInjectVerificationSource(struct Data *data, struct Orbit *orbit, struct 
     FILE *fptr;
     
     /* structure for holding injection source parameters and waveforms */
-    alloc_source(inj, data->N, data->Nchannel);
+    alloc_source(inj, data->N, UCB_MODEL_NP, data->Nchannel);
     
     /* Get injection parameters */
     double f0,dfdt,costheta,phi,m1,m2,D; //read from injection file
@@ -160,9 +154,9 @@ void UCBInjectVerificationSource(struct Data *data, struct Orbit *orbit, struct 
         inj->phi      = phi;
         inj->amp      = amp;
         inj->cosi     = cosi;
-        inj->phi0     = phi0;
+        inj->phiref   = phi0;
         inj->psi      = psi;
-        map_params_to_array(inj, inj->params, data->T);
+        map_ucb_params_to_array(inj, inj->params, data->T);
         
         //save parameters to file
         sprintf(filename,"%s/injection_parameters_%i.dat",flags->runDir,ii);
@@ -306,7 +300,7 @@ void UCBInjectSimulatedSource(struct Data *data, struct Orbit *orbit, struct Fla
         {
             if(n_inj<flags->DMAX)
             {
-                alloc_source(inj_vec[n_inj], data->N, data->Nchannel);
+                alloc_source(inj_vec[n_inj], data->N, UCB_MODEL_NP, data->Nchannel);
                 inj = inj_vec[n_inj];
             }
             else
@@ -387,13 +381,13 @@ void UCBInjectSimulatedSource(struct Data *data, struct Orbit *orbit, struct Fla
             inj->phi      = phi;
             inj->amp      = amp;
             inj->cosi     = cos(iota);
-            inj->phi0     = phi0;
+            inj->phiref   = phi0;
             inj->psi      = psi;
             if(UCB_MODEL_NP>8)
                 inj->d2fdt2 = 11.0/3.0*dfdt*dfdt/f0;
             //inj->d2fdt2 = fddot;
             
-            map_params_to_array(inj, inj->params, data->T);
+            map_ucb_params_to_array(inj, inj->params, data->T);
             
             //save parameters to file
             sprintf(filename,"%s/injection_parameters_%i.dat",flags->runDir,ii);
@@ -664,9 +658,9 @@ void GetVerificationBinary(struct Data *data, struct Flags *flags, struct Source
     inj->phi      = phi;
     inj->amp      = amp;
     inj->cosi     = cosi;
-    inj->phi0     = phi0;
+    inj->phiref   = phi0;
     inj->psi      = psi;
-    map_params_to_array(inj, inj->params, data->T);
+    map_ucb_params_to_array(inj, inj->params, data->T);
 }
 
 

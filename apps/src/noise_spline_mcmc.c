@@ -31,6 +31,19 @@ static void print_usage()
     exit(0);
 }
 
+static void set_noise_defaults(struct Data *data)
+{
+    data->T        = 31457280; /* one "mldc years" at 15s sampling */
+    data->t0       = 0.0; /* start time of data segment in seconds */
+    data->sqT      = sqrt(data->T);
+    data->NFFT     = (int)floor(data->T/LISA_CADENCE);   /* full data set */
+    data->Nlayer   = (int)floor(1/2.0/LISA_CADENCE/WAVELET_BANDWIDTH); /* up to Nyquist */
+    data->Nchannel = 3; //1=X, 2=AE, 3=XYZ
+    data->qpad     = 0;
+    data->fmin     = 1e-4; //Hz
+    sprintf(data->basis,"fourier");
+}
+
 int main(int argc, char *argv[])
 {
     fprintf(stdout, "\n============= NOISE SPLINE MCMC =============\n");
@@ -50,6 +63,7 @@ int main(int argc, char *argv[])
     struct Orbit *orbit = malloc(sizeof(struct Orbit));
     struct Chain *chain = malloc(sizeof(struct Chain));
     
+    set_noise_defaults(data);
     parse_data_args(argc,argv,data,orbit,flags,chain,"fourier");
     if(flags->help)print_usage();
     

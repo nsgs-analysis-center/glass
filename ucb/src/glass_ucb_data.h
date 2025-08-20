@@ -16,7 +16,7 @@
 
 /**
  @file glass_ucb_data.h
- \brief Functions for data handling, including reading external data, simulating internal data, and signal injections.
+ \brief Functions for UCB data handling, including reading external data, simulating internal data, and signal injections.
  
  \todo There is **a lot** of redundant code in these functions.  That needs to be fixed.
  */

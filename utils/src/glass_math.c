@@ -355,6 +355,42 @@ double wavelet_nwip(double *a, double *b, double *invC, int *list, int N)
     return arg;
 }
 
+double snr(struct Source *source, struct Noise *noise)
+{
+    double snr2=0.0;
+    switch(source->tdi->Nchannel)
+    {
+        case 1: //Michelson
+            snr2 += fourier_nwip(source->tdi->X,source->tdi->X,noise->invC[0][0],source->tdi->N/2);
+            break;
+        case 2: //A&E
+            snr2 += fourier_nwip(source->tdi->A,source->tdi->A,noise->invC[0][0],source->tdi->N/2);
+            snr2 += fourier_nwip(source->tdi->E,source->tdi->E,noise->invC[1][1],source->tdi->N/2);
+            break;
+        case 3: //XYZ
+            snr2 += fourier_nwip(source->tdi->X,source->tdi->X,noise->invC[0][0],source->tdi->N/2);
+            snr2 += fourier_nwip(source->tdi->Y,source->tdi->Y,noise->invC[1][1],source->tdi->N/2);
+            snr2 += fourier_nwip(source->tdi->Z,source->tdi->Z,noise->invC[2][2],source->tdi->N/2);
+            snr2 += fourier_nwip(source->tdi->X,source->tdi->Y,noise->invC[0][1],source->tdi->N/2)*2.;
+            snr2 += fourier_nwip(source->tdi->X,source->tdi->Z,noise->invC[0][2],source->tdi->N/2)*2.;
+            snr2 += fourier_nwip(source->tdi->Y,source->tdi->Z,noise->invC[1][2],source->tdi->N/2)*2.;
+            break;
+    }
+    
+    return(sqrt(snr2));
+}
+
+double snr_wavelet(struct Source *source, struct Noise *noise)
+{
+    double snr2 = 0.0;
+    snr2 += wavelet_nwip(source->tdi->X, source->tdi->X, noise->invC[0][0], source->list, source->Nlist);
+    snr2 += wavelet_nwip(source->tdi->Y, source->tdi->Y, noise->invC[1][1], source->list, source->Nlist);
+    snr2 += wavelet_nwip(source->tdi->Z, source->tdi->Z, noise->invC[2][2], source->list, source->Nlist);
+    snr2 += wavelet_nwip(source->tdi->X, source->tdi->Y, noise->invC[0][1], source->list, source->Nlist)*2;
+    snr2 += wavelet_nwip(source->tdi->X, source->tdi->Z, noise->invC[0][2], source->list, source->Nlist)*2;
+    snr2 += wavelet_nwip(source->tdi->Y, source->tdi->Z, noise->invC[1][2], source->list, source->Nlist)*2;
+    return sqrt(snr2);
+}
 
 // Recursive binary search function.
 // Return nearest smaller neighbor of x in array[nmin,nmax] is present,

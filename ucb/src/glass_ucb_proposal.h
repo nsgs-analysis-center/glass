@@ -34,53 +34,6 @@
 
 #define UCB_PROPOSAL_NPROP 9 ///< Number of defined proposal distributions for UCB sampler
 
-/*!
- \brief Prototype structure for proposal distributions.
- 
- Generic data structure for holding all information needed by proposal distributions.
- Structure contains function for drawing new parameters, evaluating the proposal density,
- tracking acceptance ratios, and various book-keeping scalars, vectors, and matrices to
- hold needed metadata.
-
-*/
-
-struct Proposal
-{
-    /**
-     \brief Function that generates updated source parameters.
-     
-     @param  params parameter vector
-     @return logQ proposal density
-     */
-    double (*function)(struct Data*,struct Model*,struct Source*,struct Proposal*,double*,unsigned int*);
-
-    /**
-     \brief Compute proposal density given parameters.
-     
-     @param[in]  params parameter vector
-     @param[out] logQ proposal density
-     */
-    double (*density)(struct Data*, struct Model*, struct Source*,struct Proposal*,double*);
-    
-    int *trial;      //!<total number of trials for proposal
-    int *accept;     //!<total number of accepted trials for proposals*/
-    char name[128];  //!<string identifying proposal type
-    double norm;     //!<proposal normalization
-    double maxp;     //!<max value of proposal density for rejection sampling
-    double weight;   //!<proposal weight [0,1] for fixed dimension moves
-    double rjweight; //!<proposal weight [0,1] for trans dimensional moves
-    int size;        //!<size of proposal arrays
-    double *vector;  //!<utility 1D array for proposal metadata
-    double **matrix; //!<utility 2D array for proposal metadata
-    double ***tensor;//!<utility 3D array for proposal metadata
-    
-    /** @name Gaussian mixture model
-     */
-    ///@{
-    size_t Ngmm; //!< number of mixture models (1/source)
-    struct GMM **gmm; //!<array of individual mixture models
-    ///@}
-};
 
 /**
  \brief Compute whitened power spectrum of data and normalize to preferentially draw frequencies with excess power
@@ -110,14 +63,7 @@ double draw_from_prior(struct Data *data, struct Model *model, struct Source *so
  */
 double draw_from_gmm_prior(struct Data *data, struct Model *model, struct Source *source, struct Proposal *proposal, double *params, unsigned int *seed);
 
-/**
-\brief Fair draw from uniform ranges for each parameter
- 
- @param params (updates \f$\vec\theta\f$)
- @return logQ = \f$\ln p(\f$ \c params \f$)\f$
 
- */
-double draw_from_uniform_prior(UNUSED struct Data *data, struct Model *model, UNUSED struct Source *source, UNUSED struct Proposal *proposal, double *params, unsigned int *seed);
 
 /**
 \brief Fair draw from prior for location and orientation parameters
@@ -280,8 +226,8 @@ double cov_density(UNUSED struct Data *data, struct Model *model, struct Source 
 /**
  \brief Sets up different proposals and assigns frequencies with which they are used.
  */
-void initialize_proposal(struct Orbit *orbit, struct Data *data, struct Prior *prior, struct Chain *chain, struct Flags *flags, struct Catalog *catalog, struct Proposal **proposal, int NMAX);
-void initialize_vb_proposal(struct Orbit *orbit, struct Data *data, struct Prior *prior, struct Chain *chain, struct Flags *flags, struct Proposal **proposal, int NMAX);
+void initialize_ucb_proposal(struct Orbit *orbit, struct Data *data, struct Prior *prior, struct Chain *chain, struct Flags *flags, struct Catalog *catalog, struct Proposal **proposal, int NMAX);
+void initialize_vgb_proposal(struct Orbit *orbit, struct Data *data, struct Prior *prior, struct Chain *chain, struct Flags *flags, struct Proposal **proposal, int NMAX);
 
 /**
  \brief Sets up memory for and builds 3D histogram for F-statistics proposal
@@ -351,14 +297,6 @@ void setup_covariance_proposal(struct Data *data, struct Flags *flags, struct Pr
 double evaluate_fstatistic_proposal(struct Data *data, UNUSED struct Model *model, UNUSED struct Source * source, struct Proposal *proposal, double *params);
 
 /**
- \brief Returns (log) uniform prior density
- 
- Returns \f$\sum \log\frac{1}{\Delta V}\f$ for each parameter except the SNR prior for \f$\mathcal{A}\f$.
- */
-double uniform_prior_density(struct Data *data, struct Model *model, UNUSED struct Source *source, UNUSED struct Proposal *proposal, double *params);
-
-
-/**
  \brief Returns (log) prior density
  
  Typically returns \f$\sum \log\frac{1}{\Delta V}\f$ for each parameter except those that have non-trivial priors due to various run settings e.g., the SNR prior for \f$\mathcal{A}\f$, or the galaxy prior for \f${\cos\theta,\phi}\f$.
@@ -371,11 +309,5 @@ double prior_density(struct Data *data, struct Model *model, UNUSED struct Sourc
 double gmm_prior_density(struct Data *data, struct Model *model, struct Source *source, struct Proposal *proposal, double *params);
 
 
-/**
- \brief Placeholder for symmetric proposal.  Returns 0.0
- 
- The Proposal structure requires a proposal density function. This function serves that role for proposals which are symmetric and therefore do not need use any resources computing proposal densities that will just cancel in the Hastings ratio.
- */
-double symmetric_density(UNUSED struct Data *data, UNUSED struct Model *model, UNUSED struct Source *source, UNUSED struct Proposal *proposal, UNUSED double *params);
 
 #endif /* ucb_proposal_h */

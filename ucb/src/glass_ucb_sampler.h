@@ -29,19 +29,6 @@
 #ifndef ucb_sampler_h
 #define ucb_sampler_h
 
-/** \brief Parallel tempering exchange
- 
- Cycles through all chains and proposes swaps between adjacent pairs.
- */
-void ptmcmc(struct Model **model, struct Chain *chain, struct Flags *flags);
-
-/**
- \brief Adaptive temperature spacing
- 
- Adjusts temperature spacing between tempered chains according with the goal of having an even acceptance rate between all pairs. The sensitivity of the adjustment asymptotically goes to zero as the sampler approaches the end of the burn-in phase.
- */
-void adapt_temperature_ladder(struct Chain *chain, int mcmc);
-
 /**
  \brief Fixed dimension galactic binary MCMC
  

@@ -16,9 +16,7 @@
 
 #include <glass_utils.h>
 
-#include "glass_ucb_model.h"
-#include "glass_ucb_waveform.h"
-#include "glass_ucb_io.h"
+#include "glass_ucb.h"
 
 void print_ucb_usage()
 {
@@ -478,7 +476,7 @@ void restore_chain_state(struct Orbit *orbit, struct Data *data, struct Model **
         }
         
         generate_noise_model(data, model[n]);
-        generate_signal_model(orbit, data, model[n], -1);
+        generate_ucb_model(orbit, data, model[n], -1);
         
         if(!flags->prior)
         {
@@ -693,7 +691,7 @@ void print_psd_state(struct Data *data, struct Model *model, FILE *fptr, int ste
 void print_source_params(struct Data *data, struct Source *source, FILE *fptr)
 {
     //map to parameter names (just to make code readable)
-    map_array_to_params(source, source->params, data->T);
+    map_array_to_ucb_params(source, source->params, data->T);
     
     fprintf(fptr,"%.16g ",source->f0);
     fprintf(fptr,"%.12g ",source->dfdt);
@@ -702,7 +700,7 @@ void print_source_params(struct Data *data, struct Source *source, FILE *fptr)
     fprintf(fptr,"%.12g ",source->costheta);
     fprintf(fptr,"%.12g ",source->cosi);
     fprintf(fptr,"%.12g ",source->psi);
-    fprintf(fptr,"%.12g ",source->phi0);
+    fprintf(fptr,"%.12g ",source->phiref);
     if(UCB_MODEL_NP>8)
         fprintf(fptr,"%.12g ",source->d2fdt2);
 }
@@ -717,7 +715,7 @@ void scan_source_params(struct Data *data, struct Source *source, FILE *fptr)
     check+=fscanf(fptr,"%lg",&source->costheta);
     check+=fscanf(fptr,"%lg",&source->cosi);
     check+=fscanf(fptr,"%lg",&source->psi);
-    check+=fscanf(fptr,"%lg",&source->phi0);
+    check+=fscanf(fptr,"%lg",&source->phiref);
     if(UCB_MODEL_NP>8)
         check+=fscanf(fptr,"%lg",&source->d2fdt2);
     
@@ -728,7 +726,7 @@ void scan_source_params(struct Data *data, struct Source *source, FILE *fptr)
     }
     
     //map to parameter names (just to make code readable)
-    map_params_to_array(source, source->params, data->T);
+    map_ucb_params_to_array(source, source->params, data->T);
     
 }
 

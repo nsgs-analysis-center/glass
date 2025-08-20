@@ -17,10 +17,7 @@
 
 #include <glass_utils.h>
 
-#include "glass_ucb_model.h"
-#include "glass_ucb_waveform.h"
-#include "glass_ucb_fstatistic.h"
-
+#include "glass_ucb.h"
 
 void initialize_XLS(long M, double *XLS, double *AA, double *EE)
 {
@@ -774,7 +771,7 @@ double get_Fstat_logL_wavelet(struct Orbit *orbit, struct Data *data, double f0,
     for(int i=0; i<Nfilter; i++) 
     {
         A[i] = malloc(sizeof(struct Source));
-        alloc_source(A[i],data->N,data->Nchannel);
+        alloc_source(A[i],data->N,UCB_MODEL_NP,data->Nchannel);
     }
     
     //set parameters for each filter
@@ -811,7 +808,7 @@ double get_Fstat_logL_wavelet(struct Orbit *orbit, struct Data *data, double f0,
         A[i]->params[7] = fdot*data->T*data->T;
         if(UCB_MODEL_NP>8) A[i]->params[8] = 0.0;
 
-        map_array_to_params(A[i], A[i]->params, data->T);
+        map_array_to_ucb_params(A[i], A[i]->params, data->T);
         ucb_waveform_wavelet(orbit,data->wdm,data->T, data->t0, A[i]->params, A[i]->list, &A[i]->Nlist, A[i]->tdi->X, A[i]->tdi->Y, A[i]->tdi->Z);
 
         //catch waveforms that are out of band

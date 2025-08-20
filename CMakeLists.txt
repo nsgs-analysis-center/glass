@@ -33,7 +33,9 @@ if(APPLE)
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Xpreprocessor")
 endif()
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fopenmp -Wall -std=gnu99")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fopenmp -Wall -std=gnu99 -march=native")
+SET(CMAKE_C_FLAGS_DEBUG "-glldb -O0")
+SET(CMAKE_C_FLAGS_RELEASE "-O3")
 
 # Set git version header file
 message(STATUS "Resolving GIT Version")

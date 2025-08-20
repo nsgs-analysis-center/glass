@@ -208,8 +208,7 @@ static void wavelet_lookup_table(struct Wavelets *wdm)
 }
 void initialize_wavelet(struct Wavelets *wdm, double T)
 {
-    fprintf(stdout,"\n======= Initialize Wavelet Basis =======\n");
-    
+    fprintf(stdout,"\n========= Initialize Wavelet Basis ==========\n");
     wdm->NT = (int)ceil(T/WAVELET_DURATION);
     wdm->NF = WAVELET_DURATION/LISA_CADENCE;
     wdm->df = WAVELET_BANDWIDTH;
@@ -261,7 +260,7 @@ void initialize_wavelet(struct Wavelets *wdm, double T)
     fprintf(stdout,"  Duration of time pixels:      %g [hr]\n", wdm->dt/3600);
     fprintf(stdout,"  Number of frequency layers:   %i\n", wdm->NF);
     fprintf(stdout,"  Bandwidth of frequency layer: %g [uHz]\n", wdm->df*1e6);
-    fprintf(stdout,"\n========================================\n");
+    fprintf(stdout,"=============================================\n");
 }
 
 void wavelet_index_to_pixel(struct Wavelets *wdm, int *i, int *j, int k)

@@ -37,6 +37,20 @@ static void print_usage()
     exit(0);
 }
 
+static void set_vgb_defaults(struct Data *data)
+{
+    data->T        = 31457280; /* one "mldc years" at 15s sampling */
+    data->t0       = 0.0; /* start time of data segment in seconds */
+    data->sqT      = sqrt(data->T);
+    data->NFFT     = 512;
+    data->N        = data->NFFT*2;
+    data->Nlayer   = 1;
+    data->Nchannel = 3; //1=X, 2=AE, 3=XYZ
+    data->qpad     = 0;
+    data->fmin     = 1e-4; //Hz
+    sprintf(data->basis,"fourier");
+}
+
 /**
  * This is the main function
  *
@@ -87,6 +101,7 @@ int main(int argc, char *argv[])
         
     data=data_vec[0];
     chain=chain_vec[0];
+    set_vgb_defaults(data);
     parse_ucb_args(argc,argv,flags);
     parse_data_args(argc,argv,data,orbit,flags,chain,"fourier");
     if(flags->help) print_usage();
@@ -140,7 +155,7 @@ int main(int argc, char *argv[])
             chain->NC = chain_vec[0]->NC;    //number of chains
         }
 
-        alloc_source(inj, data->N, data->Nchannel);
+        alloc_source(inj, data->N, UCB_MODEL_NP, data->Nchannel);
 
         data->nseed+=n;
 
@@ -215,7 +230,7 @@ int main(int argc, char *argv[])
         
         /* Initialize MCMC proposals */
         proposal_vec[n] = malloc(UCB_PROPOSAL_NPROP*sizeof(struct Proposal*));
-        initialize_vb_proposal(orbit, data_vec[n], prior_vec[n], chain_vec[n], flags, proposal_vec[n], DMAX);
+        initialize_vgb_proposal(orbit, data_vec[n], prior_vec[n], chain_vec[n], flags, proposal_vec[n], DMAX);
         
         /* Initialize data models */
         trial_vec[n] = malloc(sizeof(struct Model*)*NC);

@@ -16,50 +16,12 @@
 
 #include <glass_utils.h>
 
-#include "glass_ucb_model.h"
-#include "glass_ucb_waveform.h"
+#include "glass_ucb.h"
 
 
 double analytic_snr(double A, double Sn, double Sf, double sqT)
 {
     return A*sqT*Sf/sqrt(Sn); //not exactly what's in paper--calibrated against (h|h)
-}
-
-double snr(struct Source *source, struct Noise *noise)
-{
-    double snr2=0.0;
-    switch(source->tdi->Nchannel)
-    {
-        case 1: //Michelson
-            snr2 += fourier_nwip(source->tdi->X,source->tdi->X,noise->invC[0][0],source->tdi->N/2);
-            break;
-        case 2: //A&E
-            snr2 += fourier_nwip(source->tdi->A,source->tdi->A,noise->invC[0][0],source->tdi->N/2);
-            snr2 += fourier_nwip(source->tdi->E,source->tdi->E,noise->invC[1][1],source->tdi->N/2);
-            break;
-        case 3: //XYZ
-            snr2 += fourier_nwip(source->tdi->X,source->tdi->X,noise->invC[0][0],source->tdi->N/2);
-            snr2 += fourier_nwip(source->tdi->Y,source->tdi->Y,noise->invC[1][1],source->tdi->N/2);
-            snr2 += fourier_nwip(source->tdi->Z,source->tdi->Z,noise->invC[2][2],source->tdi->N/2);
-            snr2 += fourier_nwip(source->tdi->X,source->tdi->Y,noise->invC[0][1],source->tdi->N/2)*2.;
-            snr2 += fourier_nwip(source->tdi->X,source->tdi->Z,noise->invC[0][2],source->tdi->N/2)*2.;
-            snr2 += fourier_nwip(source->tdi->Y,source->tdi->Z,noise->invC[1][2],source->tdi->N/2)*2.;
-            break;
-    }
-    
-    return(sqrt(snr2));
-}
-
-double snr_wavelet(struct Source *source, struct Noise *noise)
-{
-    double snr2 = 0.0;
-    snr2 += wavelet_nwip(source->tdi->X, source->tdi->X, noise->invC[0][0], source->list, source->Nlist);
-    snr2 += wavelet_nwip(source->tdi->Y, source->tdi->Y, noise->invC[1][1], source->list, source->Nlist);
-    snr2 += wavelet_nwip(source->tdi->Z, source->tdi->Z, noise->invC[2][2], source->list, source->Nlist);
-    snr2 += wavelet_nwip(source->tdi->X, source->tdi->Y, noise->invC[0][1], source->list, source->Nlist)*2;
-    snr2 += wavelet_nwip(source->tdi->X, source->tdi->Z, noise->invC[0][2], source->list, source->Nlist)*2;
-    snr2 += wavelet_nwip(source->tdi->Y, source->tdi->Z, noise->invC[1][2], source->list, source->Nlist)*2;
-    return sqrt(snr2);
 }
 
 double waveform_match_wavelet(struct Source *a, struct Source *b, struct Noise *noise)
@@ -333,7 +295,7 @@ void ucb_fisher(struct Orbit *orbit, struct Data *data, struct Source *source, s
     // Plus and minus templates for each detector:
     struct Source *wave_p = malloc(sizeof(struct Source));
     //struct Source *wave_m = malloc(sizeof(struct Source));
-    alloc_source(wave_p, data->N, data->Nchannel);
+    alloc_source(wave_p, data->N, UCB_MODEL_NP, data->Nchannel);
 
     //alloc_source(wave_m, data->N, data->Nchannel, NP);
     
@@ -370,8 +332,8 @@ void ucb_fisher(struct Orbit *orbit, struct Data *data, struct Source *source, s
         }
 
         // complete info in source structure
-        map_array_to_params(wave_p, wave_p->params, data->T);
-        //map_array_to_params(wave_m, wave_m->params, data->T);
+        map_array_to_ucb_params(wave_p, wave_p->params, data->T);
+        //map_array_to_ucb_params(wave_m, wave_m->params, data->T);
         
         // clean up TDI arrays, just in case
         for(j=0; j<data->N; j++)
@@ -486,11 +448,11 @@ void ucb_fisher_wavelet(struct Orbit *orbit, struct Data *data, struct Source *s
     double invstep;
     
     // Plus and minus parameters:
-    double *params_p = calloc(UCB_MODEL_NP,sizeof(double));
+    double *params_p = double_vector(UCB_MODEL_NP);
     
     // Plus and minus templates for each detector:
     struct Source *wave_p = malloc(sizeof(struct Source));
-    alloc_source(wave_p, data->N, data->Nchannel);
+    alloc_source(wave_p, data->N, UCB_MODEL_NP, data->Nchannel);
     
     // TDI variables to hold derivatives of h
     struct TDI **dhdx = malloc(UCB_MODEL_NP*sizeof(struct TDI *));
@@ -522,7 +484,7 @@ void ucb_fisher_wavelet(struct Orbit *orbit, struct Data *data, struct Source *s
         }
 
         // complete info in source structure
-        map_array_to_params(wave_p, wave_p->params, data->T);
+        map_array_to_ucb_params(wave_p, wave_p->params, data->T);
         
         // clean up TDI arrays, just in case
         for(j=0; j<data->N; j++)
@@ -581,7 +543,7 @@ void ucb_fisher_wavelet(struct Orbit *orbit, struct Data *data, struct Source *s
     // Calculate eigenvalues and eigenvectors of fisher matrix
     matrix_eigenstuff(source->fisher_matrix, source->fisher_evectr, source->fisher_evalue, UCB_MODEL_NP);
     
-    free(params_p);
+    free_double_vector(params_p);
     free_source(wave_p);
     
     for(n=0; n<UCB_MODEL_NP; n++) free_tdi(dhdx[n]);
@@ -619,7 +581,7 @@ int ucb_bandwidth(double L, double fstar, double f, double fdot, double costheta
 
 void ucb_alignment(struct Orbit *orbit, struct Data *data, struct Source *source)
 {
-    map_array_to_params(source, source->params, data->T);
+    map_array_to_ucb_params(source, source->params, data->T);
     
     source->BW   = 2*ucb_bandwidth(orbit->L, orbit->fstar, source->f0, source->dfdt, source->costheta, source->amp, data->T, data->NFFT);
     source->qmin = (int)(source->f0*data->T) - source->BW/2;

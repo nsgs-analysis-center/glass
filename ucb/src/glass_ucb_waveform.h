@@ -25,23 +25,6 @@
 #include <stdio.h>
 
 /**
-\brief Signal to noise ratio in frequency domain
-  
- Calls nwip() to compute inner product of waveform with itself summed over all frequencies and data channels `I`. If 4-link data, use single TDI channel `I` = `X`. If 6-link, use `I` = {`A`, `E`}
- 
- @param source structure containing source parameters and waveform \f$h\f$
- @param noise structure containing noise model \f$S_n\f$
- @return \f$\rho =  \sqrt{\sum_I (h_I|h_I)} \f$
- */
-double snr(struct Source *source, struct Noise *noise);
-
-/**
- \brief Signal to noise ratio in wavelet domain
- @see snr()
- */
-double snr_wavelet(struct Source *source, struct Noise *noise);
-
-/**
 \brief Analytic approximation to SNR
   
  Not exactly what is in the paper. Expression has been calibrated against snr().

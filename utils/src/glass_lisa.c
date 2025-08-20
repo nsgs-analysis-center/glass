@@ -137,8 +137,8 @@ void initialize_analytic_orbit(struct Orbit *orbit)
 
 void initialize_numeric_orbit(struct Orbit *orbit)
 {
-    fprintf(stdout,"==== Initialize LISA Orbit Structure ====\n\n");
-    
+    fprintf(stdout,"\n====== Initialize LISA Orbit Structure ======\n");
+
     int n,i,check;
     double junk;
     
@@ -264,14 +264,14 @@ void initialize_numeric_orbit(struct Orbit *orbit)
     free_double_matrix(x,3);
     free_double_matrix(y,3);
     free_double_matrix(z,3);
-    fprintf(stdout,"=========================================\n\n");
-    
+    fprintf(stdout,"=============================================\n");
+
 }
 
 void initialize_interpolated_analytic_orbits(struct Orbit *orbit, double Tobs, double t0)
 {
-    fprintf(stdout,"==== Initialize LISA Orbit Structure ====\n\n");
-    
+    fprintf(stdout,"\n====== Initialize LISA Orbit Structure ======\n");
+
     //store armlength & transfer frequency in orbit structure.
     orbit->L     = LARM;
     orbit->fstar = CLIGHT/(2.0*M_PI*LARM);
@@ -356,18 +356,18 @@ void initialize_interpolated_analytic_orbits(struct Orbit *orbit, double Tobs, d
     L31 /= (double)orbit->Norb;
     L23 /= (double)orbit->Norb;
     
-    printf("Average arm lengths for the constellation:\n");
-    printf("  L12 = %g\n",L12);
-    printf("  L31 = %g\n",L31);
-    printf("  L23 = %g\n",L23);
+    printf("  Average arm lengths for the constellation:\n");
+    printf("   L12 = %g\n",L12);
+    printf("   L31 = %g\n",L31);
+    printf("   L23 = %g\n",L23);
     printf("\n");
     
     //are the armlenghts consistent?
     double L = (L12+L31+L23)/3.;
-    printf("Fractional deviation from average armlength for each side:\n");
-    printf("  L12 = %g\n",fabs(L12-L)/L);
-    printf("  L31 = %g\n",fabs(L31-L)/L);
-    printf("  L23 = %g\n",fabs(L23-L)/L);
+    printf("  Fractional deviation from average armlength for each side:\n");
+    printf("   L12 = %g\n",fabs(L12-L)/L);
+    printf("   L31 = %g\n",fabs(L31-L)/L);
+    printf("   L23 = %g\n",fabs(L23-L)/L);
     printf("\n");
     
     
@@ -375,8 +375,8 @@ void initialize_interpolated_analytic_orbits(struct Orbit *orbit, double Tobs, d
     free(x);
     free(y);
     free(z);
-    fprintf(stdout,"=========================================\n\n");
-    
+    fprintf(stdout,"=============================================\n");
+
 }
 
 void free_orbit(struct Orbit *orbit)
@@ -1044,7 +1044,7 @@ void LISA_spline_response(struct Orbit *orbit, double *tarray, int N, double cos
             Acm[i] = 0.5 * dcross[i] / (1.0 - kdotn[i]);
         }
         
-        // build X, Y, Z responses
+        /* build X, Y, Z responses
         #pragma omp parallel num_threads(3)
         {
             int thread_id = omp_get_thread_num();
@@ -1062,7 +1062,12 @@ void LISA_spline_response(struct Orbit *orbit, double *tarray, int N, double cos
                 default:
                     break;
             }
-        }//end parallel section
+        }//end parallel section */
+
+        LISA_TDI_spline(X, Xf, 0, 1, 2, tarray, m, amp_spline, freq_spline, phase_spline, Aplus, Across, cos2psi, sin2psi, App, Apm, Acp, Acm, kdotr, L);
+        LISA_TDI_spline(Y, Yf, 1, 2, 0, tarray, m, amp_spline, freq_spline, phase_spline, Aplus, Across, cos2psi, sin2psi, App, Apm, Acp, Acm, kdotr, L);
+        LISA_TDI_spline(Z, Zf, 2, 0, 1, tarray, m, amp_spline, freq_spline, phase_spline, Aplus, Across, cos2psi, sin2psi, App, Apm, Acp, Acm, kdotr, L);
+
     }//end loop over samples m
     
     /*

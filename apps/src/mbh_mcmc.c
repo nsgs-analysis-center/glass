@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Tyson B. Littenberg
+ * Copyright 2025 Tyson B. Littenberg
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,36 +15,38 @@
  */
 
 /**
- @file ucb_wavelet_mcmc.c
- \brief Main function for wavelet-domain UCB sampler app `ucb_wavelet_mcmc` 
+ @file mbh_mcmc.c
+ \brief Main function for MBH sampler app `mbh_mcmc`
  */
 
 /*  REQUIRED LIBRARIES  */
 
 #include <glass_utils.h>
 #include <glass_noise.h>
-#include <glass_ucb.h>
+#include <glass_mbh.h>
 
 static void print_usage()
 {
     print_glass_usage();
-    print_ucb_usage();
+    print_mbh_usage();
     
     fprintf(stdout,"EXAMPLE:\n");
-    fprintf(stdout,"ucb_wavelet_mcmc --inj [path to]/ldasoft/ucb/etc/sources/precision/PrecisionSource_0.txt --cheat\n");
+    fprintf(stdout,"mbh_mcmc \n");
     fprintf(stdout,"\n");
 
     exit(0);
 }
 
-static void set_ucb_defaults(struct Data *data)
+static void set_mbh_defaults(struct Data *data)
 {
     data->T        = 31457280; /* one "mldc years" at 15s sampling */
     data->t0       = 0.0; /* start time of data segment in seconds */
     data->sqT      = sqrt(data->T);
-    data->Nlayer   = 1;
-    data->N        = (int)floor(data->T/WAVELET_DURATION)*data->Nlayer;
-    data->NFFT     = data->N/2;    data->Nchannel = 3; //1=X, 2=AE, 3=XYZ
+    data->Nlayer   = (int)floor(WAVELET_DURATION/LISA_CADENCE);
+    data->Nlayer  -= 2; //parse_data_args() will bad this by 2
+    data->N        = (int)floor(data->T/WAVELET_DURATION) * data->Nlayer;
+    data->NFFT     = data->N/2;
+    data->Nchannel = 3; //1=X, 2=AE, 3=XYZ
     data->qpad     = 0;
     data->fmin     = 1e-4; //Hz
     sprintf(data->basis,"wavelet");
@@ -56,15 +58,15 @@ static void set_ucb_defaults(struct Data *data)
  */
 int main(int argc, char *argv[])
 {
-    fprintf(stdout, "\n============= Wavelet-domain UCB MCMC ============\n");
-
+    fprintf(stdout, "\n================== MBH MCMC =================\n");
+    
     time_t start, stop;
     start = time(NULL);
     char filename[MAXSTRINGSIZE];
-
+    
     /* allow nested parallelization in mcmc loop (for rebuilding fstat proposal) */
     omp_set_max_active_levels(2);
-
+    
     /* check arguments */
     print_LISA_ASCII_art(stdout);
     print_version(stdout);
@@ -77,15 +79,15 @@ int main(int argc, char *argv[])
     struct Data   *data  = malloc(sizeof(struct Data));
     
     /* Parse command line and set defaults/flags */
-    set_ucb_defaults(data);
+    set_mbh_defaults(data);
     parse_data_args(argc,argv,data,orbit,flags,chain,"wavelet");
-    parse_ucb_args(argc,argv,flags);
+    parse_mbh_args(argc,argv,flags);
     if(flags->help) print_usage();
 
     int NC = chain->NC;
     int DMAX = flags->DMAX;
     int mcmc_start = -flags->NBURN;
-
+    
     /* Setup output directories for chain and data structures */
     sprintf(data->dataDir,"%s/data",flags->runDir);
     sprintf(chain->chainDir,"%s/chains",flags->runDir);
@@ -95,7 +97,7 @@ int main(int argc, char *argv[])
     mkdir(data->dataDir,S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
     mkdir(chain->chainDir,S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
     mkdir(chain->chkptDir,S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
-
+    
     /* Initialize data structures */
     alloc_data(data, flags);
 
@@ -112,36 +114,25 @@ int main(int argc, char *argv[])
     /* noise model */
     GetDynamicNoiseModel(data,orbit,flags);
 
-    /*
-    Software injections 
-    */
     struct Source **inj=NULL;
     if(flags->NINJ>0)
     {
         /* storage for injection parameters */
-        inj=malloc(DMAX*sizeof(struct Source*));
+        inj = malloc(DMAX*sizeof(struct Source*));
         for(int n=0; n<DMAX; n++) inj[n] = malloc(sizeof(struct Source));
-    
-        /* Inject gravitational wave signal */
-        UCBInjectSimulatedSource(data,orbit,flags,inj);
+        
+        //MBHInjectSimulatedSource(data,orbit,flags,inj);
     }
-
-    /* Add Gaussian noise realization */
-    if(flags->simNoise) AddNoiseWavelet(data,data->tdi);
-
-    /* Store DFT copy of simulated data */
-    if(!flags->strainData) wavelet_layer_to_fourier_transform(data);
+    
     
     /* print various data products for plotting */
     print_data(data, flags);
 
     /* Load catalog cache file for proposals/priors */
     struct Catalog *catalog=malloc(sizeof(struct Catalog));
-    if(flags->catalog)
-        UCBLoadCatalogCache(data, flags, catalog);
-
+    //if(flags->catalog)
+    //   MBHLoadCatalogCache(data, flags, catalog);
     
-
     /* Initialize parallel chain */
     if(flags->resume)
         initialize_chain(chain, flags, &data->cseed, "a");
@@ -150,22 +141,19 @@ int main(int argc, char *argv[])
     
     /* Initialize priors */
     struct Prior *prior = malloc(sizeof(struct Prior));
-    if(flags->galaxyPrior) set_galaxy_prior(flags, prior);
-    if(flags->update) set_gmm_prior(flags, data, prior, catalog);
-    prior->density = &evaluate_ucb_prior;
+    prior->density = &evaluate_mbh_prior;
 
     /* Initialize MCMC proposals */
-    struct Proposal **proposal = malloc(UCB_PROPOSAL_NPROP*sizeof(struct Proposal*));
-    initialize_ucb_proposal(orbit, data, prior, chain, flags, catalog, proposal, DMAX);
-    
-    
+    struct Proposal **proposal = malloc(MBH_PROPOSAL_NPROP*sizeof(struct Proposal*));
+    initialize_mbh_proposal(orbit, data, prior, chain, flags, catalog, proposal, DMAX);
+
     /* Initialize data models */
     struct Model **trial = malloc(sizeof(struct Model*)*NC);
     struct Model **model = malloc(sizeof(struct Model*)*NC);
-    initialize_ucb_state(data, orbit, flags, chain, proposal, model, trial, inj);
-
+    initialize_mbh_state(data, orbit, flags, chain, proposal, model, trial, inj);
+    
     /* The MCMC loop */
-    int mcmc = mcmc_start;    
+    int mcmc = mcmc_start;
     for(; mcmc < flags->NMCMC;)
     {
         flags->burnin   = (mcmc<0) ? 1 : 0;
@@ -182,27 +170,12 @@ int main(int argc, char *argv[])
             struct Model *trial_ptr = trial[chain->index[ic]];
             copy_model(model_ptr,trial_ptr);
             
-            for(int steps=0; steps < 500; steps++)
-            {
-                //reverse jump birth/death or split/merge moves
-                if(rand_r_U_0_1(&chain->r[ic])<0.1 && flags->rj)
-                {
-                    ucb_rjmcmc(orbit, data, model_ptr, trial_ptr, chain, flags, prior, proposal, ic);
-                }
-                //fixed dimension parameter updates
-                else
-                {
-                    ucb_mcmc(orbit, data, model_ptr, trial_ptr, chain, flags, prior, proposal, ic);
-                }
-                
-                if( (flags->strainData || flags->simNoise) && !flags->psd)
-                    noise_model_mcmc(orbit, data, model_ptr, trial_ptr, chain, flags, ic);
-                
-            }//loop over MCMC steps
-            
+            for(int steps=0; steps < 2*MBH_MODEL_NP; steps++)
+                mbh_mcmc(orbit, data, model_ptr, trial_ptr, chain, flags, prior, proposal, ic);
+
             //update information matrix for each chain
             for(int n=0; n<model_ptr->Nlive; n++)
-                ucb_fisher_wavelet(orbit, data, model_ptr->source[n], data->noise);
+                mbh_fisher(orbit, data, model_ptr->source[n], data->noise);
             
         }// end (parallel) loop over chains
         
@@ -210,92 +183,29 @@ int main(int argc, char *argv[])
         ptmcmc(model,chain,flags);
         adapt_temperature_ladder(chain, mcmc+flags->NBURN);
         
-        print_chain_files(data, model, chain, flags, mcmc);
+        print_mbh_chain_files(data, model, chain, flags, mcmc);
         
         //track maximum log Likelihood
         if(mcmc%100)
         {
             if(update_max_log_likelihood(model, chain, flags)) mcmc = -flags->NBURN;
         }
-        
-        //store reconstructed waveform
-        if(!flags->quiet)
-        {
-            print_waveform_draw(data, model[chain->index[0]], flags);
-            print_psd_draw(data, model[chain->index[0]], flags);
-        }
-        
-        //update run status
-        if(mcmc%data->downsample==0)
-        {
-            
-            if(!flags->quiet)
-            {
-                print_chain_state(data, chain, model[chain->index[0]], flags, stdout, mcmc); //writing to file
-                fprintf(stdout,"Sources: %i/%i\n",model[chain->index[0]]->Nlive,model[chain->index[0]]->Neff-1);
-                print_acceptance_rates(proposal, UCB_PROPOSAL_NPROP, 0, stdout);
-            }
-            
-            //save chain state to resume sampler
-            save_chain_state(data, model, chain, flags, mcmc);
-            
-        }
-        
-        
-        //store info for evidence calculations
-        if(mcmc>0 && mcmc%data->downsample==0)
-        {
-            
-            save_waveforms(data, model[chain->index[0]], mcmc/data->downsample);
-            
-            for(int ic=0; ic<NC; ic++)
-            {
-                chain->dimension[ic][model[chain->index[ic]]->Nlive]++;
-                chain->avgLogL[ic] += model[chain->index[ic]]->logL + model[chain->index[ic]]->logLnorm;
-            }
-        }
-        
-        //annealing allowed model size
-        if(mcmc>-flags->NBURN+flags->NBURN/10. && model[0]->Neff < model[0]->Nmax && flags->rj)
-        {
-            for(int ic=0; ic<NC; ic++) model[ic]->Neff++;
-            mcmc = -flags->NBURN;
-            
-            rebuild_fstatistic_proposal(orbit, data, model[chain->index[0]], flags, proposal[1]);
-        }
+    
+        //add current cold chain state to differential evolution buffer
+        update_differential_evolution_buffer(proposal, model[chain->index[0]], &chain->r[0]);
         
         mcmc++;
         
     }// end MCMC loop
-        
     
-    //store final state of sampler
-    save_chain_state(data, model, chain, flags, mcmc);
-
-    //print aggregate run files/results
-    //print_waveforms_reconstruction(data,flags);
-    print_evidence(chain,flags);
-    
-//    sprintf(filename,"%s/data/waveform_strain.dat",flags->runDir);
-//    FILE *waveFile = fopen(filename,"w");
-//    print_waveform_strain(data,model[chain->index[0]],waveFile);
-//    fclose(waveFile);
-
-
-//    sprintf(filename,"%s/avg_log_likelihood.dat",flags->runDir);
-//    FILE *chainFile = fopen(filename,"w");
-//    for(int ic=0; ic<NC; ic++) fprintf(chainFile,"%lg %lg\n",1./chain->temperature[ic],chain->avgLogL[ic]/(double)(flags->NMCMC/data->downsample));
-//    fclose(chainFile);
-//    
     //print total run time
     stop = time(NULL);
     
     printf(" ELAPSED TIME = %g seconds on %i thread(s)\n",(double)(stop-start),flags->threads);
-    sprintf(filename,"%s/ucb_mcmc.log",flags->runDir);
+    sprintf(filename,"%s/mbh_mcmc.log",flags->runDir);
     FILE *runlog = fopen(filename,"a");
     fprintf(runlog," ELAPSED TIME = %g seconds on %i thread(s)\n",(double)(stop-start),flags->threads);
     fclose(runlog);
-        
+    
     return 0;
 }
-

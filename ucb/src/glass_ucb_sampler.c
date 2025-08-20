@@ -17,14 +17,7 @@
 #include <glass_utils.h>
 #include <glass_noise.h>
 
-#include "glass_ucb_model.h"
-#include "glass_ucb_catalog.h"
-#include "glass_ucb_io.h"
-#include "glass_ucb_data.h"
-#include "glass_ucb_prior.h"
-#include "glass_ucb_proposal.h"
-#include "glass_ucb_waveform.h"
-#include "glass_ucb_sampler.h"
+#include "glass_ucb.h"
 
 static double maximization_penalty(int dimension, int bandwidth)
 {
@@ -32,83 +25,6 @@ static double maximization_penalty(int dimension, int bandwidth)
     return -(double)dimension; //likelihood-inspired = -k
     //return 0.0; //no penalty
 }
-
-void ptmcmc(struct Model **model, struct Chain *chain, struct Flags *flags)
-{
-    int a, b;
-    int olda, oldb;
-    
-    double heat1, heat2;
-    double logL1, logL2;
-    double dlogL;
-    double H;
-    double alpha;
-    double beta;
-    
-    int NC = chain->NC;
-    
-    //b = (int)(ran2(seed)*((double)(chain->NC-1)));
-    for(b=NC-1; b>0; b--)
-    {
-        a = b - 1;
-        chain->acceptance[a]=0;
-        
-        olda = chain->index[a];
-        oldb = chain->index[b];
-        
-        heat1 = chain->temperature[a];
-        heat2 = chain->temperature[b];
-        
-        logL1 = model[olda]->logL + model[olda]->logLnorm;
-        logL2 = model[oldb]->logL + model[oldb]->logLnorm;
-        
-        //Hot chains jump more rarely
-        if(rand_r_U_0_1(&chain->r[a])<1.0)
-        {
-            dlogL = logL2 - logL1;
-            H  = (heat2 - heat1)/(heat2*heat1);
-            
-            alpha = exp(dlogL*H);
-            beta  = rand_r_U_0_1(&chain->r[a]);
-            
-            if(alpha >= beta)
-            {
-                chain->index[a] = oldb;
-                chain->index[b] = olda;
-                chain->acceptance[a]=1;
-            }
-        }
-    }
-}
-
-void adapt_temperature_ladder(struct Chain *chain, int mcmc)
-{
-    int ic;
-    
-    int NC = chain->NC;
-    
-    double S[NC];
-    double A[NC][2];
-    
-    double nu=10;
-    double t0=10000.;
-    
-    for(ic=1; ic<NC-1; ic++)
-    {
-        S[ic] = log(chain->temperature[ic] - chain->temperature[ic-1]);
-        A[ic][0] = chain->acceptance[ic-1];
-        A[ic][1] = chain->acceptance[ic];
-    }
-    
-    for(ic=1; ic<NC-1; ic++)
-    {
-        S[ic] += (A[ic][0] - A[ic][1])*(t0/((double)mcmc+t0))/nu;
-        
-        chain->temperature[ic] = chain->temperature[ic-1] + exp(S[ic]);
-        
-        if(chain->temperature[ic]/chain->temperature[ic-1] < 1.1) chain->temperature[ic] = chain->temperature[ic-1]*1.1;
-    }//end loop over ic
-}//end adapt function
 
 void noise_model_mcmc(struct Orbit *orbit, struct Data *data, struct Model *model, struct Model *trial, struct Chain *chain, struct Flags *flags, int ic)
 {
@@ -139,8 +55,7 @@ void noise_model_mcmc(struct Orbit *orbit, struct Data *data, struct Model *mode
         if(!strcmp("wavelet",data->basis)) generate_noise_model_wavelet(data, model_y);
         
         //get likelihood for y
-        if(!strcmp("fourier",data->basis)) model_y->logL = gaussian_log_likelihood(data, model_y);
-        if(!strcmp("wavelet",data->basis)) model_y->logL = gaussian_log_likelhood_wavelet(data, model_y);
+        model_y->logL = (*model_y->log_likelihood)(data, model_y);
 
         //model_y->logLnorm = gaussian_log_likelihood_constant_norm(data, model_y);
         model_y->logLnorm = gaussian_log_likelihood_model_norm(data, model_y);
@@ -209,11 +124,11 @@ void ucb_mcmc(struct Orbit *orbit, struct Data *data, struct Model *model, struc
     logQyx = (*proposal[nprop]->density)(data, model_x, source_y, proposal[nprop], source_y->params);
     logQxy = (*proposal[nprop]->density)(data, model_x, source_x, proposal[nprop], source_x->params);
 
-    map_array_to_params(source_y, source_y->params, data->T);
+    map_array_to_ucb_params(source_y, source_y->params, data->T);
 
     //get priors for x and y
-    logPx = evaluate_prior(flags, data, model_x, prior, source_x->params);
-    logPy = evaluate_prior(flags, data, model_y, prior, source_y->params);
+    logPx = (*prior->density)(flags, data, model_x, prior, source_x->params);
+    logPy = (*prior->density)(flags, data, model_y, prior, source_y->params);
 
    
     if(logPy > -INFINITY)
@@ -221,11 +136,7 @@ void ucb_mcmc(struct Orbit *orbit, struct Data *data, struct Model *model, struc
         if(!flags->prior)
         {
             //form master template
-            if(!strcmp("fourier",data->basis)) generate_signal_model(orbit, data, model_y, n);
-            if(!strcmp("wavelet",data->basis)) generate_signal_model_wavelet(orbit, data, model_y, n);  
-            //update master template
-            //update_signal_model(orbit, data, model_x, model_y, n);
-            
+            (*model_y->generate_signal_model)(orbit,data,model_y,n);
 
             //rejection sample on SNR?
             double sn;
@@ -240,13 +151,8 @@ void ucb_mcmc(struct Orbit *orbit, struct Data *data, struct Model *model, struc
                 apply_calibration_model(data, model_y);
             }
             
-
             //get likelihood for y
-            if(!strcmp("fourier",data->basis)) model_y->logL = gaussian_log_likelihood(data, model_y);
-            if(!strcmp("wavelet",data->basis)) model_y->logL = gaussian_log_likelhood_wavelet(data, model_y);
-
-            //get delta log likelihood
-            //model_y->logL = model_x->logL + delta_log_likelihood(data, model_x, model_y, n);
+            model_y->logL = (*model_y->log_likelihood)(data, model_y);
             
             /*
              H = [p(d|y)/p(d|x)]/T x p(y)/p(x) x q(x|y)/q(y|x)
@@ -285,16 +191,15 @@ static void rj_birth_death(struct Orbit *orbit, struct Data *data, struct Model 
             //TODO: insert draw from galaxy prior into draw_from_uniform_prior()
             *logQyx = (*proposal->function)(data, model_y, model_y->source[create], proposal, model_y->source[create]->params, &chain->r[ic]);
             *logQxy = 0;
-            map_array_to_params(model_y->source[create], model_y->source[create]->params, data->T);
+            map_array_to_ucb_params(model_y->source[create], model_y->source[create]->params, data->T);
             
             if(flags->maximize)
             {
-                maximize_signal_model(orbit, data, model_y, create);
+                maximize_ucb_model(orbit, data, model_y, create);
                 *penalty = maximization_penalty(4,2*model_y->source[create]->BW);
             }
             
-            if(!strcmp("fourier",data->basis)) generate_signal_model(orbit, data, model_y, create);
-            if(!strcmp("wavelet",data->basis)) generate_signal_model_wavelet(orbit, data, model_y, create);
+            (*model_y->generate_signal_model)(orbit,data,model_y,create);
 
             //rejection sample on SNR?
             if(!flags->prior)
@@ -317,8 +222,8 @@ static void rj_birth_death(struct Orbit *orbit, struct Data *data, struct Model 
         
         //pick source to kill
         int kill = (int)(rand_r_U_0_1(&chain->r[ic])*(double)model_x->Nlive);
-        if(!strcmp("fourier",data->basis)) remove_signal_model(data, model_y,  model_y->source[kill]);
-        if(!strcmp("wavelet",data->basis)) remove_signal_model_wavelet(data, model_y, model_y->source[kill]);
+        if(!strcmp("fourier",data->basis)) remove_ucb_model(data, model_y,  model_y->source[kill]);
+        if(!strcmp("wavelet",data->basis)) remove_ucb_model_wavelet(data, model_y, model_y->source[kill]);
         
         if(model_y->Nlive>-1)
         {
@@ -380,13 +285,13 @@ static void rj_split_merge(struct Orbit *orbit, struct Data *data, struct Model 
             for(int n=0; n<2; n++)
             {
                 *logQyx += (*proposal->function)(data, model_y, model_y->source[branch[n]], proposal, model_y->source[branch[n]]->params, &chain->r[ic]);
-                map_array_to_params(model_y->source[branch[n]], model_y->source[branch[n]]->params, data->T);
+                map_array_to_ucb_params(model_y->source[branch[n]], model_y->source[branch[n]]->params, data->T);
                 if(flags->maximize)
                 {
-                    maximize_signal_model(orbit, data, model_y, branch[n]);
+                    maximize_ucb_model(orbit, data, model_y, branch[n]);
                     *penalty += maximization_penalty(4,2*model_y->source[branch[n]]->BW);
                 }
-                generate_signal_model(orbit, data, model_y, branch[n]);
+                (*model_y->generate_signal_model)(orbit,data,model_y,branch[n]);
 
                 //rejection sample on SNR?
                 if(snr(model_y->source[branch[n]], model_y->noise) < 5.0) *logPy = -INFINITY;
@@ -431,14 +336,14 @@ static void rj_split_merge(struct Orbit *orbit, struct Data *data, struct Model 
             
             //draw parameters of trunk
             *logQyx += (*proposal->function)(data, model_y, model_y->source[trunk], proposal, model_y->source[trunk]->params, &chain->r[ic]);
-            map_array_to_params(model_y->source[trunk], model_y->source[trunk]->params, data->T);
+            map_array_to_ucb_params(model_y->source[trunk], model_y->source[trunk]->params, data->T);
             if(flags->maximize)
             {
-                maximize_signal_model(orbit, data, model_y, trunk);
+                maximize_ucb_model(orbit, data, model_y, trunk);
                 *penalty -= maximization_penalty(4,2*model_y->source[trunk]->BW);
             }
-            generate_signal_model(orbit, data, model_y, trunk);
-            
+            (*model_y->generate_signal_model)(orbit,data,model_y,trunk);
+
             //rejection sample on SNR?
             if(snr(model_y->source[trunk], model_y->noise) < 5.0) *logPy = -INFINITY;
 
@@ -514,13 +419,13 @@ static void rj_cluster_bomb(struct Orbit *orbit, struct Data *data, struct Model
 
         if(flags->maximize)
         {
-            maximize_signal_model(orbit, data, model_y, model_y->Nlive);
+            maximize_ucb_model(orbit, data, model_y, model_y->Nlive);
             *penalty -= maximization_penalty(4,2*model_y->source[model_y->Nlive]->BW);
         }
         model_y->Nlive++;
 
-        generate_signal_model(orbit, data, model_y, -1);
-        
+        (*model_y->generate_signal_model)(orbit,data,model_y,-1);
+
         //rejection sample on SNR?
         if(snr(model_y->source[model_y->Nlive], model_y->noise) < 5.0) *logPy = -INFINITY;
         
@@ -590,8 +495,8 @@ void ucb_rjmcmc(struct Orbit *orbit, struct Data *data, struct Model *model, str
 
     if(logPy > -INFINITY )
     {
-        for(int n=0; n<model_x->Nlive; n++) logPx += evaluate_prior(flags, data, model_x, prior, model_x->source[n]->params);
-        for(int n=0; n<model_y->Nlive; n++) logPy += evaluate_prior(flags, data, model_y, prior, model_y->source[n]->params);
+        for(int n=0; n<model_x->Nlive; n++) logPx += evaluate_ucb_prior(flags, data, model_x, prior, model_x->source[n]->params);
+        for(int n=0; n<model_y->Nlive; n++) logPy += evaluate_ucb_prior(flags, data, model_y, prior, model_y->source[n]->params);
     }
 
     /* Hasting's ratio */
@@ -599,7 +504,7 @@ void ucb_rjmcmc(struct Orbit *orbit, struct Data *data, struct Model *model, str
     {
         //  Form master template
         /*
-         generate_signal_model() is called inside rj proposal wrappers
+         generate_ucb_model() is called inside rj proposal wrappers
          rj_birth_death() and rj_split_merge()
          */
         
@@ -611,9 +516,8 @@ void ucb_rjmcmc(struct Orbit *orbit, struct Data *data, struct Model *model, str
         }
         
         //get likelihood for y
-        if(!strcmp("fourier",data->basis)) model_y->logL = gaussian_log_likelihood(data, model_y);
-        if(!strcmp("wavelet",data->basis)) model_y->logL = gaussian_log_likelhood_wavelet(data, model_y);
-
+        model_y->logL = (*model_y->log_likelihood)(data, model_y);
+        
         //get likelihood difference
         dlogL = model_y->logL - model_x->logL;
         
@@ -676,9 +580,28 @@ void initialize_ucb_state(struct Data *data, struct Orbit *orbit, struct Flags *
         trial[ic] = malloc(sizeof(struct Model));
         model[ic] = malloc(sizeof(struct Model));
         
-        alloc_model(data,trial[ic],DMAX);
-        alloc_model(data,model[ic],DMAX);
+        alloc_model(data,trial[ic],UCB_MODEL_NP,DMAX);
+        alloc_model(data,model[ic],UCB_MODEL_NP,DMAX);
+        
+        // set pointers to model-specific functions
+        if(!strcmp("fourier",data->basis))
+        {
+            model[ic]->log_likelihood = &gaussian_log_likelihood;
+            trial[ic]->log_likelihood = &gaussian_log_likelihood;
+            
+            model[ic]->generate_signal_model = &generate_ucb_model;
+            trial[ic]->generate_signal_model = &generate_ucb_model;
 
+        }
+        if(!strcmp("wavelet",data->basis))
+        {
+            model[ic]->log_likelihood = &gaussian_log_likelhood_wavelet;
+            trial[ic]->log_likelihood = &gaussian_log_likelhood_wavelet;
+
+            model[ic]->generate_signal_model = &generate_ucb_model_wavelet;
+            trial[ic]->generate_signal_model = &generate_ucb_model_wavelet;
+        }
+        
         if(ic==0)set_uniform_prior(flags, model[ic], data, 1);
         else     set_uniform_prior(flags, model[ic], data, 0);
                 
@@ -704,10 +627,10 @@ void initialize_ucb_state(struct Data *data, struct Orbit *orbit, struct Flags *
                 model[ic]->source[n]->phi      = inj->phi;
                 model[ic]->source[n]->amp      = inj->amp;
                 model[ic]->source[n]->cosi     = inj->cosi;
-                model[ic]->source[n]->phi0     = inj->phi0;
+                model[ic]->source[n]->phiref   = inj->phiref;
                 model[ic]->source[n]->psi      = inj->psi;
                 model[ic]->source[n]->d2fdt2   = inj->d2fdt2;
-                map_params_to_array(model[ic]->source[n], model[ic]->source[n]->params, data->T);
+                map_ucb_params_to_array(model[ic]->source[n], model[ic]->source[n]->params, data->T);
                 if(!strcmp("wavelet",data->basis) && ic==0 && n==0 && flags->stationary)
                     fprintf(stdout,"   ...stationary SNR for source %i=%g\n",n,snr_wavelet(inj,model[ic]->noise));
             }
@@ -715,7 +638,7 @@ void initialize_ucb_state(struct Data *data, struct Orbit *orbit, struct Flags *
             {
                 draw_from_uniform_prior(data, model[ic], model[ic]->source[n], proposal[0], model[ic]->source[n]->params, &chain->r[ic]);
             }
-            map_array_to_params(model[ic]->source[n], model[ic]->source[n]->params, data->T);
+            map_array_to_ucb_params(model[ic]->source[n], model[ic]->source[n]->params, data->T);
 
             if(!strcmp("fourier",data->basis)) ucb_fisher(orbit, data, model[ic]->source[n], data->noise);
             if(!strcmp("wavelet",data->basis)) ucb_fisher_wavelet(orbit, data, model[ic]->source[n], data->noise);
@@ -730,16 +653,21 @@ void initialize_ucb_state(struct Data *data, struct Orbit *orbit, struct Flags *
             model[ic]->Nlive= Ninj;
         }
         
-        // Form master model & compute likelihood of starting position
-        if(!strcmp("fourier",data->basis)) 
+        /*
+         Form master model & compute likelihood of starting position
+         */
+        
+        //signal
+        (*model[ic]->generate_signal_model)(orbit,data,model[ic],-1);
+
+        //noise
+        if(!strcmp("fourier",data->basis))
         {
             generate_noise_model(data, model[ic]);
-            generate_signal_model(orbit, data, model[ic], -1);
         }
         if(!strcmp("wavelet",data->basis)) 
         {
             generate_noise_model_wavelet(data, model[ic]);
-            generate_signal_model_wavelet(orbit, data, model[ic], -1);
         }
 
         //calibration error
@@ -749,12 +677,12 @@ void initialize_ucb_state(struct Data *data, struct Orbit *orbit, struct Flags *
             generate_calibration_model(data, model[ic]);
             apply_calibration_model(data, model[ic]);
         }
+        
+        //likelihood
         if(!flags->prior)
         {
-            if(!strcmp("fourier",data->basis))model[ic]->logL = gaussian_log_likelihood(data, model[ic]);
-            if(!strcmp("wavelet",data->basis))model[ic]->logL = gaussian_log_likelhood_wavelet(data, model[ic]);
+            model[ic]->logL = (*model[ic]->log_likelihood)(data, model[ic]);
             model[ic]->logLnorm = gaussian_log_likelihood_model_norm(data,model[ic]);
-        
         }
         else model[ic]->logL = model[ic]->logLnorm = 0.0;
         

@@ -32,42 +32,6 @@
 #define CAL_SIGMA_AMP 0.20 //!< 1-\f$\sigma\f$ fractional amplitude error
 ///@}
 
-/*!
- \brief Prototype structure for prior distributions.
- 
- Generic data structure for holding all information needed by prior distributions.
- Structure contains parameters for different supported priors and various book-keeping scalars, vectors, and matrices to
- hold needed metadata.
-
-*/
-struct Prior
-{    
-    ///@name Uniform prior
-    ///@{
-    double **prior; //!<upper and lower bounds for uniform priors \f$ [\theta_{\rm min},\theta_{\rm max}]\f$
-    double logPriorVolume; //!<prior volume \f$ -\sum \log(\theta_{\rm max}-\theta_{\rm min})\f$
-    ///@}
-
-    ///@name Uniform prior
-    ///@{
-    double *skyhist; //!<2D histogram of prior density on sky
-    double dcostheta; //!<size of `skyhist` bins in \f$\cos\theta\f$ direction
-    double dphi; //!<size of `skyhist` bins in \f$\phi\f$ direction
-    double skymaxp; //!<max prior density of `skyhist`
-    int ncostheta; //!<number of `skyhist` bins in \f$\cos\theta\f$ direction
-    int nphi; //!<number of `skyhist` bins in \f$\phi\f$ direction
-    ///@}
-    
-    ///@name workspace
-    ///@{
-    double *vector;  //!<utility 1D array for prior metadata
-    double **matrix; //!<utility 2D array for prior metadata
-    double ***tensor;//!<utility 3D array for prior metadata
-    ///@}
-
-    /// Gaussian Mixture Model prior
-    struct GMM *gmm;
-};
 /**
  \brief Checks that parameters \f$\vec x\f$ are within prior volume \f$V\f$.
  
@@ -102,7 +66,7 @@ void set_uniform_prior(struct Flags *flags, struct Model *model, struct Data *da
  @param UCB parameters `params` \f$ \vec x\f$
  @returns \f$ \log p(\vec x)\f$
  */
-double evaluate_prior(struct Flags *flags, struct Data *data, struct Model *model, struct Prior *prior, double *params);
+double evaluate_ucb_prior(struct Flags *flags, struct Data *data, struct Model *model, struct Prior *prior, double *params);
 
 /**
  \brief Computes prior for sky location parameters \f$\vec\Omega\f$
