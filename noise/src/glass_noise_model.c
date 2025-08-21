@@ -192,7 +192,7 @@ void update_spline_noise_model(struct SplineModel *model, int new_knot, int min_
     for(int n=0; n<model->Nchannel; n++)
     {
         cspline[n] = alloc_cubic_spline(spline->N);
-        initialize_cubic_spline(cspline[n], spline->f, spline->C[n][n]);
+        initialize_cubic_spline(cspline[n], spline->f, spline->C[n][n], SPLINE_BINARY_SEARCH);
     }
     
     int imin = (int)((spline->f[min_knot]-psd->f[0])*T);

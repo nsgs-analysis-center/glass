@@ -199,9 +199,9 @@ void initialize_numeric_orbit(struct Orbit *orbit)
     //calculate derivatives for cubic spline
     for(i=0; i<3; i++)
     {
-        initialize_cubic_spline(orbit->dx[i], t, orbit->x[i]);
-        initialize_cubic_spline(orbit->dy[i], t, orbit->y[i]);
-        initialize_cubic_spline(orbit->dz[i], t, orbit->z[i]);
+        initialize_cubic_spline(orbit->dx[i], t, orbit->x[i], SPLINE_EVEN_SAMPLED);
+        initialize_cubic_spline(orbit->dy[i], t, orbit->y[i], SPLINE_EVEN_SAMPLED);
+        initialize_cubic_spline(orbit->dz[i], t, orbit->z[i], SPLINE_EVEN_SAMPLED);
     }
     
     //calculate average arm length
@@ -317,9 +317,9 @@ void initialize_interpolated_analytic_orbits(struct Orbit *orbit, double Tobs, d
     //calculate derivatives for cubic spline
     for(int i=0; i<3; i++)
     {
-        initialize_cubic_spline(orbit->dx[i],orbit->t,orbit->x[i]);
-        initialize_cubic_spline(orbit->dy[i],orbit->t,orbit->y[i]);
-        initialize_cubic_spline(orbit->dz[i],orbit->t,orbit->z[i]);
+        initialize_cubic_spline(orbit->dx[i],orbit->t,orbit->x[i], SPLINE_EVEN_SAMPLED);
+        initialize_cubic_spline(orbit->dy[i],orbit->t,orbit->y[i], SPLINE_EVEN_SAMPLED);
+        initialize_cubic_spline(orbit->dz[i],orbit->t,orbit->z[i], SPLINE_EVEN_SAMPLED);
     }
     
     //calculate average arm length
