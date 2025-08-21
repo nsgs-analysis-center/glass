@@ -293,7 +293,7 @@ void set_uniform_prior(struct Flags *flags, struct Model *model, struct Data *da
     }
     if(verbose && !flags->quiet)
     {
-        fprintf(stdout,"  UCB Priors");
+        fprintf(stdout,"  UCB Priors:\n");
         if(flags->detached)fprintf(stdout,"   Assuming detached binary, Mchirp = [0.15,1]\n");
         fprintf(stdout,"   p(f)     = U[%g,%g]\n",fmin,fmax);
         fprintf(stdout,"   p(fdot)  = U[%g,%g]\n",fdotmin,fdotmax);

@@ -63,4 +63,11 @@ void noise_model_mcmc(struct Orbit *orbit, struct Data *data, struct Model *mode
  */
 void initialize_ucb_state(struct Data *data, struct Orbit *orbit, struct Flags *flags, struct Chain *chain, struct Proposal **proposal, struct Model **model, struct Model **trial, struct Source **inj_vec);
 
+/**
+ \brief Setup VGB sampler
+ 
+ Get all VGB structures into their initial state.
+ */
+void initialize_vgb_state(struct Data *data, struct Orbit *orbit, struct Flags *flags, struct Chain *chain, struct Proposal **proposal, struct Model **model, struct Model **trial, struct Source *inj);
+
 #endif /* ucb_sampler_h */

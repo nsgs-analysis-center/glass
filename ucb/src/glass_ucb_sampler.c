@@ -692,4 +692,107 @@ void initialize_ucb_state(struct Data *data, struct Orbit *orbit, struct Flags *
 
 }
 
+void initialize_vgb_state(struct Data *data, struct Orbit *orbit, struct Flags *flags, struct Chain *chain, struct Proposal **proposal, struct Model **model, struct Model **trial, struct Source *inj)
+{
+    int NC = chain->NC;
+    int DMAX = flags->DMAX;
+    
+    for(int ic=0; ic<NC; ic++)
+    {
+        trial[ic] = malloc(sizeof(struct Model));
+        model[ic] = malloc(sizeof(struct Model));
+        
+        alloc_model(data,trial[ic],UCB_MODEL_NP,DMAX);
+        alloc_model(data,model[ic],UCB_MODEL_NP,DMAX);
+        
+        // set pointers to model-specific functions
+        if(!strcmp("fourier",data->basis))
+        {
+            model[ic]->log_likelihood = &gaussian_log_likelihood;
+            trial[ic]->log_likelihood = &gaussian_log_likelihood;
+            
+            model[ic]->generate_signal_model = &generate_ucb_model;
+            trial[ic]->generate_signal_model = &generate_ucb_model;
+
+        }
+        if(!strcmp("wavelet",data->basis))
+        {
+            model[ic]->log_likelihood = &gaussian_log_likelhood_wavelet;
+            trial[ic]->log_likelihood = &gaussian_log_likelhood_wavelet;
+
+            model[ic]->generate_signal_model = &generate_ucb_model_wavelet;
+            trial[ic]->generate_signal_model = &generate_ucb_model_wavelet;
+        }
+        
+        if(ic==0)set_uniform_prior(flags, model[ic], data, 1);
+        else     set_uniform_prior(flags, model[ic], data, 0);
+                
+        //override noise model w/ stationary version
+        if(!strcmp("wavelet",data->basis) && flags->stationary) GetStationaryNoiseModel(data, orbit, flags, data->noise);
+
+        //set noise model
+        copy_noise(data->noise, model[ic]->noise);
+        
+        //set signal model
+        model[ic]->source[0]->f0       = inj->f0;
+        model[ic]->source[0]->dfdt     = inj->dfdt;
+        model[ic]->source[0]->costheta = inj->costheta;
+        model[ic]->source[0]->phi      = inj->phi;
+        model[ic]->source[0]->amp      = inj->amp;
+        model[ic]->source[0]->cosi     = inj->cosi;
+        model[ic]->source[0]->phiref   = inj->phiref;
+        model[ic]->source[0]->psi      = inj->psi;
+        model[ic]->source[0]->d2fdt2   = inj->d2fdt2;
+        map_ucb_params_to_array(model[ic]->source[0], model[ic]->source[0]->params, data->T);
+        
+        if(!strcmp("fourier",data->basis)) ucb_fisher(orbit, data, model[ic]->source[0], data->noise);
+        if(!strcmp("wavelet",data->basis)) ucb_fisher_wavelet(orbit, data, model[ic]->source[0], data->noise);
+        
+        model[ic]->source[0]->fisher_update_flag=0;
+        
+        //initialize sampler to proper size of model
+        if(flags->cheat)
+        {
+            model[ic]->Neff = 1;
+            model[ic]->Nlive= 1;
+        }
+        
+        /*
+         Form master model & compute likelihood of starting position
+         */
+        
+        //signal
+        (*model[ic]->generate_signal_model)(orbit,data,model[ic],-1);
+
+        //noise
+        if(!strcmp("fourier",data->basis))
+        {
+            generate_noise_model(data, model[ic]);
+        }
+        if(!strcmp("wavelet",data->basis))
+        {
+            generate_noise_model_wavelet(data, model[ic]);
+        }
+
+        //calibration error
+        if(flags->calibration)
+        {
+            draw_calibration_parameters(data, model[ic], &chain->r[ic]);
+            generate_calibration_model(data, model[ic]);
+            apply_calibration_model(data, model[ic]);
+        }
+        
+        //likelihood
+        if(!flags->prior)
+        {
+            model[ic]->logL = (*model[ic]->log_likelihood)(data, model[ic]);
+            model[ic]->logLnorm = gaussian_log_likelihood_model_norm(data,model[ic]);
+        }
+        else model[ic]->logL = model[ic]->logLnorm = 0.0;
+        
+        if(ic==0) chain->logLmax += model[ic]->logL + model[ic]->logLnorm;
+        
+    }//end loop over chains
+
+}
 

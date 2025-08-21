@@ -51,12 +51,6 @@ void UCBInjectVerificationSet(struct Data *data, struct Orbit *orbit, struct Fla
         }
     }
 
-    //Get noise spectrum for data segment
-    GetNoiseModel(data,orbit,flags);
-
-    //Add Gaussian noise to injection
-    if(flags->simNoise) AddNoise(data,data->tdi);
-
 }
 
 void UCBInjectVerificationSource(struct Data *data, struct Orbit *orbit, struct Flags *flags, struct Source *inj)
@@ -638,12 +632,13 @@ void GetVerificationBinary(struct Data *data, struct Flags *flags, struct Source
     amp = amplitude(Mc, f0, D);
     
     //initialize extrinsic parameters
-    phi0 = 0.0;
-    psi  = 0.0;
-    
+    unsigned int r = data->iseed;
+    phi0 = rand_r_U_0_1(&r)*M_PI*2.;
+    psi  = rand_r_U_0_1(&r)*M_PI/4.;
+
     //set bandwidth of data segment centered on injection
-    data->fmin = f0 - (data->NFFT)/data->T;
-    data->fmax = f0 + (data->NFFT)/data->T;
+    data->fmin = f0 - (data->NFFT/2)/data->T;
+    data->fmax = f0 + (data->NFFT/2)/data->T;
     data->qmin = (int)(data->fmin*data->T);
     data->qmax = data->qmin+data->NFFT;
     
