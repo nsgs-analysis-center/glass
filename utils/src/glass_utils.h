@@ -49,10 +49,12 @@
 #include "glass_lisa.h"
 #include "glass_wavelet.h"
 #include "glass_data.h"
-#include "glass_math.h"
 #include "glass_gmm.h"
 #include "glass_galaxy.h"
-
+#include "glass_model.h"
+#include "glass_math.h"
+#include "glass_sampler.h"
+#include "glass_catalog.h"
 
 /**
  \brief Wrapper around the astrometry.net functions to match healpix's conventions.

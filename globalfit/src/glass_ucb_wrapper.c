@@ -186,7 +186,7 @@ void initialize_ucb_sampler(struct UCBData *ucb_data)
     if(flags->update) set_gmm_prior(flags, data, prior, catalog);
     
     /* Initialize MCMC proposals */
-    initialize_proposal(orbit, data, prior, chain, flags, catalog, proposal, flags->DMAX);
+    initialize_ucb_proposal(orbit, data, prior, chain, flags, catalog, proposal, flags->DMAX);
     
     /* Initialize UCB sampler state */
     struct Source **inj = NULL;
@@ -466,7 +466,7 @@ void exchange_ucb_source_params(struct UCBData *ucb_data)
     if(Nlive_new > 0)
     {
         struct Model *new_model = malloc(sizeof(struct Model));
-        alloc_model(data,new_model,Nlive_new);
+        alloc_model(data,new_model,UCB_MODEL_NP,Nlive_new);
         new_model->Nlive = Nlive_new;
         //set noise model
         copy_noise(data->noise, new_model->noise);
@@ -491,11 +491,11 @@ void exchange_ucb_source_params(struct UCBData *ucb_data)
         
         for(int n=0; n<Nlive_new; n++)
         {
-            map_array_to_params(new_model->source[n], new_model->source[n]->params, data->T);
+            map_array_to_ucb_params(new_model->source[n], new_model->source[n]->params, data->T);
         }
         
         /* generate signal model for received parameters */
-        generate_signal_model(orbit, data, new_model, -1);
+        generate_ucb_model(orbit, data, new_model, -1);
         
         /* form residual */
         for(int n=0; n<2*data->N; n++)

@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Tyson B. Littenberg
+ * Copyright 2025 Tyson B. Littenberg
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,26 +14,24 @@
  * limitations under the License.
  */
 
-/** 
- @file glass_ucb.h
- \brief Libary for UCB module
- 
- Including
- - UCB data model
- - UCB sampler functions
- - UCB waveform generator
+/**
+ @file glass_mbh_model.h
+ \brief Functions for defining, manipulating, and evaluating MBH model
  */
 
-#ifndef glass_ucb_h
-#define glass_ucb_h
 
-#include "glass_ucb_model.h"
-#include "glass_ucb_io.h"
-#include "glass_ucb_data.h"
-#include "glass_ucb_fstatistic.h"
-#include "glass_ucb_prior.h"
-#include "glass_ucb_proposal.h"
-#include "glass_ucb_waveform.h"
-#include "glass_ucb_sampler.h"
+#ifndef mbh_model_h
+#define mbh_model_h
 
-#endif /* glass_ucb_h */
+#include <stdio.h>
+
+
+#define MBH_MODEL_NP 11 ///< Number of source parameters for UCB model
+
+void map_array_to_mbh_params(struct Source *source, double *params);
+void map_mbh_params_to_array(struct Source *source, double *params);
+
+void generate_mbh_signal_model(struct Orbit *orbit, struct Data *data, struct Model *model, int source_id);
+
+#endif /* mbh_model_h */
+

@@ -15,8 +15,9 @@
  */
 
 #include <glass_utils.h>
+#include "glass_mbh.h"
 #include "glass_mbh_IMRPhenom.h"
-#include "glass_mbh_waveform.h"
+
 #define NSETUP 7 //size of setup array for wdm trasnform
 
 double mbh_final_spin(double *params)
@@ -298,8 +299,8 @@ void mbh_td_waveform(struct Orbit *orbit, struct Wavelets *wdm, double Tobs, dou
     double *phase_ssb = double_vector(Nspline);
     double *amp_ssb   = double_vector(Nspline);
 
-    double costh = sin(params[7]); // EclipticLatitude
-    double phi  = params[8];       // EclipticLongitude
+    double costh = params[7]; // EclipticLatitude
+    double phi   = params[8]; // EclipticLongitude
     LISA_spacecraft_to_barycenter_time(orbit, costh, phi, time_sc, time_ssb, Nspline, +1);
 
     
@@ -817,7 +818,7 @@ void mbh_fd_waveform(struct Orbit *orbit, struct Wavelets *wdm, double Tobs, dou
     alloc_tdi(tdi_amp,Nspline,3);
 
     //extract extrinsic parameters from MBH parameter vector
-    double costh = sin(params[7]);
+    double costh = params[7];
     double phi   = params[8];
     double cosi  = params[10];
     double psi   = params[9];
@@ -974,4 +975,119 @@ void mbh_fd_waveform(struct Orbit *orbit, struct Wavelets *wdm, double Tobs, dou
     free_tdi(wave);
     free_tdi(tdi_phase);
     free_tdi(tdi_amp);
+}
+
+void mbh_fisher(struct Orbit *orbit, struct Data *data, struct Source *source, struct Noise *noise)
+{
+    int i,j,n;
+
+    double *epsilon = double_vector(MBH_MODEL_NP);
+    // [0] ln(Mass1)  [1] ln(Mass2)  [2] Spin1 [3] Spin2 [4] phic [5] tc [6] ln(distance)
+    // [7] cosEclipticCoLatitude, [8] EclipticLongitude  [9] polarization, [10] inclination
+    epsilon[0] = 1.0e-6;
+    epsilon[1] = 1.0e-6;
+    epsilon[2] = 1.0e-4;
+    epsilon[3] = 1.0e-4;
+    epsilon[4] = 1.0e-5;
+    epsilon[5] = 1.0e-3;
+    epsilon[6] = 1.0e-5;
+    epsilon[7] = 1.0e-5;
+    epsilon[8] = 1.0e-5;
+    epsilon[9] = 1.0e-5;
+    epsilon[10] = 1.0e-5;
+
+
+    double *params_p = double_vector(MBH_MODEL_NP);
+    
+    struct Source *wave_p = malloc(sizeof(struct Source));
+    alloc_source(wave_p, data->N, MBH_MODEL_NP, data->Nchannel);
+    
+    // TDI variables to hold derivatives of h
+    struct TDI **dhdx = malloc(MBH_MODEL_NP*sizeof(struct TDI *));
+    for(n=0; n<MBH_MODEL_NP; n++)
+    {
+        dhdx[n] = malloc(sizeof(struct TDI));
+        alloc_tdi(dhdx[n], data->N, data->Nchannel);
+    }
+
+    for(i=0; i<MBH_MODEL_NP; i++)
+    {
+        
+        // copy parameters
+        for(j=0; j<MBH_MODEL_NP; j++)
+        {
+            wave_p->params[j] = source->params[j];
+        }
+        
+        // perturb parameters
+        wave_p->params[i] += epsilon[i];
+
+        // complete info in source structure
+        map_array_to_mbh_params(wave_p, wave_p->params);
+        
+        // clean up TDI arrays, just in case
+        for(j=0; j<data->N; j++)
+        {
+            wave_p->tdi->X[j]=0.0;
+            wave_p->tdi->Y[j]=0.0;
+            wave_p->tdi->Z[j]=0.0;
+            wave_p->tdi->A[j]=0.0;
+            wave_p->tdi->E[j]=0.0;
+        }
+        
+        
+        // compute perturbed waveforms
+        mbh_fd_waveform(orbit,data->wdm,data->T, data->t0, wave_p->params, wave_p->list, &wave_p->Nlist, wave_p->tdi->X, wave_p->tdi->Y, wave_p->tdi->Z);
+
+        // central differencing derivatives of waveforms w.r.t. parameters
+        for(n=0; n<wave_p->Nlist; n++)
+        {
+            int k = wave_p->list[n];
+            dhdx[i]->X[k] = (wave_p->tdi->X[k] - source->tdi->X[k])/epsilon[i];
+            dhdx[i]->Y[k] = (wave_p->tdi->Y[k] - source->tdi->Y[k])/epsilon[i];
+            dhdx[i]->Z[k] = (wave_p->tdi->Z[k] - source->tdi->Z[k])/epsilon[i];
+        }
+
+    }
+    
+    // Calculate fisher matrix
+    for(i=0; i<MBH_MODEL_NP; i++)
+    {
+        for(j=i; j<MBH_MODEL_NP; j++)
+        {
+            source->fisher_matrix[i][j]  = wavelet_nwip(dhdx[i]->X, dhdx[j]->X, noise->invC[0][0], wave_p->list, wave_p->Nlist);
+            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->Y, dhdx[j]->Y, noise->invC[1][1], wave_p->list, wave_p->Nlist);
+            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->Z, dhdx[j]->Z, noise->invC[2][2], wave_p->list, wave_p->Nlist);
+            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->X, dhdx[j]->Y, noise->invC[0][1], wave_p->list, wave_p->Nlist);
+            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->X, dhdx[j]->Z, noise->invC[0][2], wave_p->list, wave_p->Nlist);
+            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->Y, dhdx[j]->Z, noise->invC[1][2], wave_p->list, wave_p->Nlist);
+            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->Y, dhdx[j]->X, noise->invC[1][0], wave_p->list, wave_p->Nlist);
+            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->Z, dhdx[j]->X, noise->invC[2][0], wave_p->list, wave_p->Nlist);
+            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->Z, dhdx[j]->Y, noise->invC[2][1], wave_p->list, wave_p->Nlist);
+
+            if(!isfinite(source->fisher_matrix[i][j]))
+            {
+                fprintf(stderr,"WARNING: nan matrix element (line %d of file %s)\n",__LINE__,__FILE__);
+                fprintf(stderr, "fisher_matrix[%i][%i], Snf=[%g,%g]\n",i,j,noise->C[0][0][data->N/2],noise->C[1][1][data->N/2]);
+                for(int k=0; k<MBH_MODEL_NP; k++)
+                {
+                    fprintf(stderr,"source->params[%i]=%g\n",k,source->params[k]);
+                }
+                source->fisher_matrix[i][j] = 10.0;
+            }
+            source->fisher_matrix[j][i] = source->fisher_matrix[i][j];
+        }
+    }
+    
+    // Calculate eigenvalues and eigenvectors of fisher matrix
+    matrix_eigenstuff(source->fisher_matrix, source->fisher_evectr, source->fisher_evalue, MBH_MODEL_NP);
+    
+    free_source(wave_p);
+    
+    for(n=0; n<MBH_MODEL_NP; n++) free_tdi(dhdx[n]);
+    free(dhdx);
+    
+    
+    free_double_vector(epsilon);
+    free_double_vector(params_p);
 }

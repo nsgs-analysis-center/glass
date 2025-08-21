@@ -492,6 +492,17 @@ void ReadHDF5(struct Data *data, struct TDI *tdi, struct TDI *tdi_dwt, struct Fl
     double Tobs = stop_time - start_time;
     int N = (int)floor(Tobs/dt);
 
+    if(data->N>N)
+    {
+        printf("  Error: Requested amount of data is larger than %s\n",data->fileName);
+        printf("         data->N = %i\n",data->N);
+        printf("         N       = %i\n",N);
+        printf("         data->Tobs = %.12g\n", data->T);
+        printf("         Tobs       = %.12g\n", Tobs);
+        printf("         Reduce requested --duration\n");
+        exit(1);
+    }
+    
     /* work space for selecting and transforming time series */
     double *X = malloc(N*sizeof(double));
     double *Y = malloc(N*sizeof(double));
@@ -767,8 +778,10 @@ void ReadASCII(struct Data *data, struct TDI *tdi)
 
 void ReadData(struct Data *data, struct Orbit *orbit, struct Flags *flags)
 {
-    if(!flags->quiet) fprintf(stdout,"\n==== ReadData ====\n");
-    
+    if(!flags->quiet)
+        
+    fprintf(stdout,"\n================== ReadData =================\n");
+
     /* load full dataset */
     struct TDI *tdi_full_dft = malloc(sizeof(struct TDI));
     struct TDI *tdi_full_dwt = malloc(sizeof(struct TDI));
@@ -849,6 +862,8 @@ void ReadData(struct Data *data, struct Orbit *orbit, struct Flags *flags)
     //free memory
     free_tdi(tdi_full_dft);
     free_tdi(tdi_full_dwt);
+    
+    fprintf(stdout,"=============================================\n");
 }
 
 void GetNoiseModel(struct Data *data, struct Orbit *orbit, struct Flags *flags)
@@ -1483,28 +1498,10 @@ void parse_data_args(int argc, char **argv, struct Data *data, struct Orbit *orb
     sprintf(data->format,"sangria");
     sprintf(data->basis,"%s",basis);
 
-    data->T        = 31457280; /* one "mldc years" at 15s sampling */
-    data->t0       = 0.0; /* start time of data segment in seconds */
-    data->sqT      = sqrt(data->T);
-    data->NFFT     = 512;
-    data->Nlayer   = 1;
-    data->Nchannel = 3; //1=X, 2=AE, 3=XYZ
-    data->qpad     = 0;
-    data->fmin     = 1e-4; //Hz
     
     data->cseed = 150914;
     data->nseed = 151226;
     data->iseed = 151012;
-
-    if(!strcmp(data->basis,"fourier")) data->N = data->NFFT*2;
-    if(!strcmp(data->basis,"wavelet"))
-    {
-        data->T = floor(data->T/WAVELET_DURATION)*WAVELET_DURATION;
-        data->sqT = sqrt(data->T);
-        data->Nlayer = 1;
-        data->N = (int)floor(data->T/WAVELET_DURATION)*data->Nlayer;
-        data->NFFT = data->N/2;
-    }
 
 
     //Specifying the expected options

@@ -14,26 +14,18 @@
  * limitations under the License.
  */
 
+#ifndef glass_mbh_sampler_h
+#define glass_mbh_sampler_h
+
+#include <stdio.h>
+
+void mbh_mcmc(struct Orbit *orbit, struct Data *data, struct Model *model, struct Model *trial, struct Chain *chain, struct Flags *flags, struct Prior *prior, struct Proposal **proposal, int ic);
+
 /**
- @file glass_mbh.h
- \brief Libary for MBH module
+ \brief Setup UCB sampler
  
- Including
- - MBH data model
- - MBH sampler functions
- - MBH waveform generator
+ Get all UCB structures into their initial state.
  */
+void initialize_mbh_state(struct Data *data, struct Orbit *orbit, struct Flags *flags, struct Chain *chain, struct Proposal **proposal, struct Model **model, struct Model **trial, struct Source **inj_vec);
 
-#ifndef glass_mbh_h
-#define glass_mbh_h
-
-#include "glass_mbh_io.h"
-#include "glass_mbh_data.h"
-#include "glass_mbh_model.h"
-#include "glass_mbh_prior.h"
-#include "glass_mbh_proposal.h"
-#include "glass_mbh_waveform.h"
-#include "glass_mbh_sampler.h"
-#include "glass_mbh_IMRPhenom.h"
-
-#endif /* glass_mbh_h */
+#endif /* glass_mbh_sampler_h */

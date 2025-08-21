@@ -20,11 +20,7 @@
 
 #include <glass_utils.h>
 
-#include "glass_ucb_model.h"
-#include "glass_ucb_catalog.h"
-#include "glass_ucb_io.h"
-#include "glass_ucb_data.h"
-#include "glass_ucb_waveform.h"
+#include "glass_ucb.h"
 
 
 int main(int argc, char *argv[])
@@ -144,7 +140,7 @@ int main(int argc, char *argv[])
         data->qmax = data->qmin+data->NFFT;
         
         struct Source *inj = malloc(sizeof(struct Source));
-        alloc_source(inj, data->N, data->Nchannel);
+        alloc_source(inj, data->N, UCB_MODEL_NP, data->Nchannel);
         
         for(int n=0; n<data->N; n++)
         {
@@ -160,10 +156,10 @@ int main(int argc, char *argv[])
         inj->phi      = phi;
         inj->amp      = amp;
         inj->cosi     = iota;
-        inj->phi0     = phi0;
+        inj->phiref   = phi0;
         inj->psi      = psi;
         
-        map_params_to_array(inj, inj->params, data->T);
+        map_ucb_params_to_array(inj, inj->params, data->T);
         
         //Book-keeping of injection time-frequency volume
         ucb_alignment(orbit, data, inj);

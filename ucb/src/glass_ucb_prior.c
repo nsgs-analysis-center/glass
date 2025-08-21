@@ -16,11 +16,7 @@
 
 #include <glass_utils.h>
 
-#include "glass_ucb_model.h"
-#include "glass_ucb_io.h"
-#include "glass_ucb_waveform.h"
-#include "glass_ucb_catalog.h"
-#include "glass_ucb_prior.h"
+#include "glass_ucb.h"
 
 static double loglike(double *x, int D)
 {
@@ -231,7 +227,7 @@ void set_uniform_prior(struct Flags *flags, struct Model *model, struct Data *da
      params[3] = log(source->amp);
      params[4] = source->cosi;
      params[5] = source->psi;
-     params[6] = source->phi0;
+     params[6] = source->phiref;
      params[7] = source->dfdt*T*T;
      */
     
@@ -297,13 +293,12 @@ void set_uniform_prior(struct Flags *flags, struct Model *model, struct Data *da
     }
     if(verbose && !flags->quiet)
     {
-        fprintf(stdout,"\n============== PRIORS ==============\n");
-        if(flags->detached)fprintf(stdout,"  Assuming detached binary, Mchirp = [0.15,1]\n");
-        fprintf(stdout,"  p(f)     = U[%g,%g]\n",fmin,fmax);
-        fprintf(stdout,"  p(fdot)  = U[%g,%g]\n",fdotmin,fdotmax);
-        fprintf(stdout,"  p(fddot) = U[%g,%g]\n",fddotmin,fddotmax);
-        fprintf(stdout,"  p(lnA)   = U[%g,%g]\n",model->prior[3][0],model->prior[3][1]);
-        fprintf(stdout,"====================================\n\n");
+        fprintf(stdout,"  UCB Priors");
+        if(flags->detached)fprintf(stdout,"   Assuming detached binary, Mchirp = [0.15,1]\n");
+        fprintf(stdout,"   p(f)     = U[%g,%g]\n",fmin,fmax);
+        fprintf(stdout,"   p(fdot)  = U[%g,%g]\n",fdotmin,fdotmax);
+        fprintf(stdout,"   p(fddot) = U[%g,%g]\n",fddotmin,fddotmax);
+        fprintf(stdout,"   p(lnA)   = U[%g,%g]\n",model->prior[3][0],model->prior[3][1]);
     }
     
     if(UCB_MODEL_NP>7)
@@ -490,16 +485,16 @@ double evaluate_gmm_prior(struct Data *data, struct GMM *gmm, double *params)
 
     //pack parameters into source with correct units
     struct Source *source = malloc(sizeof(struct Source));
-    alloc_source(source, data->N, data->Nchannel);
+    alloc_source(source, data->N, UCB_MODEL_NP, data->Nchannel);
     
-    map_array_to_params(source, params, data->T);
+    map_array_to_ucb_params(source, params, data->T);
     x[0] = source->f0;
     x[1] = source->costheta;
     x[2] = source->phi;
     x[3] = log(source->amp);
     x[4] = source->cosi;
     x[5] = source->psi;
-    x[6] = source->phi0;
+    x[6] = source->phiref;
     if(UCB_MODEL_NP>7)
         x[7] = source->dfdt;
     if(UCB_MODEL_NP>8)
@@ -538,7 +533,7 @@ double evaluate_gmm_prior(struct Data *data, struct GMM *gmm, double *params)
     return log(P) + logJ;
 }
 
-double evaluate_prior(struct Flags *flags, struct Data *data, struct Model *model, struct Prior *prior, double *params)
+double evaluate_ucb_prior(struct Flags *flags, struct Data *data, struct Model *model, struct Prior *prior, double *params)
 {
     double logP=0.0;
     double **uniform_prior = model->prior;

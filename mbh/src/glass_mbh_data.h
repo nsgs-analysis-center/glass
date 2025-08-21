@@ -15,25 +15,22 @@
  */
 
 /**
- @file glass_mbh.h
- \brief Libary for MBH module
+ @file glass_mbh_data.h
+ \brief Functions for MBH data handling, including reading external data, simulating internal data, and signal injections.
  
- Including
- - MBH data model
- - MBH sampler functions
- - MBH waveform generator
  */
 
-#ifndef glass_mbh_h
-#define glass_mbh_h
+#ifndef glass_mbh_data_h
+#define glass_mbh_data_h
 
-#include "glass_mbh_io.h"
-#include "glass_mbh_data.h"
-#include "glass_mbh_model.h"
-#include "glass_mbh_prior.h"
-#include "glass_mbh_proposal.h"
-#include "glass_mbh_waveform.h"
-#include "glass_mbh_sampler.h"
-#include "glass_mbh_IMRPhenom.h"
+#include <stdio.h>
 
-#endif /* glass_mbh_h */
+/**
+ \brief Injection routine for generic binaries
+ 
+ Unlike verification sources, this code expects the polarization angle \f$\psi\f$ or (currently) initial phase \f$\varphi_0\f$ to be included in the parameter files.
+ */
+void MBHInjectSimulatedSource(struct Data *data, struct Orbit *orbit, struct Flags *flags, struct Source **inj_vec);
+
+
+#endif /* glass_mbh_data_h */
