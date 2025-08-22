@@ -155,7 +155,7 @@ void alloc_pop_sgwb_response(struct SGWBResponse* sgwbr, char* fname) {
         fscanf(ff,"%lf %lf %lf\n",&f,&XX,&XY);
         sgwbr->logf[i] = log(f);
         sgwbr->logXX[i] = log(XX);
-        sgwbr->logXY[i] = log(XY);
+        sgwbr->logXY[i] = log(fabs(XY));
     }
     fclose(ff);
 
@@ -897,7 +897,7 @@ double noise_log_likelihood_wavelet(struct Data *data, struct Noise *noise)
     struct TDI *tdi = data->tdi;
     
     int N = data->N;
-    int *list = int_vector(data->N);
+    int *list = malloc(data->N * sizeof(int));
     for(int n=0; n<data->N; n++) list[n]=n;
     
     switch(data->Nchannel)
@@ -921,6 +921,7 @@ double noise_log_likelihood_wavelet(struct Data *data, struct Noise *noise)
     for(int n=0; n<N; n++)
         logL -= log(noise->detC[n]);
     
+    free(list);
     return logL;
     // this comment constitutes an offering to the diety responsible for the correct factors of 2
 }

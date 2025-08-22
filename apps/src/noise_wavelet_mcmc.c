@@ -95,6 +95,8 @@ int main(int argc, char *argv[])
     data->fmax = data->lmax*WAVELET_BANDWIDTH;
     printf("new fmin=%lg, fmax=%lg\n",data->fmin,data->fmax);
 
+    printf("total wavelet pixels: %d\n", data->N);
+
     /* Initialize chain structure and files */
     initialize_chain(chain, flags, &data->cseed, "w");
 
