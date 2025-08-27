@@ -36,7 +36,7 @@ int main(int argc, char *argv[])
     /* usage */
     if(argc!=3)
     {
-        fprintf(stdout,"Usage: gb_sim /path/to/injection_file Tobs[yr]\n");
+        fprintf(stdout,"Usage: gb_reconstruction /path/to/injection_file Tobs[yr]\n");
         return 0;
     }
     
@@ -104,13 +104,13 @@ int main(int argc, char *argv[])
         params[7] = dfdt*T*T;
         
         /* generate waveform */
-        int BW = 2*galactic_binary_bandwidth(orbit->L, orbit->fstar, f0, dfdt, theta, amp, T, NFREQ); //bandwidth of waveform
+        int BW = 2*ucb_bandwidth(orbit->L, orbit->fstar, f0, dfdt, theta, amp, T, NFREQ); //bandwidth of waveform
         double *Atemp = malloc(sizeof(double)*2*BW);
         double *Etemp = malloc(sizeof(double)*2*BW);
         double *Xtemp = malloc(sizeof(double)*2*BW);
         double *Ytemp = malloc(sizeof(double)*2*BW);
         double *Ztemp = malloc(sizeof(double)*2*BW);
-        galactic_binary(orbit, "sangria", T, 0.0, params, 8, Xtemp,Ytemp,Ztemp, Atemp, Etemp, BW, 2);
+        ucb_waveform(orbit, "sangria", T, 0.0, params, 8, Xtemp,Ytemp,Ztemp, Atemp, Etemp, BW, 2);
         
         
         /* insert waveform into full array */
