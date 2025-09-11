@@ -165,6 +165,11 @@ void copy_model(struct Model *origin, struct Model *copy);
 void copy_model_lite(struct Model *origin, struct Model *copy);
 ///@}
 
+/**
+ \brief swap model pointers
+ */
+void swap_model(struct Model **ptr1, struct Model **ptr2);
+
 /** @name Free memory for structures */
 ///@{
 void free_model(struct Model *model);
@@ -190,7 +195,7 @@ int update_max_log_likelihood(struct Model **model, struct Chain *chain, struct 
  Updates residuals for model y and computes change in likelihood by summin only over data where waveforms are non-zero.
  @return \f$ -\frac{1}{2}\left[(d-h_{\rm new}|d-h__{\rm new}) - (d-h_{\rm old}|d-h_{\rm old})\right] \f$
  */
-double delta_log_likelihood(struct Data *data, struct Model *model);
+double delta_log_likelihood(struct Data *data, struct Model *model, struct Model *trial);
 
 /**
  \brief Compute argument of Gaussian likelihood
@@ -235,5 +240,11 @@ Computes new LISA instrument response Model::tdi after applying
  amplitude and phase corrections from calibration parameters.
  */
 void apply_calibration_model(struct Data *data, struct Model *model);
+
+/// Print current state of waveform and residuals during run for diagnostics. Disabled when Flags::quiet=`TRUE`.
+void print_waveform_draw(struct Data *data, struct Model *model, struct Flags *flags);
+
+/// Print waveform power
+void print_waveform(struct Data *data, struct Model *model, FILE *fptr);
 
 #endif /* glass_model_h */

@@ -41,11 +41,6 @@
 void setup_frequency_proposal(struct Data *data, struct Flags *flags);
 
 /**
- \brief Compute and print acceptance ratios for each proposal
- */
-void print_acceptance_rates(struct Proposal **proposal, int NProp, int ic, FILE *fptr);
-
-/**
 \brief Fair draw from prior for each parameter
  
  @param params (updates \f$\vec\theta\f$)

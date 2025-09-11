@@ -153,4 +153,9 @@ double uniform_prior_density(struct Data *data, struct Model *model, UNUSED stru
  */
 double symmetric_density(UNUSED struct Data *data, UNUSED struct Model *model, UNUSED struct Source *source, UNUSED struct Proposal *proposal, UNUSED double *params);
 
+/**
+ \brief Compute and print acceptance ratios for each proposal
+ */
+void print_acceptance_rates(struct Proposal **proposal, int NProp, int ic, FILE *fptr);
+
 #endif /* glass_sampler_h */

@@ -41,7 +41,7 @@ static void setup_wdm_basis(struct Wavelets *wdm, int NF)
     wdm->Omega = M_PI/wdm->cadence;
     wdm->dOmega = wdm->Omega/(double)wdm->NF;
     wdm->inv_root_dOmega = 1.0/sqrt(wdm->dOmega);
-    wdm->B = wdm->Omega/(double)(2*wdm->NF);
+    wdm->B = wdm->dOmega;
     wdm->A = (wdm->dOmega-wdm->B)/2.0;
     wdm->BW = (wdm->A+wdm->B)/M_PI;
 }
@@ -219,7 +219,7 @@ void initialize_wavelet(struct Wavelets *wdm, double T)
     wdm->frequency_steps = 400;
     wdm->fdot_steps = 50;
     wdm->d_fdot = 0.1;
-    wdm->oversample = 16.0;
+    wdm->oversample = 8.0;
 
     wdm->N = wdm->oversample * 2 * wdm->NF;
     wdm->T = wdm->N*wdm->cadence;

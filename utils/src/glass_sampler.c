@@ -119,3 +119,18 @@ double symmetric_density(UNUSED struct Data *data, UNUSED struct Model *model, U
 {
     return 0.0;
 }
+
+void print_acceptance_rates(struct Proposal **proposal, int NProp, int ic, FILE *fptr)
+{
+    fprintf(fptr,"Acceptance rates for chain %i:\n", ic);
+    fprintf(fptr," MCMC\n");
+    for(int n=0; n<NProp; n++)
+    {
+        if(proposal[n]->weight > 0) fprintf(fptr,"   %.1e  [%s]\n", (double)proposal[n]->accept[ic]/(double)proposal[n]->trial[ic],proposal[n]->name);
+    }
+    fprintf(fptr," RJMCMC\n");
+    for(int n=0; n<NProp; n++)
+    {
+        if(proposal[n]->rjweight > 0) fprintf(fptr,"   %.1e  [%s]\n", (double)proposal[n]->accept[ic]/(double)proposal[n]->trial[ic],proposal[n]->name);
+    }
+}

@@ -25,6 +25,16 @@ void print_mbh_usage()
     fprintf(stdout,"\n");
     fprintf(stdout,"OPTIONAL:\n");
 
+    //Priors & Proposals
+    fprintf(stdout,"       ==== Priors & Proposals ==== \n");
+    fprintf(stdout,"       --trigger     : event trigger time for analysis     \n");
+
+    //Injections
+    fprintf(stdout,"       ======== Injections ======== \n");
+    fprintf(stdout,"       --inj         : inject signal                       \n");
+    fprintf(stdout,"       --injseed     : seed for injection parameters       \n");
+    fprintf(stdout,"\n");
+
 }
 void parse_mbh_args(int argc, char **argv, struct Flags *flags)
 {
@@ -33,8 +43,66 @@ void parse_mbh_args(int argc, char **argv, struct Flags *flags)
     copy_argv(argc,argv,argv_copy);
     opterr=0; //suppress warnings about unknown arguments
 
-    flags->DMAX = 1;
+    //Set defaults
+    flags->NINJ  = 0;
+    flags->DMAX  = 1;
+    flags->cheat = 0;
+    flags->triggerTime = -1.0;
 
+    flags->injFile = malloc(flags->DMAX *sizeof(char *));
+    for(int n=0; n<flags->DMAX ; n++) flags->injFile[n] = malloc(1024*sizeof(char));
+    
+    //Specifying the expected options
+    static struct option long_options[] =
+    {
+        /* These options set a flag. */
+        {"injseed",    required_argument, 0, 0},
+        {"inj",        required_argument, 0, 0},
+        {"trigger",    required_argument, 0, 0},
+        
+        /* These options don’t set a flag.
+         We distinguish them by their indices. */
+        {"cheat",       no_argument, 0, 0 },
+        {0, 0, 0, 0}
+    };
+    
+    
+    int opt=0;
+    int long_index=0;
+    
+    //Loop through argv string and pluck out arguments
+    while ((opt = getopt_long_only(argc, argv_copy,"apl:b:", long_options, &long_index )) != -1)
+    {
+        switch (opt)
+        {
+                
+            case 0:
+                if(strcmp("cheat", long_options[long_index].name) == 0) flags->cheat = 1;
+                if(strcmp("trigger",long_options[long_index].name) == 0) flags->triggerTime = atof(optarg);
+                if(strcmp("inj", long_options[long_index].name) == 0)
+                {
+                    checkfile(optarg);
+                    sprintf(flags->injFile[flags->NINJ],"%s",optarg);
+                    flags->NINJ++;
+                    if(flags->NINJ>flags->DMAX )
+                    {
+                        fprintf(stderr,"WARNING: Requested number of injections is too large (%i/%i)\n",flags->NINJ,flags->DMAX );
+                        fprintf(stderr,"Should you remove at least %i --inj arguments?\n",flags->NINJ-flags->DMAX );
+                        fprintf(stderr,"Now exiting to system\n");
+                        exit(1);
+                    }
+                }
+                break;
+            case 'h' :
+                print_mbh_usage();
+                break;
+            default:
+                break;
+        }
+    }
+
+    
+    
     //reset opt counter
     optind = 0;
 
@@ -76,6 +144,8 @@ void print_mbh_chain_files(struct Data *data, struct Model **model, struct Chain
     {
         print_mbh_source_params(data,model[n]->source[i],chain->parameterFile[0]);
         fprintf(chain->parameterFile[0],"\n");
+        
+        fprintf(stdout,"%.12g %.12g ",model[n]->logL,sqrt(2.*(model[n]->logL-data->SNR2)));
         print_mbh_source_params(data,model[n]->source[i],stdout);
         fprintf(stdout,"\n");
         fflush(chain->parameterFile[0]);

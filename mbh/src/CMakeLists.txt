@@ -2,6 +2,7 @@
 
 set(MBH_SRC
     glass_mbh_io.h glass_mbh_io.c
+    glass_mbh_data.h glass_mbh_data.c
     glass_mbh_prior.h glass_mbh_prior.c
     glass_mbh_proposal.h glass_mbh_proposal.c
     glass_mbh_sampler.h glass_mbh_sampler.c

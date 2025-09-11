@@ -17,7 +17,7 @@
 #ifndef glass_wavelet_h
 #define glass_wavelet_h
 
-#define WAVELET_FILTER_CONSTANT 4  // filter steepness in frequency
+#define WAVELET_FILTER_CONSTANT 6  // filter steepness in frequency
 #define REAL(z,i) ((z)[2*(i)])
 #define IMAG(z,i) ((z)[2*(i)+1])
 

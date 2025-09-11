@@ -1044,26 +1044,7 @@ void LISA_spline_response(struct Orbit *orbit, double *tarray, int N, double cos
             Acm[i] = 0.5 * dcross[i] / (1.0 - kdotn[i]);
         }
         
-        /* build X, Y, Z responses
-        #pragma omp parallel num_threads(3)
-        {
-            int thread_id = omp_get_thread_num();
-            switch(thread_id)
-            {
-                case 0:
-                    LISA_TDI_spline(X, Xf, 0, 1, 2, tarray, m, amp_spline, freq_spline, phase_spline, Aplus, Across, cos2psi, sin2psi, App, Apm, Acp, Acm, kdotr, L);
-                    break;
-                case 1:
-                    LISA_TDI_spline(Y, Yf, 1, 2, 0, tarray, m, amp_spline, freq_spline, phase_spline, Aplus, Across, cos2psi, sin2psi, App, Apm, Acp, Acm, kdotr, L);
-                    break;
-                case 2:
-                    LISA_TDI_spline(Z, Zf, 2, 0, 1, tarray, m, amp_spline, freq_spline, phase_spline, Aplus, Across, cos2psi, sin2psi, App, Apm, Acp, Acm, kdotr, L);
-                    break;
-                default:
-                    break;
-            }
-        }//end parallel section */
-
+        /* build X, Y, Z responses */
         LISA_TDI_spline(X, Xf, 0, 1, 2, tarray, m, amp_spline, freq_spline, phase_spline, Aplus, Across, cos2psi, sin2psi, App, Apm, Acp, Acm, kdotr, L);
         LISA_TDI_spline(Y, Yf, 1, 2, 0, tarray, m, amp_spline, freq_spline, phase_spline, Aplus, Across, cos2psi, sin2psi, App, Apm, Acp, Acm, kdotr, L);
         LISA_TDI_spline(Z, Zf, 2, 0, 1, tarray, m, amp_spline, freq_spline, phase_spline, Aplus, Across, cos2psi, sin2psi, App, Apm, Acp, Acm, kdotr, L);
@@ -1075,24 +1056,26 @@ void LISA_spline_response(struct Orbit *orbit, double *tarray, int N, double cos
     */
 
     //extract_amplitude_and_phase() is removing the carrier phase
-    #pragma omp parallel num_threads(3)
+    omp_set_num_threads(3);
+    #pragma omp parallel
     {
-        switch(omp_get_thread_num())
+        #pragma omp single
         {
-            case 0:
+            #pragma omp task
+            {
                 extract_amplitude_and_phase(N, tdi_amp->X, tdi_phase->X, R->X, Rf->X, phase_ref);
                 unwrap_phase(N, tdi_phase->X);
-                break;
-            case 1:
+            }
+            #pragma omp task
+            {
                 extract_amplitude_and_phase(N, tdi_amp->Y, tdi_phase->Y, R->Y, Rf->Y, phase_ref);
                 unwrap_phase(N, tdi_phase->Y);
-                break;
-            case 2:
+            }
+            #pragma omp task
+            {
                 extract_amplitude_and_phase(N, tdi_amp->Z, tdi_phase->Z, R->Z, Rf->Z, phase_ref);
                 unwrap_phase(N, tdi_phase->Z);
-                break;
-            default:
-                break;
+            }
         }
     }
     
@@ -1335,9 +1318,11 @@ void copy_tdi(struct TDI *origin, struct TDI *copy)
     copy->N        = origin->N;
     copy->Nchannel = origin->Nchannel;
     
+    /*
     memcpy(copy->A, origin->A, origin->N*sizeof(double));
     memcpy(copy->E, origin->E, origin->N*sizeof(double));
     memcpy(copy->T, origin->T, origin->N*sizeof(double));
+     */
     memcpy(copy->X, origin->X, origin->N*sizeof(double));
     memcpy(copy->Y, origin->Y, origin->N*sizeof(double));
     memcpy(copy->Z, origin->Z, origin->N*sizeof(double));
@@ -1348,9 +1333,11 @@ void copy_tdi_segment(struct TDI *origin, struct TDI *copy, int index, int N)
     copy->N        = origin->N;
     copy->Nchannel = origin->Nchannel;
     index*=2;
+    /*
     memcpy(copy->A+index, origin->A+index, N*sizeof(double));
     memcpy(copy->E+index, origin->E+index, N*sizeof(double));
     memcpy(copy->T+index, origin->T+index, N*sizeof(double));
+     */
     memcpy(copy->X+index, origin->X+index, N*sizeof(double));
     memcpy(copy->Y+index, origin->Y+index, N*sizeof(double));
     memcpy(copy->Z+index, origin->Z+index, N*sizeof(double));

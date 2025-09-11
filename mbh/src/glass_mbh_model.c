@@ -58,25 +58,17 @@ void generate_mbh_signal_model(struct Orbit *orbit, struct Data *data, struct Mo
 {
     int i,n;
 
-    for(n=0; n<data->N; n++)
-    {
-        model->tdi->X[n]=0.0;
-        model->tdi->Y[n]=0.0;
-        model->tdi->Z[n]=0.0;
-        model->tdi->A[n]=0.0;
-        model->tdi->E[n]=0.0;
-        model->list[n]=0;
-    }
+    /*
+     Generate waveform for Source
+     */
     
-    struct Source *source = model->source[0];
+    struct Source *source = model->source[source_id];
     
     for(i=0; i<data->N; i++)
     {
         source->tdi->X[i]=0.0;
         source->tdi->Y[i]=0.0;
         source->tdi->Z[i]=0.0;
-        source->tdi->A[i]=0.0;
-        source->tdi->E[i]=0.0;
         source->list[i]=0;
     }
     
@@ -85,7 +77,17 @@ void generate_mbh_signal_model(struct Orbit *orbit, struct Data *data, struct Mo
     //Simulate gravitational wave signal
     mbh_fd_waveform(orbit, data->wdm, data->T, model->t0, source->params, source->list, &source->Nlist, source->tdi->X, source->tdi->Y, source->tdi->Z);
     
-    //Add waveform to model TDI channels
+    
+    /*
+     Add Source to Model
+     */
+    for(n=0; n<data->N; n++)
+    {
+        model->tdi->X[n]=0.0;
+        model->tdi->Y[n]=0.0;
+        model->tdi->Z[n]=0.0;
+        model->list[n]=0;
+    }
     model->Nlist = source->Nlist;
 
     for(int n=0; n<source->Nlist; n++)
@@ -96,8 +98,8 @@ void generate_mbh_signal_model(struct Orbit *orbit, struct Data *data, struct Mo
             model->tdi->X[k] += source->tdi->X[k];
             model->tdi->Y[k] += source->tdi->Y[k];
             model->tdi->Z[k] += source->tdi->Z[k];
+            model->list[n] = k;
         }
-        model->list[n] = source->list[n];
     }
 
     //get union of list
