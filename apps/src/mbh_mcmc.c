@@ -42,13 +42,16 @@ static void set_mbh_defaults(struct Data *data)
     data->T        = 31457280; /* one "mldc years" at 15s sampling */
     data->t0       = 0.0; /* start time of data segment in seconds */
     data->sqT      = sqrt(data->T);
-    data->Nlayer   = (int)floor(WAVELET_DURATION/LISA_CADENCE);
-    data->Nlayer  -= 2; //parse_data_args() will bad this by 2
-    data->N        = (int)floor(data->T/WAVELET_DURATION) * data->Nlayer;
-    data->NFFT     = data->N/2;
     data->Nchannel = 3; //1=X, 2=AE, 3=XYZ
     data->qpad     = 0;
-    data->fmin     = 1e-4; //Hz
+    data->fmin     = 5e-4; //Hz
+    data->fmax     = 2e-2; //Hz
+    data->lmin     = (int)floor(data->fmin/WAVELET_BANDWIDTH);
+    data->lmax     = (int)ceil(data->fmax/WAVELET_BANDWIDTH);
+    data->Nlayer   = data->lmax-data->lmin;
+    data->N        = (int)floor(data->T/WAVELET_DURATION) * data->Nlayer;
+    data->NFFT     = data->N/2;
+    data->Nlayer  -= 2; //parse_data_args() will pad this by 2
     sprintf(data->basis,"wavelet");
 }
 
@@ -121,13 +124,35 @@ int main(int argc, char *argv[])
         inj = malloc(DMAX*sizeof(struct Source*));
         for(int n=0; n<DMAX; n++) inj[n] = malloc(sizeof(struct Source));
         
-        //MBHInjectSimulatedSource(data,orbit,flags,inj);
+        /* Inject gravitational wave signal */
+        MBHInjectSimulatedSource(data,orbit,flags,inj);
     }
     
+    /* Add Gaussian noise realization */
+    if(flags->simNoise) AddNoiseWavelet(data,data->tdi);
+    
+    /* Store DFT copy of simulated data */
+    if(!flags->strainData) wavelet_layer_to_fourier_transform(data);
     
     /* print various data products for plotting */
     print_data(data, flags);
 
+    /* compute (d|d) to normalize likelihood */
+    int *list = int_vector(data->N);
+    for(int n=0; n<data->N; n++)
+    {
+        list[n] = n;
+    }
+    data->SNR2 = 0;
+    data->SNR2 += wavelet_nwip(data->tdi->X, data->tdi->X, data->noise->invC[0][0], list, data->N);
+    data->SNR2 += wavelet_nwip(data->tdi->Y, data->tdi->Y, data->noise->invC[1][1], list, data->N);
+    data->SNR2 += wavelet_nwip(data->tdi->Z, data->tdi->Z, data->noise->invC[2][2], list, data->N);
+    data->SNR2 += wavelet_nwip(data->tdi->X, data->tdi->Y, data->noise->invC[0][1], list, data->N)*2;
+    data->SNR2 += wavelet_nwip(data->tdi->X, data->tdi->Z, data->noise->invC[0][2], list, data->N)*2;
+    data->SNR2 += wavelet_nwip(data->tdi->Y, data->tdi->Z, data->noise->invC[1][2], list, data->N)*2;
+    data->SNR2 *= -0.5;
+    free_int_vector(list);
+    
     /* Load catalog cache file for proposals/priors */
     struct Catalog *catalog=malloc(sizeof(struct Catalog));
     //if(flags->catalog)
@@ -184,16 +209,27 @@ int main(int argc, char *argv[])
         adapt_temperature_ladder(chain, mcmc+flags->NBURN);
         
         print_mbh_chain_files(data, model, chain, flags, mcmc);
-        
+
+        //Recompute likelihoods (and residuals)
+        //this protects against error accumulating in dlogL calculations
+        for(int ic=0; ic<NC; ic++)
+            model[ic]->logL = (*model[ic]->log_likelihood)(data, model[ic]);
+
         //track maximum log Likelihood
         if(mcmc%100)
         {
             if(update_max_log_likelihood(model, chain, flags)) mcmc = -flags->NBURN;
         }
-    
+            
         //add current cold chain state to differential evolution buffer
         update_differential_evolution_buffer(proposal, model[chain->index[0]], &chain->r[0]);
         
+        //store reconstructed waveform
+        print_waveform_draw(data, model[chain->index[0]], flags);
+
+        //update on sampling efficiency
+        print_acceptance_rates(proposal, MBH_PROPOSAL_NPROP, 0, stdout);
+
         mcmc++;
         
     }// end MCMC loop

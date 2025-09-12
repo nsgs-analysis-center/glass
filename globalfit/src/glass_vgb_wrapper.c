@@ -143,7 +143,7 @@ void initialize_vgb_sampler(struct VGBData *vgb_data)
         struct Proposal **proposal = vgb_data->proposal_vec[n];
         struct Model **model = vgb_data->model_vec[n];
         struct Model **trial = vgb_data->trial_vec[n];
-        struct Source *vgb   = vgb_data->vgb_vec[n];
+        struct Source **vgb   = vgb_data->vgb_vec;
         
         /* Initialize parallel chain */
         if(flags->resume)
@@ -155,7 +155,7 @@ void initialize_vgb_sampler(struct VGBData *vgb_data)
         initialize_vgb_proposal(orbit, data, prior, chain, flags, proposal, flags->DMAX);
         
         /* Initialize data models */
-        initialize_ucb_state(data, orbit, flags, chain, proposal, model, trial,  vgb_data->vgb_vec);
+        initialize_ucb_state(data, orbit, flags, chain, proposal, model, trial, vgb);
         
         /* Store data segment in working directory */
         if(vgb_data->procID==1) print_data(data, flags);

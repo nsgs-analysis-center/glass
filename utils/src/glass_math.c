@@ -368,12 +368,8 @@ double wavelet_nwip(double *a, double *b, double *invC, int *list, int N)
     double arg = 0.0;
     for(int n=0; n<N; n++)
     {
-        if(list[n] > 0)
-        {
-            int k = list[n];
-            arg += a[k]*b[k]*invC[k];
-        }
-        
+        int k = list[n];
+        arg += a[k]*b[k]*invC[k];
     }
     return arg;
 }

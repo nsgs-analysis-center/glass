@@ -69,23 +69,27 @@ void mbh_mcmc(struct Orbit *orbit, struct Data *data, struct Model *model, struc
         {
             //form master template
             (*model_y->generate_signal_model)(orbit, data, model_y, 0);
-            
-            //get likelihood for y using delta log likelihood method
-            model_y->logL  = gaussian_log_likelhood_wavelet(data, model_y);
 
-            /*compare fast and slow likelihood
-            double dlogLx = delta_log_likelihood(data, model_x);
-            double dlogLy = delta_log_likelihood(data, model_y);
-            printf("logLx=%.12g, logLy=%.12g, dlogL=%.12g, dlogLx=%.12g, dlogLy=%.12g, dlogLtemp=%.12g\n",
-                   model_x->logL,model_y->logL,
-                   model_y->logL-model_x->logL,
-                   dlogLx,dlogLy,
-                   dlogLy-dlogLx);*/
+            //rejection sample on SNR?
+            if(snr_wavelet(model_y->source[0], model_y->noise)<10.)
+            {
+                logPy = -INFINITY;
+                logH  = -INFINITY;
+            }
+            else
+            {
+                //get likelihood of trial model by brute force
+                //model_y->logL = (*model_y->log_likelihood)(data, model_y);
             
-            /*
-             H = [p(d|y)/p(d|x)]/T x p(y)/p(x) x q(x|y)/q(y|x)
-             */
-            logH += (model_y->logL - model_x->logL)/chain->temperature[ic]; //delta logL
+                //get likelihood for y using delta log likelihood method
+                model_y->logL = model_x->logL + delta_log_likelihood(data,model_x,model_y);
+                
+                /*
+                 H = [p(d|y)/p(d|x)]/T x p(y)/p(x) x q(x|y)/q(y|x)
+                 */
+                logH += (model_y->logL - model_x->logL)/chain->temperature[ic]; //delta logL
+            }
+            
         }
         logH += logPy  - logPx;  //priors
         logH += logQxy - logQyx; //proposals
@@ -94,10 +98,8 @@ void mbh_mcmc(struct Orbit *orbit, struct Data *data, struct Model *model, struc
         
         if(isfinite(logH) && logH > loga)
         {
-
             proposal[nprop]->accept[ic]++;
             copy_model_lite(model_y,model_x);
-
         }
     }
 }
@@ -121,8 +123,8 @@ void initialize_mbh_state(struct Data *data, struct Orbit *orbit, struct Flags *
         alloc_model(data,trial[ic],MBH_MODEL_NP,DMAX);
         alloc_model(data,model[ic],MBH_MODEL_NP,DMAX);
         
-        model[ic]->log_likelihood = &delta_log_likelihood;
-        trial[ic]->log_likelihood = &delta_log_likelihood;
+        model[ic]->log_likelihood = &gaussian_log_likelhood_wavelet;
+        trial[ic]->log_likelihood = &gaussian_log_likelhood_wavelet;
         
         model[ic]->generate_signal_model = &generate_mbh_signal_model;
         trial[ic]->generate_signal_model = &generate_mbh_signal_model;
@@ -137,6 +139,7 @@ void initialize_mbh_state(struct Data *data, struct Orbit *orbit, struct Flags *
         copy_noise(data->noise, model[ic]->noise);
         
         //draw signal model
+        double snr;
         for(int n=0; n<DMAX; n++)
         {
             if(flags->cheat && inj_vec[n]->tref>data->t0)
@@ -163,25 +166,18 @@ void initialize_mbh_state(struct Data *data, struct Orbit *orbit, struct Flags *
             }
             else
             {
-                do {
+                do
+                {
+                    snr=0;
                     draw_from_mbh_prior(data, model[ic], model[ic]->source[n], proposal[0], model[ic]->source[n]->params, &chain->r[ic]);
-                } while (check_mbh_prior(model[ic]->source[n]->params,model[ic]->prior));
+                    
+                    if(!check_mbh_prior(model[ic]->source[n]->params,model[ic]->prior))
+                    {
+                        (*model[ic]->generate_signal_model)(orbit, data,model[ic], 0);
+                        snr = snr_wavelet(model[ic]->source[0], data->noise);
+                    }
+                } while ( snr<10.);
                 
-                double m1 = 9.840620473718e+05;
-                double m2 = 8.212835097523e+05;
-                
-                model[ic]->source[n]->Mchirp   = chirpmass(m1,m2);
-                model[ic]->source[n]->Mtotal   = m1+m2;
-                model[ic]->source[n]->chi1     = 4.525488035553191e-01;
-                model[ic]->source[n]->chi2     = 5.581335050668826e-01;
-                model[ic]->source[n]->phiref   = 2.982619790826792e+00;
-                model[ic]->source[n]->tref     = 4.800035465863327e+06;
-                model[ic]->source[n]->dL       = 1.763565935270e+01;
-                model[ic]->source[n]->costheta = -4.741945333726355e-01;
-                model[ic]->source[n]->phi      = 5.823731551490122e-01;
-                model[ic]->source[n]->psi      = 1.840857645136265e-01;
-                model[ic]->source[n]->cosi     = -2.544566370040902e-02;
-                map_mbh_params_to_array(model[ic]->source[n], model[ic]->source[n]->params);
                 
             }
             map_array_to_mbh_params(model[ic]->source[n], model[ic]->source[n]->params);
@@ -203,7 +199,7 @@ void initialize_mbh_state(struct Data *data, struct Orbit *orbit, struct Flags *
          */
         
         //signal
-        (*model[ic]->generate_signal_model)(orbit,data,model[ic],-1);
+        (*model[ic]->generate_signal_model)(orbit,data,model[ic],0);
 
         //noise
         for(int i=0; i<data->Nchannel; i++)
@@ -229,7 +225,7 @@ void initialize_mbh_state(struct Data *data, struct Orbit *orbit, struct Flags *
         //likelihood
         if(!flags->prior)
         {
-            model[ic]->logL = gaussian_log_likelihood(data, model[ic]);
+            model[ic]->logL = (*model[ic]->log_likelihood)(data, model[ic]);
             model[ic]->logLnorm = gaussian_log_likelihood_model_norm(data,model[ic]);
         }
         else model[ic]->logL = model[ic]->logLnorm = 0.0;

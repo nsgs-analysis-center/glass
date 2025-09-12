@@ -878,32 +878,35 @@ void mbh_fd_waveform(struct Orbit *orbit, struct Wavelets *wdm, double Tobs, dou
     int N=0; //number of wavelet pixels
     int k;   //wavelet pixel index
 
-
     for(int layer=track->min_layer; layer<track->max_layer; layer++)
     {
         int Nsegment = track->segment_size[layer];
         int nmid = track->segment_midpt[layer];
 
         //wavelet transfrom the piece of the track in this layer
-        #pragma omp parallel num_threads(3)
+        
+        omp_set_num_threads(3);
+
+        #pragma omp parallel
         {
             //perform different tasks based on thread ID
-            switch(omp_get_thread_num())
+            #pragma omp single
             {
-                case 0:
+                #pragma omp task
+                {
                     build_interpolated_waveform(track, layer, Tobs, tc, amp_ssb_spline, amp_tdi_spline_X, phase_tdi_spline_X, wave->X);
                     wavelet_transform_segment(wdm, Nsegment, layer, wave->X);
-                    break;
-                case 1:
+                }
+                #pragma omp task
+                {
                     build_interpolated_waveform(track, layer, Tobs, tc, amp_ssb_spline, amp_tdi_spline_Y, phase_tdi_spline_Y, wave->Y);
                     wavelet_transform_segment(wdm, Nsegment, layer, wave->Y);
-                    break;
-                case 2:
+                }
+                #pragma omp task
+                {
                     build_interpolated_waveform(track, layer, Tobs, tc, amp_ssb_spline, amp_tdi_spline_Z, phase_tdi_spline_Z, wave->Z);
                     wavelet_transform_segment(wdm, Nsegment, layer, wave->Z);
-                    break;
-                default:
-                    break;
+                }
             }
         }
         
@@ -996,12 +999,15 @@ void mbh_fisher(struct Orbit *orbit, struct Data *data, struct Source *source, s
     epsilon[9] = 1.0e-5;
     epsilon[10] = 1.0e-5;
 
-
     double *params_p = double_vector(MBH_MODEL_NP);
-    
+    double *params_m = double_vector(MBH_MODEL_NP);
+
     struct Source *wave_p = malloc(sizeof(struct Source));
-    alloc_source(wave_p, data->N, MBH_MODEL_NP, data->Nchannel);
+    struct Source *wave_m = malloc(sizeof(struct Source));
     
+    alloc_source(wave_p, data->N, MBH_MODEL_NP, data->Nchannel);
+    alloc_source(wave_m, data->N, MBH_MODEL_NP, data->Nchannel);
+
     // TDI variables to hold derivatives of h
     struct TDI **dhdx = malloc(MBH_MODEL_NP*sizeof(struct TDI *));
     for(n=0; n<MBH_MODEL_NP; n++)
@@ -1017,35 +1023,51 @@ void mbh_fisher(struct Orbit *orbit, struct Data *data, struct Source *source, s
         for(j=0; j<MBH_MODEL_NP; j++)
         {
             wave_p->params[j] = source->params[j];
+            wave_m->params[j] = source->params[j];
         }
         
         // perturb parameters
-        wave_p->params[i] += epsilon[i];
+        wave_p->params[i] += epsilon[i]/2.;
+        wave_m->params[i] -= epsilon[i]/2.;
 
         // complete info in source structure
         map_array_to_mbh_params(wave_p, wave_p->params);
-        
+        map_array_to_mbh_params(wave_m, wave_m->params);
+
         // clean up TDI arrays, just in case
         for(j=0; j<data->N; j++)
         {
             wave_p->tdi->X[j]=0.0;
             wave_p->tdi->Y[j]=0.0;
             wave_p->tdi->Z[j]=0.0;
-            wave_p->tdi->A[j]=0.0;
-            wave_p->tdi->E[j]=0.0;
+            
+            wave_m->tdi->X[j]=0.0;
+            wave_m->tdi->Y[j]=0.0;
+            wave_m->tdi->Z[j]=0.0;
+
+            dhdx[i]->X[j] = 0.0;
+            dhdx[i]->Y[j] = 0.0;
+            dhdx[i]->Z[j] = 0.0;
         }
         
         
         // compute perturbed waveforms
         mbh_fd_waveform(orbit,data->wdm,data->T, data->t0, wave_p->params, wave_p->list, &wave_p->Nlist, wave_p->tdi->X, wave_p->tdi->Y, wave_p->tdi->Z);
+        mbh_fd_waveform(orbit,data->wdm,data->T, data->t0, wave_m->params, wave_m->list, &wave_m->Nlist, wave_m->tdi->X, wave_m->tdi->Y, wave_m->tdi->Z);
 
         // central differencing derivatives of waveforms w.r.t. parameters
         for(n=0; n<wave_p->Nlist; n++)
         {
             int k = wave_p->list[n];
-            dhdx[i]->X[k] = (wave_p->tdi->X[k] - source->tdi->X[k])/epsilon[i];
-            dhdx[i]->Y[k] = (wave_p->tdi->Y[k] - source->tdi->Y[k])/epsilon[i];
-            dhdx[i]->Z[k] = (wave_p->tdi->Z[k] - source->tdi->Z[k])/epsilon[i];
+            if(k>=0 && k<data->N)
+            {
+//                dhdx[i]->X[k] = (wave_p->tdi->X[k] - source->tdi->X[k])/epsilon[i];
+//                dhdx[i]->Y[k] = (wave_p->tdi->Y[k] - source->tdi->Y[k])/epsilon[i];
+//                dhdx[i]->Z[k] = (wave_p->tdi->Z[k] - source->tdi->Z[k])/epsilon[i];
+                dhdx[i]->X[k] = (wave_p->tdi->X[k] - wave_m->tdi->X[k])/epsilon[i];
+                dhdx[i]->Y[k] = (wave_p->tdi->Y[k] - wave_m->tdi->Y[k])/epsilon[i];
+                dhdx[i]->Z[k] = (wave_p->tdi->Z[k] - wave_m->tdi->Z[k])/epsilon[i];
+            }
         }
 
     }
@@ -1065,6 +1087,8 @@ void mbh_fisher(struct Orbit *orbit, struct Data *data, struct Source *source, s
             source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->Z, dhdx[j]->X, noise->invC[2][0], wave_p->list, wave_p->Nlist);
             source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->Z, dhdx[j]->Y, noise->invC[2][1], wave_p->list, wave_p->Nlist);
 
+            
+            
             if(!isfinite(source->fisher_matrix[i][j]))
             {
                 fprintf(stderr,"WARNING: nan matrix element (line %d of file %s)\n",__LINE__,__FILE__);
@@ -1083,11 +1107,13 @@ void mbh_fisher(struct Orbit *orbit, struct Data *data, struct Source *source, s
     matrix_eigenstuff(source->fisher_matrix, source->fisher_evectr, source->fisher_evalue, MBH_MODEL_NP);
     
     free_source(wave_p);
-    
+    free_source(wave_m);
+
     for(n=0; n<MBH_MODEL_NP; n++) free_tdi(dhdx[n]);
     free(dhdx);
     
     
     free_double_vector(epsilon);
     free_double_vector(params_p);
+    free_double_vector(params_m);
 }

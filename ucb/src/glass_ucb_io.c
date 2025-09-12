@@ -887,47 +887,7 @@ void save_waveforms(struct Data *data, struct Model *model, int mcmc)
     }
 }
 
-void print_waveform(struct Data *data, struct Model *model, FILE *fptr)
-{
-    for(int n=0; n<data->NFFT; n++)
-    {
-        int re = 2*n;
-        int im = re+1;
-        double f = data->fmin + (double)n/data->T;
 
-        fprintf(fptr,"%.12g ",f);
-        switch(data->Nchannel)
-        {
-            case 2:
-                fprintf(fptr,"%.12g ",data->tdi->A[re]*data->tdi->A[re] + data->tdi->A[im]*data->tdi->A[im]);
-                fprintf(fptr,"%.12g ",data->tdi->E[re]*data->tdi->E[re] + data->tdi->E[im]*data->tdi->E[im]);
-                
-                fprintf(fptr,"%.12g ",model->tdi->A[re]*model->tdi->A[re] + model->tdi->A[im]*model->tdi->A[im]);
-                fprintf(fptr,"%.12g ",model->tdi->E[re]*model->tdi->E[re] + model->tdi->E[im]*model->tdi->E[im]);
-                
-                fprintf(fptr,"%.12g ",(data->tdi->A[re]-model->tdi->A[re])*(data->tdi->A[re]-model->tdi->A[re]) + (data->tdi->A[im]-model->tdi->A[im])*(data->tdi->A[im]-model->tdi->A[im]) );
-                fprintf(fptr,"%.12g ",(data->tdi->E[re]-model->tdi->E[re])*(data->tdi->E[re]-model->tdi->E[re]) + (data->tdi->E[im]-model->tdi->E[im])*(data->tdi->E[im]-model->tdi->E[im]) );
-                
-                break;
-            case 3:
-                fprintf(fptr,"%.12g ",data->tdi->X[re]*data->tdi->X[re] + data->tdi->X[im]*data->tdi->X[im]);
-                fprintf(fptr,"%.12g ",data->tdi->Y[re]*data->tdi->Y[re] + data->tdi->Y[im]*data->tdi->Y[im]);
-                fprintf(fptr,"%.12g ",data->tdi->Z[re]*data->tdi->Z[re] + data->tdi->Z[im]*data->tdi->Z[im]);
-
-                fprintf(fptr,"%.12g ",model->tdi->X[re]*model->tdi->X[re] + model->tdi->X[im]*model->tdi->X[im]);
-                fprintf(fptr,"%.12g ",model->tdi->Y[re]*model->tdi->Y[re] + model->tdi->Y[im]*model->tdi->Y[im]);
-                fprintf(fptr,"%.12g ",model->tdi->Z[re]*model->tdi->Z[re] + model->tdi->Z[im]*model->tdi->Z[im]);
-                
-                fprintf(fptr,"%.12g ",(data->tdi->X[re]-model->tdi->X[re])*(data->tdi->X[re]-model->tdi->X[re]) + (data->tdi->X[im]-model->tdi->X[im])*(data->tdi->X[im]-model->tdi->X[im]) );
-                fprintf(fptr,"%.12g ",(data->tdi->Y[re]-model->tdi->Y[re])*(data->tdi->Y[re]-model->tdi->Y[re]) + (data->tdi->Y[im]-model->tdi->Y[im])*(data->tdi->Y[im]-model->tdi->Y[im]) );
-                fprintf(fptr,"%.12g ",(data->tdi->Z[re]-model->tdi->Z[re])*(data->tdi->Z[re]-model->tdi->Z[re]) + (data->tdi->Z[im]-model->tdi->Z[im])*(data->tdi->Z[im]-model->tdi->Z[im]) );
-
-                break;
-        }
-        fprintf(fptr,"\n");
-        //    }
-    }
-}
 
 void print_waveform_strain(struct Data *data, struct Model *model, FILE *fptr)
 {
@@ -979,17 +939,6 @@ void print_waveform_strain(struct Data *data, struct Model *model, FILE *fptr)
     }
 }
 
-
-void print_waveform_draw(struct Data *data, struct Model *model, struct Flags *flags)
-{
-    FILE *fptr;
-    char filename[128];
-    
-    sprintf(filename,"%s/waveform_draw.dat",data->dataDir);
-    fptr=fopen(filename,"w");
-    print_waveform(data, model, fptr);
-    fclose(fptr);
-}
 void print_waveforms_reconstruction(struct Data *data, struct Flags *flags)
 {
     char filename[1024];

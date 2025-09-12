@@ -793,31 +793,25 @@ void ucb_waveform(struct Orbit *orbit, char *format, double T, double t0, double
     
     /*   Numerical Fourier transform of slowly evolving signal */
 
-    #pragma omp parallel num_threads(6)
+    omp_set_num_threads(6);
+
+    #pragma omp parallel
     {
         //perform different tasks based on thread ID
-        switch(omp_get_thread_num())
+        #pragma omp single
         {
-            case 0:
-                glass_forward_complex_fft(data12+1, BW);
-                break;
-            case 1:
-                glass_forward_complex_fft(data21+1, BW);
-                break;
-            case 2:
-                glass_forward_complex_fft(data31+1, BW);
-                break;
-            case 3:
-                glass_forward_complex_fft(data13+1, BW);
-                break;
-            case 4:
-                glass_forward_complex_fft(data23+1, BW);
-                break;
-            case 5:
-                glass_forward_complex_fft(data32+1, BW);
-                break;
-            default:
-                break;
+            #pragma omp task
+            glass_forward_complex_fft(data12+1, BW);
+            #pragma omp task
+            glass_forward_complex_fft(data21+1, BW);
+            #pragma omp task
+            glass_forward_complex_fft(data31+1, BW);
+            #pragma omp task
+            glass_forward_complex_fft(data13+1, BW);
+            #pragma omp task
+            glass_forward_complex_fft(data23+1, BW);
+            #pragma omp task
+            glass_forward_complex_fft(data32+1, BW);
         }
     }
 
@@ -1049,26 +1043,27 @@ void ucb_waveform_wavelet(struct Orbit *orbit, struct Wavelets *wdm, double Tobs
     wavelet_window_frequency(wdm, window, Nlayers);
         
     // wavelet transform on heterodyned data using downsampled windows.
-    #pragma omp parallel num_threads(3)
+    omp_set_num_threads(3);
+
+    #pragma omp parallel
     {
-        switch(omp_get_thread_num())
+        #pragma omp single
         {
-            case 0:
+            #pragma omp task
+            {
                 build_interpolated_waveform(amp_interpolant_X, phase_interpolant_X, time_ds, phase_ds, phase_het, N_ds, wave->X);
                 wavelet_transform_by_layers(wdm, min_layer, Nlayers, window, wave->X);
-                break;
-            case 1:
+            }
+            #pragma omp task
+            {
                 build_interpolated_waveform(amp_interpolant_Y, phase_interpolant_Y, time_ds, phase_ds, phase_het, N_ds, wave->Y);
                 wavelet_transform_by_layers(wdm, min_layer, Nlayers, window, wave->Y);
-                
-                break;
-            case 2:
+            }
+            #pragma omp task
+            {
                 build_interpolated_waveform(amp_interpolant_Z, phase_interpolant_Z, time_ds, phase_ds, phase_het, N_ds, wave->Z);
                 wavelet_transform_by_layers(wdm, min_layer, Nlayers, window, wave->Z);
-                
-                break;
-            default:
-                break;
+            }
         }
     }
     

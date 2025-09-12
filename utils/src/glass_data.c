@@ -1480,7 +1480,7 @@ void parse_data_args(int argc, char **argv, struct Data *data, struct Orbit *orb
     flags->resume      = 0;
     flags->NMCMC       = 1000;
     flags->NBURN       = 1000;
-    flags->threads     = omp_get_max_threads();
+    flags->threads     = 12;
     sprintf(flags->runDir,"./");
     chain->NC          = 12;//number of chains
     int set_fmax_flag  = 0; //flag watching for if fmax is set by CLI
@@ -1666,6 +1666,8 @@ void parse_data_args(int argc, char **argv, struct Data *data, struct Orbit *orb
         chain->NC += flags->threads - (chain->NC % flags->threads);
     }
     
+    omp_set_num_threads(flags->threads);
+
     //override size of data if fmax was requested
     if(set_fmax_flag)
     {

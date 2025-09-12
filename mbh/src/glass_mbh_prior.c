@@ -52,10 +52,17 @@ void set_uniform_mbh_prior(struct Flags *flags, struct Model *model, struct Data
     model->prior[4][1] = PI2;
 
     //merger time
-    model->prior[5][0] = 1.01*data->t0; //TODO: 1.01 seems pretty arbitrary
-    model->prior[5][1] = 2*data->T;     //TODO: max tc is too restrictive
-    model->prior[5][1] = 0.99*data->T;     //TODO: max tc is too restrictive
-
+    if(flags->triggerTime < 0.0)
+    {
+        model->prior[5][0] = 1.01*data->t0; //TODO: 1.01 seems pretty arbitrary
+        model->prior[5][1] = 2*data->T;     //TODO: max tc is too restrictive
+        model->prior[5][1] = 0.99*data->T;     //TODO: max tc is too restrictive
+    }
+    else
+    {
+        model->prior[5][0] = flags->triggerTime - DAY;
+        model->prior[5][1] = flags->triggerTime + DAY;
+    }
     //log distance (Gpc)
     model->prior[6][0] = log(0.1);
     model->prior[6][1] = log(1.0e3);
