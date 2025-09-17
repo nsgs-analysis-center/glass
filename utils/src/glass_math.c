@@ -587,7 +587,7 @@ void cholesky_decomp(double **A, double **L, int N)
     LAPACKE_dpotrf(LAPACK_ROW_MAJOR,'L',N,matrix,N);
     
     //copy cholesky decomposition into output matrix
-    for(int i=0; i<N; i++) for(int j=0; j<N; j++)  L[i][j] = matrix[2*i+j];
+    for(int i=0; i<N; i++) for(int j=0; j<N; j++)  L[i][j] = matrix[i*N+j];
     
     //zero upper half of matrix (copy of A)
     for(int i=0; i<N; i++) for(int j=i+1; j<N; j++) L[i][j] = 0.0;

@@ -44,7 +44,7 @@ static void set_mbh_defaults(struct Data *data)
     data->sqT      = sqrt(data->T);
     data->Nchannel = 3; //1=X, 2=AE, 3=XYZ
     data->qpad     = 0;
-    data->fmin     = 5e-4; //Hz
+    data->fmin     = 1e-4; //Hz
     data->fmax     = 2e-2; //Hz
     data->lmin     = (int)floor(data->fmin/WAVELET_BANDWIDTH);
     data->lmax     = (int)ceil(data->fmax/WAVELET_BANDWIDTH);
@@ -66,9 +66,6 @@ int main(int argc, char *argv[])
     time_t start, stop;
     start = time(NULL);
     char filename[MAXSTRINGSIZE];
-    
-    /* allow nested parallelization in mcmc loop (for rebuilding fstat proposal) */
-    omp_set_max_active_levels(2);
     
     /* check arguments */
     print_LISA_ASCII_art(stdout);
@@ -195,7 +192,7 @@ int main(int argc, char *argv[])
             struct Model *trial_ptr = trial[chain->index[ic]];
             copy_model(model_ptr,trial_ptr);
             
-            for(int steps=0; steps < 2*MBH_MODEL_NP; steps++)
+            for(int steps=0; steps < 10*MBH_MODEL_NP; steps++)
                 mbh_mcmc(orbit, data, model_ptr, trial_ptr, chain, flags, prior, proposal, ic);
 
             //update information matrix for each chain
@@ -225,7 +222,7 @@ int main(int argc, char *argv[])
         update_differential_evolution_buffer(proposal, model[chain->index[0]], &chain->r[0]);
         
         //store reconstructed waveform
-        print_waveform_draw(data, model[chain->index[0]], flags);
+        //print_waveform_draw(data, model[chain->index[0]], flags);
 
         //update on sampling efficiency
         print_acceptance_rates(proposal, MBH_PROPOSAL_NPROP, 0, stdout);

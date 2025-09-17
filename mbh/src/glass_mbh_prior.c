@@ -32,12 +32,12 @@ void set_uniform_mbh_prior(struct Flags *flags, struct Model *model, struct Data
     //TODO: assign priors by parameter name, use mapper to get into vector (more robust to changes)
     
     //log chirp mass
-    model->prior[0][0] = log(1.0e2);
-    model->prior[0][1] = log(0.44*5.0e8);
+    model->prior[0][0] = log(1.0e4);
+    model->prior[0][1] = log(0.44*5.0e7);
     
     //log total mass
-    model->prior[1][0] = log(1.0e3);
-    model->prior[1][1] = log(5.0e8);
+    model->prior[1][0] = log(1.0e5);
+    model->prior[1][1] = log(5.0e7);
     
     //chi1
     model->prior[2][0] = -0.999;

@@ -792,28 +792,12 @@ void ucb_waveform(struct Orbit *orbit, char *format, double T, double t0, double
     }
     
     /*   Numerical Fourier transform of slowly evolving signal */
-
-    omp_set_num_threads(6);
-
-    #pragma omp parallel
-    {
-        //perform different tasks based on thread ID
-        #pragma omp single
-        {
-            #pragma omp task
-            glass_forward_complex_fft(data12+1, BW);
-            #pragma omp task
-            glass_forward_complex_fft(data21+1, BW);
-            #pragma omp task
-            glass_forward_complex_fft(data31+1, BW);
-            #pragma omp task
-            glass_forward_complex_fft(data13+1, BW);
-            #pragma omp task
-            glass_forward_complex_fft(data23+1, BW);
-            #pragma omp task
-            glass_forward_complex_fft(data32+1, BW);
-        }
-    }
+    glass_forward_complex_fft(data12+1, BW);
+    glass_forward_complex_fft(data21+1, BW);
+    glass_forward_complex_fft(data31+1, BW);
+    glass_forward_complex_fft(data13+1, BW);
+    glass_forward_complex_fft(data23+1, BW);
+    glass_forward_complex_fft(data32+1, BW);
 
     //Unpack arrays from fft and normalize
     for(i=1; i<=BW; i++)
@@ -1043,29 +1027,13 @@ void ucb_waveform_wavelet(struct Orbit *orbit, struct Wavelets *wdm, double Tobs
     wavelet_window_frequency(wdm, window, Nlayers);
         
     // wavelet transform on heterodyned data using downsampled windows.
-    omp_set_num_threads(3);
+    build_interpolated_waveform(amp_interpolant_X, phase_interpolant_X, time_ds, phase_ds, phase_het, N_ds, wave->X);
+    build_interpolated_waveform(amp_interpolant_Y, phase_interpolant_Y, time_ds, phase_ds, phase_het, N_ds, wave->Y);
+    build_interpolated_waveform(amp_interpolant_Z, phase_interpolant_Z, time_ds, phase_ds, phase_het, N_ds, wave->Z);
 
-    #pragma omp parallel
-    {
-        #pragma omp single
-        {
-            #pragma omp task
-            {
-                build_interpolated_waveform(amp_interpolant_X, phase_interpolant_X, time_ds, phase_ds, phase_het, N_ds, wave->X);
-                wavelet_transform_by_layers(wdm, min_layer, Nlayers, window, wave->X);
-            }
-            #pragma omp task
-            {
-                build_interpolated_waveform(amp_interpolant_Y, phase_interpolant_Y, time_ds, phase_ds, phase_het, N_ds, wave->Y);
-                wavelet_transform_by_layers(wdm, min_layer, Nlayers, window, wave->Y);
-            }
-            #pragma omp task
-            {
-                build_interpolated_waveform(amp_interpolant_Z, phase_interpolant_Z, time_ds, phase_ds, phase_het, N_ds, wave->Z);
-                wavelet_transform_by_layers(wdm, min_layer, Nlayers, window, wave->Z);
-            }
-        }
-    }
+    wavelet_transform_by_layers(wdm, min_layer, Nlayers, window, wave->X);
+    wavelet_transform_by_layers(wdm, min_layer, Nlayers, window, wave->Y);
+    wavelet_transform_by_layers(wdm, min_layer, Nlayers, window, wave->Z);
     
     /*
      Properly re-index to undo the heterodyning

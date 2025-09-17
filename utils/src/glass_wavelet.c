@@ -178,7 +178,6 @@ static void wavelet_lookup_table(struct Wavelets *wdm)
     
     double f0 = ref_layer*wdm->df;
     
-    #pragma omp parallel for
     for(int j=0; j<wdm->fdot_steps; j++)  // loop over f-dot slices
     {
 

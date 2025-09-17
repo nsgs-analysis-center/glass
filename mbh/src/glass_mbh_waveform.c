@@ -884,31 +884,13 @@ void mbh_fd_waveform(struct Orbit *orbit, struct Wavelets *wdm, double Tobs, dou
         int nmid = track->segment_midpt[layer];
 
         //wavelet transfrom the piece of the track in this layer
+        build_interpolated_waveform(track, layer, Tobs, tc, amp_ssb_spline, amp_tdi_spline_X, phase_tdi_spline_X, wave->X);
+        build_interpolated_waveform(track, layer, Tobs, tc, amp_ssb_spline, amp_tdi_spline_Y, phase_tdi_spline_Y, wave->Y);
+        build_interpolated_waveform(track, layer, Tobs, tc, amp_ssb_spline, amp_tdi_spline_Z, phase_tdi_spline_Z, wave->Z);
         
-        omp_set_num_threads(3);
-
-        #pragma omp parallel
-        {
-            //perform different tasks based on thread ID
-            #pragma omp single
-            {
-                #pragma omp task
-                {
-                    build_interpolated_waveform(track, layer, Tobs, tc, amp_ssb_spline, amp_tdi_spline_X, phase_tdi_spline_X, wave->X);
-                    wavelet_transform_segment(wdm, Nsegment, layer, wave->X);
-                }
-                #pragma omp task
-                {
-                    build_interpolated_waveform(track, layer, Tobs, tc, amp_ssb_spline, amp_tdi_spline_Y, phase_tdi_spline_Y, wave->Y);
-                    wavelet_transform_segment(wdm, Nsegment, layer, wave->Y);
-                }
-                #pragma omp task
-                {
-                    build_interpolated_waveform(track, layer, Tobs, tc, amp_ssb_spline, amp_tdi_spline_Z, phase_tdi_spline_Z, wave->Z);
-                    wavelet_transform_segment(wdm, Nsegment, layer, wave->Z);
-                }
-            }
-        }
+        wavelet_transform_segment(wdm, Nsegment, layer, wave->X);
+        wavelet_transform_segment(wdm, Nsegment, layer, wave->Y);
+        wavelet_transform_segment(wdm, Nsegment, layer, wave->Z);
         
         //map to full tf grid
         for(int n=0; n<Nsegment; n++)
@@ -978,6 +960,8 @@ void mbh_fd_waveform(struct Orbit *orbit, struct Wavelets *wdm, double Tobs, dou
     free_tdi(wave);
     free_tdi(tdi_phase);
     free_tdi(tdi_amp);
+    
+    free_time_frequency_track(track);
 }
 
 void mbh_fisher(struct Orbit *orbit, struct Data *data, struct Source *source, struct Noise *noise)

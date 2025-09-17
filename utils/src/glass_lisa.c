@@ -1056,28 +1056,12 @@ void LISA_spline_response(struct Orbit *orbit, double *tarray, int N, double cos
     */
 
     //extract_amplitude_and_phase() is removing the carrier phase
-    omp_set_num_threads(3);
-    #pragma omp parallel
-    {
-        #pragma omp single
-        {
-            #pragma omp task
-            {
-                extract_amplitude_and_phase(N, tdi_amp->X, tdi_phase->X, R->X, Rf->X, phase_ref);
-                unwrap_phase(N, tdi_phase->X);
-            }
-            #pragma omp task
-            {
-                extract_amplitude_and_phase(N, tdi_amp->Y, tdi_phase->Y, R->Y, Rf->Y, phase_ref);
-                unwrap_phase(N, tdi_phase->Y);
-            }
-            #pragma omp task
-            {
-                extract_amplitude_and_phase(N, tdi_amp->Z, tdi_phase->Z, R->Z, Rf->Z, phase_ref);
-                unwrap_phase(N, tdi_phase->Z);
-            }
-        }
-    }
+    extract_amplitude_and_phase(N, tdi_amp->X, tdi_phase->X, R->X, Rf->X, phase_ref);
+    extract_amplitude_and_phase(N, tdi_amp->Y, tdi_phase->Y, R->Y, Rf->Y, phase_ref);
+    extract_amplitude_and_phase(N, tdi_amp->Z, tdi_phase->Z, R->Z, Rf->Z, phase_ref);
+    unwrap_phase(N, tdi_phase->X);
+    unwrap_phase(N, tdi_phase->Y);
+    unwrap_phase(N, tdi_phase->Z);
     
     free(App);
     free(Apm);

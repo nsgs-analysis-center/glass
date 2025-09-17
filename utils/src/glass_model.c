@@ -425,66 +425,50 @@ double delta_log_likelihood(struct Data *data, struct Model *model_x, struct Mod
     double hh_x=0; 
     double hh_y=0;
 
-    omp_set_num_threads(4);
-    #pragma omp parallel
-    {
-        #pragma omp single
-        {
-            #pragma omp task
-            {
-                // add the (d|h) contribution to the current likelihood over the pixel list
-                dh_x += wavelet_nwip(d->X, h_x->X, n_x->invC[0][0], list_x, N_x);
-                dh_x += wavelet_nwip(d->Y, h_x->Y, n_x->invC[1][1], list_x, N_x);
-                dh_x += wavelet_nwip(d->Z, h_x->Z, n_x->invC[2][2], list_x, N_x);
-                dh_x += wavelet_nwip(d->X, h_x->Y, n_x->invC[0][1], list_x, N_x);
-                dh_x += wavelet_nwip(d->X, h_x->Z, n_x->invC[0][2], list_x, N_x);
-                dh_x += wavelet_nwip(d->Y, h_x->Z, n_x->invC[1][2], list_x, N_x);
-                dh_x += wavelet_nwip(d->Y, h_x->X, n_x->invC[1][0], list_x, N_x);
-                dh_x += wavelet_nwip(d->Z, h_x->X, n_x->invC[2][0], list_x, N_x);
-                dh_x += wavelet_nwip(d->Z, h_x->Y, n_x->invC[2][1], list_x, N_x);
-            }
-            #pragma omp task
-            {
-                // add the (h|h) conribution to the current likelihoood over the pixel list
-                hh_x += wavelet_nwip(h_x->X, h_x->X, n_x->invC[0][0], list_x, N_x);
-                hh_x += wavelet_nwip(h_x->Y, h_x->Y, n_x->invC[1][1], list_x, N_x);
-                hh_x += wavelet_nwip(h_x->Z, h_x->Z, n_x->invC[2][2], list_x, N_x);
-                hh_x += wavelet_nwip(h_x->X, h_x->Y, n_x->invC[0][1], list_x, N_x);
-                hh_x += wavelet_nwip(h_x->X, h_x->Z, n_x->invC[0][2], list_x, N_x);
-                hh_x += wavelet_nwip(h_x->Y, h_x->Z, n_x->invC[1][2], list_x, N_x);
-                hh_x += wavelet_nwip(h_x->Y, h_x->X, n_x->invC[1][0], list_x, N_x);
-                hh_x += wavelet_nwip(h_x->Z, h_x->X, n_x->invC[2][0], list_x, N_x);
-                hh_x += wavelet_nwip(h_x->Z, h_x->Y, n_x->invC[2][1], list_x, N_x);
-            }
-            #pragma omp task
-            {
-                // add the (d|h) contribution to the trial likelihood over the pixel list
-                dh_y += wavelet_nwip(d->X, h_y->X, n_y->invC[0][0], list_y, N_y);
-                dh_y += wavelet_nwip(d->Y, h_y->Y, n_y->invC[1][1], list_y, N_y);
-                dh_y += wavelet_nwip(d->Z, h_y->Z, n_y->invC[2][2], list_y, N_y);
-                dh_y += wavelet_nwip(d->X, h_y->Y, n_y->invC[0][1], list_y, N_y);
-                dh_y += wavelet_nwip(d->X, h_y->Z, n_y->invC[0][2], list_y, N_y);
-                dh_y += wavelet_nwip(d->Y, h_y->Z, n_y->invC[1][2], list_y, N_y);
-                dh_y += wavelet_nwip(d->Y, h_y->X, n_y->invC[1][0], list_y, N_y);
-                dh_y += wavelet_nwip(d->Z, h_y->X, n_y->invC[2][0], list_y, N_y);
-                dh_y += wavelet_nwip(d->Z, h_y->Y, n_y->invC[2][1], list_y, N_y);
-            }
-            #pragma omp task
-            {
-                // add the (h|h) conribution to the trial likelihoood over the pixel list
-                hh_y += wavelet_nwip(h_y->X, h_y->X, n_y->invC[0][0], list_y, N_y);
-                hh_y += wavelet_nwip(h_y->Y, h_y->Y, n_y->invC[1][1], list_y, N_y);
-                hh_y += wavelet_nwip(h_y->Z, h_y->Z, n_y->invC[2][2], list_y, N_y);
-                hh_y += wavelet_nwip(h_y->X, h_y->Y, n_y->invC[0][1], list_y, N_y);
-                hh_y += wavelet_nwip(h_y->X, h_y->Z, n_y->invC[0][2], list_y, N_y);
-                hh_y += wavelet_nwip(h_y->Y, h_y->Z, n_y->invC[1][2], list_y, N_y);
-                hh_y += wavelet_nwip(h_y->Y, h_y->X, n_y->invC[1][0], list_y, N_y);
-                hh_y += wavelet_nwip(h_y->Z, h_y->X, n_y->invC[2][0], list_y, N_y);
-                hh_y += wavelet_nwip(h_y->Z, h_y->Y, n_y->invC[2][1], list_y, N_y);
-            }
-        }
-    }
-
+    // add the (d|h) contribution to the current likelihood over the pixel list
+    dh_x += wavelet_nwip(d->X, h_x->X, n_x->invC[0][0], list_x, N_x);
+    dh_x += wavelet_nwip(d->Y, h_x->Y, n_x->invC[1][1], list_x, N_x);
+    dh_x += wavelet_nwip(d->Z, h_x->Z, n_x->invC[2][2], list_x, N_x);
+    dh_x += wavelet_nwip(d->X, h_x->Y, n_x->invC[0][1], list_x, N_x);
+    dh_x += wavelet_nwip(d->X, h_x->Z, n_x->invC[0][2], list_x, N_x);
+    dh_x += wavelet_nwip(d->Y, h_x->Z, n_x->invC[1][2], list_x, N_x);
+    dh_x += wavelet_nwip(d->Y, h_x->X, n_x->invC[1][0], list_x, N_x);
+    dh_x += wavelet_nwip(d->Z, h_x->X, n_x->invC[2][0], list_x, N_x);
+    dh_x += wavelet_nwip(d->Z, h_x->Y, n_x->invC[2][1], list_x, N_x);
+    
+    // add the (h|h) conribution to the current likelihoood over the pixel list
+    hh_x += wavelet_nwip(h_x->X, h_x->X, n_x->invC[0][0], list_x, N_x);
+    hh_x += wavelet_nwip(h_x->Y, h_x->Y, n_x->invC[1][1], list_x, N_x);
+    hh_x += wavelet_nwip(h_x->Z, h_x->Z, n_x->invC[2][2], list_x, N_x);
+    hh_x += wavelet_nwip(h_x->X, h_x->Y, n_x->invC[0][1], list_x, N_x);
+    hh_x += wavelet_nwip(h_x->X, h_x->Z, n_x->invC[0][2], list_x, N_x);
+    hh_x += wavelet_nwip(h_x->Y, h_x->Z, n_x->invC[1][2], list_x, N_x);
+    hh_x += wavelet_nwip(h_x->Y, h_x->X, n_x->invC[1][0], list_x, N_x);
+    hh_x += wavelet_nwip(h_x->Z, h_x->X, n_x->invC[2][0], list_x, N_x);
+    hh_x += wavelet_nwip(h_x->Z, h_x->Y, n_x->invC[2][1], list_x, N_x);
+    
+    // add the (d|h) contribution to the trial likelihood over the pixel list
+    dh_y += wavelet_nwip(d->X, h_y->X, n_y->invC[0][0], list_y, N_y);
+    dh_y += wavelet_nwip(d->Y, h_y->Y, n_y->invC[1][1], list_y, N_y);
+    dh_y += wavelet_nwip(d->Z, h_y->Z, n_y->invC[2][2], list_y, N_y);
+    dh_y += wavelet_nwip(d->X, h_y->Y, n_y->invC[0][1], list_y, N_y);
+    dh_y += wavelet_nwip(d->X, h_y->Z, n_y->invC[0][2], list_y, N_y);
+    dh_y += wavelet_nwip(d->Y, h_y->Z, n_y->invC[1][2], list_y, N_y);
+    dh_y += wavelet_nwip(d->Y, h_y->X, n_y->invC[1][0], list_y, N_y);
+    dh_y += wavelet_nwip(d->Z, h_y->X, n_y->invC[2][0], list_y, N_y);
+    dh_y += wavelet_nwip(d->Z, h_y->Y, n_y->invC[2][1], list_y, N_y);
+    
+    // add the (h|h) conribution to the trial likelihoood over the pixel list
+    hh_y += wavelet_nwip(h_y->X, h_y->X, n_y->invC[0][0], list_y, N_y);
+    hh_y += wavelet_nwip(h_y->Y, h_y->Y, n_y->invC[1][1], list_y, N_y);
+    hh_y += wavelet_nwip(h_y->Z, h_y->Z, n_y->invC[2][2], list_y, N_y);
+    hh_y += wavelet_nwip(h_y->X, h_y->Y, n_y->invC[0][1], list_y, N_y);
+    hh_y += wavelet_nwip(h_y->X, h_y->Z, n_y->invC[0][2], list_y, N_y);
+    hh_y += wavelet_nwip(h_y->Y, h_y->Z, n_y->invC[1][2], list_y, N_y);
+    hh_y += wavelet_nwip(h_y->Y, h_y->X, n_y->invC[1][0], list_y, N_y);
+    hh_y += wavelet_nwip(h_y->Z, h_y->X, n_y->invC[2][0], list_y, N_y);
+    hh_y += wavelet_nwip(h_y->Z, h_y->Y, n_y->invC[2][1], list_y, N_y);
+    
     double logLx = -0.5*(hh_x - 2.0*dh_x);
     double logLy = -0.5*(hh_y - 2.0*dh_y);
 
@@ -642,28 +626,16 @@ double gaussian_log_likelhood_wavelet(struct Data *data, struct Model *model)
     double XX=0.0;
     double XY=0.0;
 
-    omp_set_num_threads(2);
-    #pragma omp parallel
-    {
-        #pragma omp single
-        {
-            #pragma omp task
-            {
-                XX += wavelet_nwip(residual->X, residual->X, model->noise->invC[0][0], list, data->N);
-                XX += wavelet_nwip(residual->Y, residual->Y, model->noise->invC[1][1], list, data->N);
-                XX += wavelet_nwip(residual->Z, residual->Z, model->noise->invC[2][2], list, data->N);
-            }
-            #pragma omp task
-            {
-                XY += wavelet_nwip(residual->X, residual->Y, model->noise->invC[0][1], list, data->N)*2.0;
-                XY += wavelet_nwip(residual->X, residual->Z, model->noise->invC[0][2], list, data->N)*2.0;
-                XY += wavelet_nwip(residual->Y, residual->Z, model->noise->invC[1][2], list, data->N)*2.0;
-            }
-        }
-    }
-
+    XX += wavelet_nwip(residual->X, residual->X, model->noise->invC[0][0], list, data->N);
+    XX += wavelet_nwip(residual->Y, residual->Y, model->noise->invC[1][1], list, data->N);
+    XX += wavelet_nwip(residual->Z, residual->Z, model->noise->invC[2][2], list, data->N);
+    
+    XY += wavelet_nwip(residual->X, residual->Y, model->noise->invC[0][1], list, data->N);
+    XY += wavelet_nwip(residual->X, residual->Z, model->noise->invC[0][2], list, data->N);
+    XY += wavelet_nwip(residual->Y, residual->Z, model->noise->invC[1][2], list, data->N);
+    
     free_int_vector(list);
-    return -0.5*(XX+XY);
+    return -0.5*(XX + 2.0*XY);
 }
 
 void generate_calibration_model(struct Data *data, struct Model *model)
