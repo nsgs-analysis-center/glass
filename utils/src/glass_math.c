@@ -32,10 +32,12 @@ struct CubicSpline* alloc_cubic_spline(int N)
     spline->y2   = double_vector(spline->N);
     spline->y3   = double_vector(spline->N);
 
+    spline->ds = NAN;
+
     return spline;
 }
 
-void initialize_cubic_spline(struct CubicSpline *spline, double *x, double *y)
+void initialize_cubic_spline(struct CubicSpline *spline, double *x, double *y, spline_interpolation_t interpolation_scheme )
 {
     
     //pack interpolant data {x,y} into spline structure
@@ -51,8 +53,29 @@ void initialize_cubic_spline(struct CubicSpline *spline, double *x, double *y)
     
     //compute interpolant coefficients
     spline_coefficients(spline);
+
+
+    // set the interpolation scheme
+    spline->interp_type = interpolation_scheme;
+    _Static_assert(SPLINE_INTERPOLATION_COUNT==2, "Did you add a spline interpolation scheme? Edit this switch case, it needs to be exhaustive.");
+    switch (interpolation_scheme) {
+        case SPLINE_EVEN_SAMPLED:
+            spline->ds = x[1] - x[0];
+            spline->index_lookup = &even_sampled_search;
+            // TODO: maybe just put a switch in interpolate instead, I hate this.
+            break;
+        case SPLINE_BINARY_SEARCH:
+            spline->ds = NAN;
+            spline->index_lookup = &binary_search;
+            break;
+        default:
+            fprintf(stderr, "Unknown spline interpolation type: %s\n", SPLINE_INTERPOLATION_NAMES[interpolation_scheme]);
+            exit(-2);
+            break;
+    }
     
 }
+
 
 void free_cubic_spline(struct CubicSpline *spline)
 {
@@ -174,7 +197,7 @@ double spline_interpolation(struct CubicSpline *spline, double x)
     
     return a*y1 + b*y2 + c*d2y1 + d*d2y2;
     */
-    int n = binary_search(spline->x,0,spline->N,x);
+    int n = spline->index_lookup(spline->x,0,spline->N,x);
     double dx = x - spline->x[n];
     
     return spline->y0[n] + spline->y1[n]*dx + spline->y2[n]*dx*dx + spline->y3[n]*dx*dx*dx;
@@ -182,7 +205,7 @@ double spline_interpolation(struct CubicSpline *spline, double x)
 
 double spline_interpolation_deriv(struct CubicSpline *spline, double x)
 {
-    int n = binary_search(spline->x,0,spline->N,x);
+    int n = spline->index_lookup(spline->x,0,spline->N,x);
     double dx = x - spline->x[n];
     
     return spline->y1[n] + 2*spline->y2[n]*dx + 3*spline->y3[n]*dx*dx;
@@ -190,7 +213,7 @@ double spline_interpolation_deriv(struct CubicSpline *spline, double x)
 
 double spline_interpolation_deriv2(struct CubicSpline *spline, double x)
 {
-    int n = binary_search(spline->x,0,spline->N,x);
+    int n = spline->index_lookup(spline->x,0,spline->N,x);
     double dx = x - spline->x[n];
     
     return 2*spline->y2[n] + 6*spline->y3[n]*dx;
@@ -351,6 +374,10 @@ double wavelet_nwip(double *a, double *b, double *invC, int *list, int N)
     return arg;
 }
 
+int even_sampled_search(double *array, int nmin, int nmax, double x) {
+    double dx = array[1] - array[0];
+    return (int)floor(x/dx);
+}
 double snr(struct Source *source, struct Noise *noise)
 {
     double snr2=0.0;
@@ -752,7 +779,7 @@ void CubicSplineGLASS(int N, double *x, double *y, int Nint, double *xint, doubl
     struct CubicSpline *cspline = alloc_cubic_spline(N);
     
     /* get derivatives */
-    initialize_cubic_spline(cspline,x,y);
+    initialize_cubic_spline(cspline,x,y,SPLINE_BINARY_SEARCH);
     
     /* interpolation */
     for(int n=0; n<Nint; n++) yint[n] = spline_interpolation(cspline,xint[n]);

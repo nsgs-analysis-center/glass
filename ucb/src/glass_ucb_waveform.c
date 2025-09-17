@@ -956,8 +956,8 @@ void ucb_waveform_wavelet(struct Orbit *orbit, struct Wavelets *wdm, double Tobs
     struct CubicSpline *amp_ssb_spline   = alloc_cubic_spline(Nspline);
     struct CubicSpline *phase_ssb_spline = alloc_cubic_spline(Nspline);
     
-    initialize_cubic_spline(amp_ssb_spline,orbit->t,amp_ssb);
-    initialize_cubic_spline(phase_ssb_spline,orbit->t,phase_ssb);
+    initialize_cubic_spline(amp_ssb_spline,orbit->t,amp_ssb,SPLINE_EVEN_SAMPLED);
+    initialize_cubic_spline(phase_ssb_spline,orbit->t,phase_ssb,SPLINE_EVEN_SAMPLED);
     
     /*
      Resample SSB phase to reference spacecraft
@@ -1031,12 +1031,12 @@ void ucb_waveform_wavelet(struct Orbit *orbit, struct Wavelets *wdm, double Tobs
     struct CubicSpline *phase_interpolant_Y = alloc_cubic_spline(Nspline);
     struct CubicSpline *phase_interpolant_Z = alloc_cubic_spline(Nspline);
 
-    initialize_cubic_spline(amp_interpolant_X,   time_ssb, tdi_amp->X);
-    initialize_cubic_spline(amp_interpolant_Y,   time_ssb, tdi_amp->Y);
-    initialize_cubic_spline(amp_interpolant_Z,   time_ssb, tdi_amp->Z);
-    initialize_cubic_spline(phase_interpolant_X, time_ssb, tdi_phase->X);
-    initialize_cubic_spline(phase_interpolant_Y, time_ssb, tdi_phase->Y);
-    initialize_cubic_spline(phase_interpolant_Z, time_ssb, tdi_phase->Z);
+    initialize_cubic_spline(amp_interpolant_X,   time_ssb, tdi_amp->X,SPLINE_EVEN_SAMPLED);
+    initialize_cubic_spline(amp_interpolant_Y,   time_ssb, tdi_amp->Y,SPLINE_EVEN_SAMPLED);
+    initialize_cubic_spline(amp_interpolant_Z,   time_ssb, tdi_amp->Z,SPLINE_EVEN_SAMPLED);
+    initialize_cubic_spline(phase_interpolant_X, time_ssb, tdi_phase->X,SPLINE_EVEN_SAMPLED);
+    initialize_cubic_spline(phase_interpolant_Y, time_ssb, tdi_phase->Y,SPLINE_EVEN_SAMPLED);
+    initialize_cubic_spline(phase_interpolant_Z, time_ssb, tdi_phase->Z,SPLINE_EVEN_SAMPLED);
 
     // get freqeuncy wavelet window function for downsampled data
     double *window = double_vector((wdm->NT/2+1));
@@ -1163,8 +1163,8 @@ void ucb_waveform_wavelet_tab(struct Orbit *orbit, struct Wavelets *wdm, double 
     struct CubicSpline *amp_ssb_spline   = alloc_cubic_spline(Nspline);
     struct CubicSpline *phase_ssb_spline = alloc_cubic_spline(Nspline);
     
-    initialize_cubic_spline(amp_ssb_spline,orbit->t,amp_ssb);
-    initialize_cubic_spline(phase_ssb_spline,orbit->t,phase_ssb);
+    initialize_cubic_spline(amp_ssb_spline,orbit->t,amp_ssb,SPLINE_EVEN_SAMPLED);
+    initialize_cubic_spline(phase_ssb_spline,orbit->t,phase_ssb,SPLINE_EVEN_SAMPLED);
     
     /*
     Interpolate phase at SSB now on the data's time grid.
@@ -1222,8 +1222,8 @@ void ucb_waveform_wavelet_tab(struct Orbit *orbit, struct Wavelets *wdm, double 
     struct CubicSpline *amp_interpolant = alloc_cubic_spline(Nspline);
     struct CubicSpline *phase_interpolant = alloc_cubic_spline(Nspline);
        
-    initialize_cubic_spline(amp_interpolant,t,tdi_amp->X);
-    initialize_cubic_spline(phase_interpolant,t,tdi_phase->X);
+    initialize_cubic_spline(amp_interpolant,t,tdi_amp->X,SPLINE_EVEN_SAMPLED);
+    initialize_cubic_spline(phase_interpolant,t,tdi_phase->X,SPLINE_EVEN_SAMPLED);
 
     for(int i=0; i< wdm->NT; i++)
     {
@@ -1233,8 +1233,8 @@ void ucb_waveform_wavelet_tab(struct Orbit *orbit, struct Wavelets *wdm, double 
         fdot->X[i]  = spline_interpolation_deriv2(phase_interpolant, time_wavelet_grid[i])/PI2 + fdot_wavelet_grid[i];
     }
     
-    initialize_cubic_spline(amp_interpolant,t,tdi_amp->Y);
-    initialize_cubic_spline(phase_interpolant,t,tdi_phase->Y);
+    initialize_cubic_spline(amp_interpolant,t,tdi_amp->Y,SPLINE_EVEN_SAMPLED);
+    initialize_cubic_spline(phase_interpolant,t,tdi_phase->Y,SPLINE_EVEN_SAMPLED);
 
     for(int i=0; i< wdm->NT; i++)
     {
@@ -1244,8 +1244,8 @@ void ucb_waveform_wavelet_tab(struct Orbit *orbit, struct Wavelets *wdm, double 
         fdot->Y[i]  = spline_interpolation_deriv2(phase_interpolant, time_wavelet_grid[i])/PI2 + fdot_wavelet_grid[i];
     }
     
-    initialize_cubic_spline(amp_interpolant,t,tdi_amp->Z);
-    initialize_cubic_spline(phase_interpolant,t,tdi_phase->Z);
+    initialize_cubic_spline(amp_interpolant,t,tdi_amp->Z,SPLINE_EVEN_SAMPLED);
+    initialize_cubic_spline(phase_interpolant,t,tdi_phase->Z,SPLINE_EVEN_SAMPLED);
 
     for(int i=0; i< wdm->NT; i++)
     {

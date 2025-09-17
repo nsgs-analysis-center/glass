@@ -22,8 +22,22 @@
 #ifndef math_h
 #define math_h
 
+typedef enum {
+    SPLINE_BINARY_SEARCH,
+    SPLINE_EVEN_SAMPLED,
+    SPLINE_INTERPOLATION_COUNT // leave this here, counts length of enum
+} spline_interpolation_t;
+// note that if this array ever becomes extremely large, maybe swap to extern
+static const char* SPLINE_INTERPOLATION_NAMES[] = {"binary search", "even sampling"};
+_Static_assert(sizeof(SPLINE_INTERPOLATION_NAMES)/sizeof(SPLINE_INTERPOLATION_NAMES[0]) == SPLINE_INTERPOLATION_COUNT,
+        "Did you add a spline type but not its name?");
 struct CubicSpline
 {
+    /**
+     \brief How to lookup nearest sample in interpolated arrays
+     */
+    int (*index_lookup)(double*,int,int,double);
+    spline_interpolation_t interp_type; //!<Type of interpolation
     int N;       //!<Number of grid points to be interpolated
     int nmin;    //!<Stored lower index of last call to interpolation
     int nmax;    //!<Stored upper index of last call to interpolation
@@ -34,6 +48,7 @@ struct CubicSpline
     double *y1;   //!<1st order coefficient
     double *y2;   //!<2nd order coefficient
     double *y3;   //!<3rd order coefficient
+    double ds;    //!<Spacing between x-axis samples, when known. E.g., dt for time samples, df for frequency, etc. Not used in all interpolation functions
 };
 
 struct CubicSpline* alloc_cubic_spline(int N);
@@ -45,7 +60,7 @@ struct CubicSpline* alloc_cubic_spline(int N);
  @param[in] x independent variable of interpolant
  @param[in] y dependent variable of interpolant
 */
-void initialize_cubic_spline(struct CubicSpline *spline, double *x, double *y);
+void initialize_cubic_spline(struct CubicSpline *spline, double *x, double *y, spline_interpolation_t interpolation_scheme);
 
 void free_cubic_spline(struct CubicSpline *spline);
 
@@ -250,6 +265,7 @@ double snr_wavelet(struct Source *source, struct Noise *noise);
  */
 int binary_search(double *array, int nmin, int nmax, double x);
 
+int even_sampled_search(double *array, int nmin, int nmax, double x);
 /**
 \brief Computes eigenvectors and eigenvalues of matrix
    
