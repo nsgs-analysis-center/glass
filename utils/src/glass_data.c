@@ -1715,7 +1715,7 @@ void parse_data_args(int argc, char **argv, struct Data *data, struct Orbit *orb
         data->fmax = data->fmin + (double)(data->Nlayer)*WAVELET_BANDWIDTH;
 
     }
-    printf("old fmin=%lg, fmax=%lg\n",data->fmin,data->fmax);
+    //printf("old fmin=%lg, fmax=%lg\n",data->fmin,data->fmax);
 
     //after all of that resize data
     if(!strcmp(data->basis,"fourier")) data->N = data->NFFT*2;
@@ -1738,6 +1738,15 @@ void parse_data_args(int argc, char **argv, struct Data *data, struct Orbit *orb
 
     //reset opt counter
     optind = 0;
+
+    // double check wavelet fmin
+    if(!strcmp(data->basis,"wavelet")) 
+    {
+        if (floor(data->fmin/WAVELET_BANDWIDTH) == 0) {
+            fprintf(stderr, "Error, your minimum frequency (after padding) includes the DC wavelet frequency bin!\nThis bin goes until %g Hz\nYou almost certainly don't want to do this. Recommended fix: increase fmin\n", WAVELET_BANDWIDTH);
+            exit(-2);
+        }
+    }
 
     //free placeholder for argvs
     for(int i=0; i<=argc; i++)free(argv_copy[i]);
