@@ -41,6 +41,34 @@ inline void print_sgwb_state(struct SGWBModel *model, FILE *fptr)
     for(int i=0; i<model->Nparams; i++)fprintf(fptr,"%.12g ", model->params[i]);
 }
 
+void print_noise_model_dynamic(struct Data *data, struct Noise *noise, char filename[])
+{
+    struct Wavelets* wdm = data->wdm;
+    FILE *fptr = fopen(filename,"w");
+    int k;
+    int jmin=(int)round(noise->f[0]/wdm->df);
+    int jmax=(int)round(noise->f[noise->N-1]/wdm->df)+1; 
+    for(int i=0; i<wdm->NT; i++)
+    {
+        double t = i*wdm->dt;
+        for(int j=jmin; j<jmax; j++)
+        {
+            double f = j*wdm->df;
+            wavelet_pixel_to_index(wdm,i,j,&k);
+            k-=wdm->kmin;
+            fprintf(fptr,"%lg ",t);
+            fprintf(fptr,"%lg ",f);
+            for(int m=0; j<noise->Nchannel; m++)
+                fprintf(fptr,"%lg ",noise->C[m][m][k]);
+            fprintf(fptr,"%lg ",noise->C[0][1][k]);
+            fprintf(fptr,"%lg ",noise->C[0][2][k]);
+            fprintf(fptr,"%lg ",noise->C[1][2][k]);
+            fprintf(fptr,"\n");
+        } //loop over frequency layers
+    } //loop over time slices
+    fclose(fptr);
+}
+
 void print_noise_model(struct Noise *noise, char filename[])
 {
     FILE *fptr = fopen(filename,"w");
@@ -55,7 +83,6 @@ void print_noise_model(struct Noise *noise, char filename[])
         fprintf(fptr,"\n");
     }
     fclose(fptr);
-    
 }
 
 void print_whitened_data(struct Data *data, struct Noise *noise, char filename[])

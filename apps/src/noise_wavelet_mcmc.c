@@ -100,29 +100,38 @@ int main(int argc, char *argv[])
     /* Initialize chain structure and files */
     initialize_chain(chain, flags, &data->cseed, "w");
 
-
     // okay, for now we're in the very weird situation of not trying to fit the foreground or instrument params, **only** the SGWB params
     //
+
+    // For now, we are not going to have full wavelet scaleograms stored everywhere!
+    // we'll treat these as outer products of the spectrum and modulation
+    // the modulation will be constant for everything except the confusion noise for now
+    // TODO: eventually, allow for slow frequency-dependent modulations in the instrument model
+
+
     /* Initialize Instrument Noise Model */
     printf("   ...initialize instrument noise model\n");
-    struct Noise **psd = malloc(chain->NC*sizeof(struct Noise *)); // will save total scalograms here
+    struct Noise **scaleogram = malloc(chain->NC*sizeof(struct Noise *)); // will save total scalograms here
     struct InstrumentModel **inst_model = malloc(chain->NC*sizeof(struct InstrumentModel *));
     struct InstrumentModel **inst_trial = malloc(chain->NC*sizeof(struct InstrumentModel *));
-    int wN;
-    wavelet_pixel_to_index(data->wdm,0,data->lmax,&wN);
     for(int ic=0; ic<chain->NC; ic++)
     {
         // okay, so this is wavelet-basis! time and freq pixels both here
-        psd[ic] = malloc(sizeof(struct Noise)); // not a "deep" alloc
+        scaleogram[ic] = malloc(sizeof(struct Noise)); // not a "deep" alloc
 
-        alloc_noise(psd[ic], wN, data->Nlayer, data->Nchannel); // note is data->N in wavelet not data->NFFT
+        // see above note, we'll save the current scaleogram from all contributions here
+        // but the individual models will only have spectrum x modulation
+        alloc_noise(scaleogram[ic], data->Nlayer*data->wdm->NT, data->Nlayer, data->Nchannel);
 
+        // see above note. this is frequency-axis only
         inst_model[ic] = malloc(sizeof(struct InstrumentModel));
         inst_trial[ic] = malloc(sizeof(struct InstrumentModel));
+        // the only difference between this function and
+        // initialize_instrument_model is that this internally integrates over a finer frequency grid
         initialize_instrument_model_wavelet(orbit, data, inst_model[ic]);
         initialize_instrument_model_wavelet(orbit, data, inst_trial[ic]);
     }
-    // TODO for now this works because the noise model is stationary
+    // noise model is only along freq axis for now
     sprintf(filename,"%s/instrument_noise_model.dat", data->dataDir);
     print_noise_model(inst_model[0]->psd, filename);
 
@@ -130,7 +139,6 @@ int main(int argc, char *argv[])
     // note: UCB wavelet app hides this inside initialize_ucb_state if stationary noise, and in the waveform calls otherwise.
     // See GetDynamicNoiseModel and GetStationaryNoiseModel
     // remember, plan here for now is to not sample over foreground model in wavelet basis, but still sample over noise/sgwb
-    // doesn't look too hard tbh!
     if(flags->confNoise)printf("   ...initialize foreground noise model\n");
     struct ForegroundModel **conf_model = malloc(chain->NC*sizeof(struct ForegroundModel *));
     for(int ic=0; ic<chain->NC; ic++)
@@ -141,13 +149,11 @@ int main(int argc, char *argv[])
            initialize_foreground_model_wavelet(orbit, data, conf_model[ic]);
         }
     }
-    // TODO check if this even works
     if(flags->confNoise)
     {
         sprintf(filename,"%s/foreground_noise_model.dat",data->dataDir);
         print_noise_model(conf_model[0]->psd, filename);
     }
-
 
     /* Initialize SGWB Model */
     if(flags->sgwbTemplate>=0) printf("   ...initialize SGWB model\n");
@@ -167,7 +173,6 @@ int main(int argc, char *argv[])
     {
         sprintf(filename,"%s/sgwb_noise_model.dat",data->dataDir);
         print_noise_model(sgwb_model[0]->psd, filename);
-        // works because stationary
     }
 
     /* TODO: SGWB injections??? */
@@ -180,20 +185,19 @@ int main(int argc, char *argv[])
             printf("error: only support conf and sgwb on!");
             return -1;
         }
-        generate_full_dynamic_covariance_matrix(data->wdm, inst_model[ic], conf_model[ic], sgwb_model[ic], psd[ic]);
+        generate_full_dynamic_covariance_matrix(data->wdm, inst_model[ic], conf_model[ic], sgwb_model[ic], scaleogram[ic]);
 
     /* get initial likelihood */
         // TODO struct Noise doesn't have a logL... what's the point of getting the initial logLs anyway?
-        invert_noise_covariance_matrix(psd[ic]);
-        double logL = noise_log_likelihood_wavelet(data, psd[ic]);
+        invert_noise_covariance_matrix(scaleogram[ic]);
+        double logL = noise_log_likelihood_wavelet(data, scaleogram[ic]);
         inst_model[ic]->logL = logL;
         sgwb_model[ic]->logL = logL;
         conf_model[ic]->logL = logL;
     }
 
     sprintf(filename,"%s/full_noise_model.dat",data->dataDir);
-    // TODO do we need to fix this?? is wavelet. might work anyway
-    print_noise_model(psd[0], filename);
+    print_noise_model_dynamic(data, scaleogram[0], filename);
 
     //MCMC
     printf("\n==== Noise Wavelet MCMC Sampler ====\n");
@@ -239,7 +243,7 @@ int main(int argc, char *argv[])
             // (parallel) loop over chains
             for(int ic=threadID; ic<NC; ic+=numThreads)
             {
-                struct Noise *psd_ptr = psd[chain->index[ic]];
+                struct Noise *psd_ptr = scaleogram[chain->index[ic]];
                 struct InstrumentModel *inst_model_ptr = inst_model[chain->index[ic]];
                 //struct InstrumentModel *inst_trial_ptr = inst_trial[chain->index[ic]];
                 struct ForegroundModel *conf_model_ptr = conf_model[chain->index[ic]];
@@ -275,16 +279,16 @@ int main(int argc, char *argv[])
 
                 if(flags->confNoise) 
                 {
-                    fprintf(foregroundChainFile,"%i %.12g ",step,conf_model[chain->index[0]]->logL);
+                    fprintf(foregroundChainFile,"%i %.12g ", step, conf_model[chain->index[0]]->logL);
                     print_foreground_state(conf_model[chain->index[0]], foregroundChainFile);
                     fprintf(foregroundChainFile,"\n");
                 }
 
                 if(flags->sgwbTemplate>=0) 
                 {
-                    fprintf(sgwbChainFile,"%i %.12g ",step,sgwb_model[chain->index[0]]->logL);
+                    fprintf(sgwbChainFile,"%i %.12g ", step, sgwb_model[chain->index[0]]->logL);
                     print_sgwb_state(sgwb_model[chain->index[0]], sgwbChainFile);
-                    fprintf(sgwbChainFile,"\n");
+                    fprintf(sgwbChainFile, "\n");
                 }
 
                 if(step%(flags->NMCMC/10)==0)
@@ -318,11 +322,11 @@ int main(int argc, char *argv[])
                     {
                         generate_sgwb_model_wavelet(data->wdm, sgwb_model[chain->index[0]]);
                     }
-                    generate_full_dynamic_covariance_matrix(data->wdm, inst_model[chain->index[0]], conf_model[chain->index[0]], sgwb_model[chain->index[0]], psd[chain->index[0]]);
+                    generate_full_dynamic_covariance_matrix(data->wdm, inst_model[chain->index[0]], conf_model[chain->index[0]], sgwb_model[chain->index[0]], scaleogram[chain->index[0]]);
                     
                     for(int n=0; n<data->N; n++)
                         for(int i=0; i<data->Nchannel; i++)
-                            data->S_pow[n][i][step/data->downsample] = psd[chain->index[0]]->C[i][i][n];
+                            data->S_pow[n][i][step/data->downsample] = scaleogram[chain->index[0]]->C[i][i][n];
                 }
 
                 step++;
@@ -356,11 +360,11 @@ int main(int argc, char *argv[])
         sprintf(filename,"%s/final_sgwb_noise_model.dat",data->dataDir);
         print_noise_model(sgwb_model[chain->index[0]]->psd, filename);
     }
-    generate_full_dynamic_covariance_matrix(data->wdm, inst_model[chain->index[0]], conf_model[chain->index[0]], sgwb_model[chain->index[0]], psd[chain->index[0]]);
+    generate_full_dynamic_covariance_matrix(data->wdm, inst_model[chain->index[0]], conf_model[chain->index[0]], sgwb_model[chain->index[0]], scaleogram[chain->index[0]]);
     if(flags->confNoise || flags->sgwbTemplate>=0)
     {
         sprintf(filename,"%s/final_full_noise_model.dat",data->dataDir);
-        print_noise_model(psd[chain->index[0]], filename);
+        print_noise_model_dynamic(data, scaleogram[chain->index[0]], filename);
     }
     
     print_noise_reconstruction(data, flags);
@@ -368,7 +372,7 @@ int main(int argc, char *argv[])
     sprintf(filename,"%s/whitened_data.dat",data->dataDir);
     // this was here, but it was already added??
     //if(flags->confNoise)generate_full_covariance_matrix(inst_model[chain->index[0]]->psd,conf_model[chain->index[0]]->psd, data->Nchannel);
-    print_whitened_data(data, psd[chain->index[0]], filename);
+    print_whitened_data(data, scaleogram[chain->index[0]], filename);
 
     
     //print total run time

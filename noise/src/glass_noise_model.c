@@ -501,11 +501,11 @@ void generate_instrument_noise_model_wavelet(struct Wavelets *wdm, struct Orbit 
     int imax = (int)round(model->psd->f[model->psd->N-1]/wdm->df)+1;
 
     // initialize data models
-    alloc_instrument_model(grid, 2*wdm->NF, imax-imin, 3);
+    alloc_instrument_model(grid, 2*(imax-imin), imax-imin, 3);
 
     // set up psd frequency grid
     for(int n=0; n<grid->psd->N; n++)
-        grid->psd->f[n] = wdm->df/2.0*(n+1);
+        grid->psd->f[n] = imin*wdm->df + wdm->df/2.0*n;
 
     // initialize noise levels
     for(int i=0; i<grid->Nlink; i++)
@@ -591,11 +591,11 @@ void generate_galactic_foreground_model_wavelet(struct Wavelets *wdm, struct For
     int imax = (int)round(model->psd->f[model->psd->N-1]/wdm->df)+1;
 
     // initialize data models
-    alloc_foreground_model(grid, 2*wdm->NF, imax-imin, 3);
+    alloc_foreground_model(grid, 2*(imax-imin), imax-imin, 3);
 
     // set up psd frequency grid
     for(int n=0; n<grid->psd->N; n++)
-        grid->psd->f[n] = wdm->df/2.0*(n+1);
+        grid->psd->f[n] = wdm->df*imin + wdm->df/2.0*n;
 
     // initialize foreground parameters levels
     grid->Tobs  = model->Tobs;
@@ -703,11 +703,11 @@ void generate_sgwb_model_wavelet(struct Wavelets* wdm, struct SGWBModel *model)
     int imax = (int)round(model->psd->f[model->psd->N-1]/wdm->df)+1;
 
     // initialize data models
-    alloc_sgwb_model(grid, 2*wdm->NF, imax-imin, 3, model->SGWB_type);
+    alloc_sgwb_model(grid, 2*(imax-imin), imax-imin, 3, model->SGWB_type);
 
     // set up psd frequency grid
     for(int n=0; n<grid->psd->N; n++)
-        grid->psd->f[n] = wdm->df/2.0*(n+1);
+        grid->psd->f[n] = wdm->df*imin + wdm->df/2.0*n;
     // intialize grid parameter levels
     grid->Nparams = model->Nparams;
     grid->Tobs = model->Tobs;
@@ -726,6 +726,7 @@ void generate_sgwb_model_wavelet(struct Wavelets* wdm, struct SGWBModel *model)
     for(int n=0; n<3; n++)
         for(int m=n; m<3; m++)
             C[n][m][0] = simpson_integration_3(Cgrid[n][m][0],Cgrid[n][m][1],Cgrid[n][m][2],1.0);
+    // TODO: double check bounds of integration here
     for(int i=imin+1; i<imax-1; i++)
     {
         // note that the galactic foreground version of this assumes there are layers before and after imin/imax!
@@ -890,6 +891,17 @@ double noise_log_likelihood(struct Data *data, struct Noise *noise)
     return logL;
 }
 
+static inline double wavelet_nwip_linear(double *a, double *b, double *invC, int N)
+{
+    // TODO: use lapack here. this is just a.b.invC
+    double arg = 0.0;
+    for(int k=0; k<N; k++)
+    {
+        arg += a[k]*b[k]*invC[k];
+    }
+    return arg;
+}
+
 double noise_log_likelihood_wavelet(struct Data *data, struct Noise *noise)
 {
     double logL = 0.0;
@@ -897,31 +909,28 @@ double noise_log_likelihood_wavelet(struct Data *data, struct Noise *noise)
     struct TDI *tdi = data->tdi;
     
     int N = data->N;
-    int *list = malloc(data->N * sizeof(int));
-    for(int n=0; n<data->N; n++) list[n]=n;
     
     switch(data->Nchannel)
     {
         case 1:
-            logL += -0.5*wavelet_nwip(tdi->X, tdi->X, noise->invC[0][0], list, N);
+            logL += -0.5*wavelet_nwip_linear(tdi->X, tdi->X, noise->invC[0][0], N);
             break;
         case 2:
-            logL += -0.5*wavelet_nwip(tdi->A, tdi->A, noise->invC[0][0], list, N);
-            logL += -0.5*wavelet_nwip(tdi->E, tdi->E, noise->invC[1][1], list, N);
+            logL += -0.5*wavelet_nwip_linear(tdi->A, tdi->A, noise->invC[0][0], N);
+            logL += -0.5*wavelet_nwip_linear(tdi->E, tdi->E, noise->invC[1][1], N);
             break;
         case 3:
-            logL += -0.5*wavelet_nwip(tdi->X, tdi->X, noise->invC[0][0], list, N);
-            logL += -0.5*wavelet_nwip(tdi->Y, tdi->Y, noise->invC[1][1], list, N);
-            logL += -0.5*wavelet_nwip(tdi->Z, tdi->Z, noise->invC[2][2], list, N);
-            logL += -wavelet_nwip(tdi->X, tdi->Y, noise->invC[0][1], list, N);
-            logL += -wavelet_nwip(tdi->X, tdi->Z, noise->invC[0][2], list, N);
-            logL += -wavelet_nwip(tdi->Y, tdi->Z, noise->invC[1][2], list, N);
+            logL += -0.5*wavelet_nwip_linear(tdi->X, tdi->X, noise->invC[0][0], N);
+            logL += -0.5*wavelet_nwip_linear(tdi->Y, tdi->Y, noise->invC[1][1], N);
+            logL += -0.5*wavelet_nwip_linear(tdi->Z, tdi->Z, noise->invC[2][2], N);
+            logL += -wavelet_nwip_linear(tdi->X, tdi->Y, noise->invC[0][1], N);
+            logL += -wavelet_nwip_linear(tdi->X, tdi->Z, noise->invC[0][2], N);
+            logL += -wavelet_nwip_linear(tdi->Y, tdi->Z, noise->invC[1][2], N);
             break;
     }
     for(int n=0; n<N; n++)
         logL -= log(noise->detC[n]);
     
-    free(list);
     return logL;
     // this comment constitutes an offering to the diety responsible for the correct factors of 2
 }
@@ -1160,8 +1169,9 @@ void initialize_foreground_model_wavelet(struct Orbit *orbit, struct Data *data,
     // get noise covariance matrix for initial parameters
     generate_galactic_foreground_model_wavelet(wdm,model);
 
-        // get galaxy modulation
+    // get galaxy modulation
     model->modulation = malloc(sizeof(struct GalaxyModulation));
+    // TODO: discretize and save this in Galaxy class so we don't have to recalcuate it all the time
     initialize_galaxy_modulation(model->modulation, data->wdm, orbit, data->T, data->t0);
     
     /**************************************************
