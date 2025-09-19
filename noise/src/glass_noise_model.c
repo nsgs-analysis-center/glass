@@ -891,10 +891,11 @@ double noise_log_likelihood(struct Data *data, struct Noise *noise)
     return logL;
 }
 
-static inline double wavelet_nwip_linear(double *a, double *b, double *invC, int N)
+static inline double wavelet_nwip_linear(const double* __restrict a, const double* __restrict b, const double* __restrict invC, size_t N)
 {
-    // TODO: use lapack here. this is just a.b.invC
+    // TODO: use lapack/blas here? this is just a.b.invC
     double arg = 0.0;
+    #pragma omp simd reduction(+:arg)
     for(int k=0; k<N; k++)
     {
         arg += a[k]*b[k]*invC[k];

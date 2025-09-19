@@ -385,7 +385,7 @@ double power_spectrum(double *data, int n)
     return (Re*Re + Im*Im);
 }
 
-double fourier_nwip(double *a, double *b, double *invC, int N)
+double fourier_nwip(const double *a, const double *b, const double *invC, int N)
 {
     int j,k;
     double arg, product;
@@ -405,7 +405,7 @@ double fourier_nwip(double *a, double *b, double *invC, int N)
     return(2.0*arg);
 }
 
-double wavelet_nwip(double *a, double *b, double *invC, int *list, int N)
+double wavelet_nwip(const double *a, const double *b, const double *invC, const int *list, int N)
 {
     double arg = 0.0;
     for(int n=0; n<N; n++)

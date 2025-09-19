@@ -100,6 +100,17 @@ int main(int argc, char *argv[])
     /* Initialize chain structure and files */
     initialize_chain(chain, flags, &data->cseed, "w");
 
+    /* read data */
+    if(flags->strainData)
+        ReadData(data,orbit,flags);
+    else if(flags->simNoise)
+        AddNoiseWavelet(data,data->tdi);
+    /* Store DFT copy of simulated data */
+    if(!flags->strainData) wavelet_layer_to_fourier_transform(data);
+    
+    /* print various data products for plotting */
+    print_data(data, flags);
+
     // okay, for now we're in the very weird situation of not trying to fit the foreground or instrument params, **only** the SGWB params
     //
 
@@ -175,7 +186,6 @@ int main(int argc, char *argv[])
         print_noise_model(sgwb_model[0]->psd, filename);
     }
 
-    /* TODO: SGWB injections??? */
 
     /* Combine noise components to form covariance matrix */
     // TODO need stationary flag

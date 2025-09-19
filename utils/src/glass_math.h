@@ -240,8 +240,8 @@ double power_spectrum(double *data, int n);
  @param N number of frequency bins in sum
  @return \f$(a|b) =  4 \sum_n a^*_n b_n C^-1_n \f$
  */
-double fourier_nwip(double *a, double *b, double *invC, int N);
-double wavelet_nwip(double *a, double *b, double *invC, int *list, int N);
+double fourier_nwip(const double *a, const double *b, const double *invC, int N);
+double wavelet_nwip(const double *a, const double *b, const double *invC, const int *list, int N);
 
 /**
 \brief Our implementation of the recursive binary search algorithm
