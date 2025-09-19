@@ -58,6 +58,7 @@ ldasoft.build
 
 #Vim junk
 *.swp
+tags
 
 #install directories
 build
