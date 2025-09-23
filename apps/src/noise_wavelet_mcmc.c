@@ -103,8 +103,19 @@ int main(int argc, char *argv[])
     /* read data */
     if(flags->strainData)
         ReadData(data,orbit,flags);
-    else if(flags->simNoise)
+    else if(flags->simNoise) {
+        // TODO: choose injections?
+        // inject some noise
+        struct InstrumentModel inst_inj = {0};
+        initialize_instrument_model_wavelet(orbit, data, &inst_inj);
+        struct ForegroundModel conf_inj = {0};
+        initialize_foreground_model_wavelet(orbit, data, &conf_inj);
+        struct SGWBModel sgwb_inj = {0};
+        initialize_sgwb_model_wavelet(orbit, data, &sgwb_inj, flags->sgwbTemplate);
+        generate_full_dynamic_covariance_matrix(data->wdm, &inst_inj, &conf_inj, &sgwb_inj, data->noise);
+
         AddNoiseWavelet(data,data->tdi);
+    }
     /* Store DFT copy of simulated data */
     if(!flags->strainData) wavelet_layer_to_fourier_transform(data);
     
@@ -134,6 +145,17 @@ int main(int argc, char *argv[])
         // but the individual models will only have spectrum x modulation
         alloc_noise(scaleogram[ic], data->Nlayer*data->wdm->NT, data->Nlayer, data->Nchannel);
 
+        // initialize a few extra pieces of the scaleograms
+        scaleogram[ic]->kmin = data->wdm->kmin;
+        // TODO: allocing all this memory and filling it with things we already know feels dumb
+        // maybe we should just compute the scaleograms as needed
+        int k;
+        for (size_t i = 0; i < data->wdm->NT; i++)
+            for (size_t j=0; j < data->wdm->NF; j++) {
+                wavelet_pixel_to_index(data->wdm,i,j,&k); 
+                scaleogram[ic]->f[k] = (data->lmin + j)*data->wdm->df;
+            }
+
         // see above note. this is frequency-axis only
         inst_model[ic] = malloc(sizeof(struct InstrumentModel));
         inst_trial[ic] = malloc(sizeof(struct InstrumentModel));
@@ -162,6 +184,7 @@ int main(int argc, char *argv[])
     }
     if(flags->confNoise)
     {
+        // NOTE: these do not include the modulation prefactors
         sprintf(filename,"%s/foreground_noise_model.dat",data->dataDir);
         print_noise_model(conf_model[0]->psd, filename);
     }

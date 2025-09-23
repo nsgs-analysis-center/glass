@@ -31,7 +31,7 @@ void print_instrument_state(struct InstrumentModel *model, FILE *fptr)
     for(int i=0; i<model->Nlink; i++)fprintf(fptr,"%.12g ", model->soms[i]);
 }
 
-void print_foreground_state(struct ForegroundModel *model, FILE *fptr)
+inline void print_foreground_state(struct ForegroundModel *model, FILE *fptr)
 {
     for(int i=0; i<model->Nparams; i++)fprintf(fptr,"%.12g ", model->sgal[i]);
 }
@@ -58,7 +58,7 @@ void print_noise_model_dynamic(struct Data *data, struct Noise *noise, char file
             k-=wdm->kmin;
             fprintf(fptr,"%lg ",t);
             fprintf(fptr,"%lg ",f);
-            for(int m=0; j<noise->Nchannel; m++)
+            for(size_t m=0; m<noise->Nchannel; m++)
                 fprintf(fptr,"%lg ",noise->C[m][m][k]);
             fprintf(fptr,"%lg ",noise->C[0][1][k]);
             fprintf(fptr,"%lg ",noise->C[0][2][k]);

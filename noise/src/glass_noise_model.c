@@ -487,6 +487,20 @@ void generate_instrument_noise_model(struct Orbit *orbit, struct InstrumentModel
                 model->psd->C[i][j][n] /= 2.0;
     }
 }
+//TODO: is it worth oversampling these very smooth functional forms...?
+/*
+void generate_instrument_noise_model_wavelet_coarse(struct Wavelets *wdm, struct Orbit *orbit, struct InstrumentModel *model) {
+    // active layers
+    int imin = (int)round(model->psd->f[0]/wdm->df);
+    int imax = (int)round(model->psd->f[model->psd->N-1]/wdm->df)+1;
+    generate_instrument_noise_model(orbit,model);
+    //NOTE: normalization fudge factor
+    for(int i=0; i<model->psd->N; i++)
+        for(int n=0; n<3; n++)
+            for(int m=n; m<3; m++)
+                C[n][m][i]/=8.;
+}
+*/
 
 void generate_instrument_noise_model_wavelet(struct Wavelets *wdm, struct Orbit *orbit, struct InstrumentModel *model)
 {
@@ -501,11 +515,17 @@ void generate_instrument_noise_model_wavelet(struct Wavelets *wdm, struct Orbit 
     int imax = (int)round(model->psd->f[model->psd->N-1]/wdm->df)+1;
 
     // initialize data models
-    alloc_instrument_model(grid, 2*(imax-imin), imax-imin, 3);
+    // NOTE: originally the grid went over every frequency layer, even ones we don't use
+    alloc_instrument_model(grid, 2*(imax-imin) + 2, imax-imin, 3);
+    /* Basic idea here is to resample at df/2, with one extra sample on each end
+     *    model:         0 ------- 1 ------- 2 ------- 3 ------- ... --------- N
+     *    grid:   -0.5 - 0 - 0.5 - 1 - 1.5 - 2 - 2.5 - 3 - 3.5 - ... - N-0.5 - N - N+0.5 
+     */
 
     // set up psd frequency grid
-    for(int n=0; n<grid->psd->N; n++)
-        grid->psd->f[n] = imin*wdm->df + wdm->df/2.0*n;
+    double grid_fmin = imin*wdm->df - wdm->df/2.0;
+    for(size_t n=0; n<grid->psd->N; n++)
+        grid->psd->f[n] = grid_fmin + wdm->df/2.0*n;
 
     // initialize noise levels
     for(int i=0; i<grid->Nlink; i++)
@@ -524,20 +544,23 @@ void generate_instrument_noise_model_wavelet(struct Wavelets *wdm, struct Orbit 
     double ***Cgrid = grid->psd->C;
     for(int i=imin; i<imax; i++)
     {
-        int j = 2*i-2;
+        int j = 2*(i-imin) + 1;
         for(int n=0; n<3; n++)
-            for(int m=n; m<3; m++)
-                C[n][m][i-imin] = simpson_integration_3(Cgrid[n][m][j],Cgrid[n][m][j+1],Cgrid[n][m][j+2],1.0);
+            for(int m=n; m<3; m++) {
+                // TODO: fix formula? spacing is df!
+                C[n][m][i-imin] = simpson_integration_3(Cgrid[n][m][j-1],Cgrid[n][m][j],Cgrid[n][m][j+1],1.0);
+            }
     }
 
-    //NOTE: normalization fudge factor
+    //NOTE: normalization fudge factor (and symmetrization)
     for(int i=0; i<model->psd->N; i++)
         for(int n=0; n<3; n++)
-            for(int m=n; m<3; m++)
+            for(int m=n; m<3; m++) {
                 C[n][m][i]/=8.;
+                C[m][n][i] = C[n][m][i];
+            }
 
     free_instrument_model(grid);
-
 }
 
 void generate_galactic_foreground_model(struct ForegroundModel *model)
@@ -591,11 +614,16 @@ void generate_galactic_foreground_model_wavelet(struct Wavelets *wdm, struct For
     int imax = (int)round(model->psd->f[model->psd->N-1]/wdm->df)+1;
 
     // initialize data models
-    alloc_foreground_model(grid, 2*(imax-imin), imax-imin, 3);
+    alloc_foreground_model(grid, 2*(imax-imin) + 2, imax-imin, 3);
+    /* Basic idea here is to resample at df/2, with one extra sample on each end
+     *    model:         0 ------- 1 ------- 2 ------- 3 ------- ... --------- N
+     *    grid:   -0.5 - 0 - 0.5 - 1 - 1.5 - 2 - 2.5 - 3 - 3.5 - ... - N-0.5 - N - N+0.5 
+     */
 
     // set up psd frequency grid
-    for(int n=0; n<grid->psd->N; n++)
-        grid->psd->f[n] = wdm->df*imin + wdm->df/2.0*n;
+    double grid_fmin = imin*wdm->df - wdm->df/2.0;
+    for(size_t n=0; n<grid->psd->N; n++)
+        grid->psd->f[n] = grid_fmin + wdm->df/2.0*n;
 
     // initialize foreground parameters levels
     grid->Tobs  = model->Tobs;
@@ -617,13 +645,14 @@ void generate_galactic_foreground_model_wavelet(struct Wavelets *wdm, struct For
 
     for(int i=imin; i<imax; i++)
     {
-        int j = 2*i-2;
+        int j = 2*(i-imin) + 1;
         for(int n=0; n<3; n++)
             for(int m=n; m<3; m++)
-                C[n][m][i-imin] = simpson_integration_3(Cgrid[n][m][j],Cgrid[n][m][j+1],Cgrid[n][m][j+2],1.0);
+                C[n][m][i-imin] = simpson_integration_3(Cgrid[n][m][j-1],Cgrid[n][m][j],Cgrid[n][m][j+1],1.0);
     }
 
     //NOTE: undo isotropc -1/2 on covariance hardcoded in generate_galactic_foreground_model()
+    // modulation(t) will be applied to PSDs later
     for(int i=0; i<model->psd->N; i++)
         for(int n=0; n<3; n++)
             for(int m=n; m<3; m++)
@@ -633,10 +662,10 @@ void generate_galactic_foreground_model_wavelet(struct Wavelets *wdm, struct For
     //NOTE: normalization fudge factor
     for(int i=0; i<model->psd->N; i++)
         for(int n=0; n<3; n++)
-            for(int m=n; m<3; m++)
+            for(int m=n; m<3; m++) {
                 C[n][m][i]/=8.;
-
-
+                C[m][n][i] = C[n][m][i];
+            }
 
     free_foreground_model(grid);
 }
@@ -682,8 +711,8 @@ void generate_sgwb_model(struct SGWBModel *model)
                 break;
             case 3:
                 double logf = log(f);
-                Rxx = exp(spline_interpolation_even_sampling(model->R->spline_logRXX, logf));
-                Rxy = exp(spline_interpolation_even_sampling(model->R->spline_logRXY, logf));
+                Rxx =  exp(spline_interpolation_even_sampling(model->R->spline_logRXX, logf));
+                Rxy = -exp(spline_interpolation_even_sampling(model->R->spline_logRXY, logf));
                 // note that, in equal-arm LISA, XYZ: Rxx = Ryy = Rzz, and Rxy = Rxz = Ryz = -0.5*Rxx
                 model->psd->C[0][0][n] = model->psd->C[1][1][n] = model->psd->C[2][2][n] = Rxx*Sgw;
                 model->psd->C[0][1][n] = model->psd->C[0][2][n] = model->psd->C[1][2][n] = Rxy*Sgw;
@@ -703,11 +732,17 @@ void generate_sgwb_model_wavelet(struct Wavelets* wdm, struct SGWBModel *model)
     int imax = (int)round(model->psd->f[model->psd->N-1]/wdm->df)+1;
 
     // initialize data models
-    alloc_sgwb_model(grid, 2*(imax-imin), imax-imin, 3, model->SGWB_type);
+    alloc_sgwb_model(grid, 2*(imax-imin) + 2, imax-imin, 3, model->SGWB_type);
+    /* Basic idea here is to resample at df/2, with one extra sample on each end
+     *    model:         0 ------- 1 ------- 2 ------- 3 ------- ... --------- N
+     *    grid:   -0.5 - 0 - 0.5 - 1 - 1.5 - 2 - 2.5 - 3 - 3.5 - ... - N-0.5 - N - N+0.5 
+     */
 
     // set up psd frequency grid
-    for(int n=0; n<grid->psd->N; n++)
-        grid->psd->f[n] = wdm->df*imin + wdm->df/2.0*n;
+    double grid_fmin = imin*wdm->df - wdm->df/2.0;
+    for(size_t n=0; n<grid->psd->N; n++)
+        grid->psd->f[n] = grid_fmin + wdm->df/2.0*n;
+
     // intialize grid parameter levels
     grid->Nparams = model->Nparams;
     grid->Tobs = model->Tobs;
@@ -722,32 +757,23 @@ void generate_sgwb_model_wavelet(struct Wavelets* wdm, struct SGWBModel *model)
     */
     double ***C     = model->psd->C;
     double ***Cgrid = grid->psd->C;
-
-    for(int n=0; n<3; n++)
-        for(int m=n; m<3; m++)
-            C[n][m][0] = simpson_integration_3(Cgrid[n][m][0],Cgrid[n][m][1],Cgrid[n][m][2],1.0);
-    // TODO: double check bounds of integration here
-    for(int i=imin+1; i<imax-1; i++)
+    for(int i=imin; i<imax; i++)
     {
-        // note that the galactic foreground version of this assumes there are layers before and after imin/imax!
-        // maybe this is the case for galactic foreground, but not for us...
-        // we'll center the integral instead
-        int j = 2*i-1;
+        int j = 2*(i-imin) + 1;
         for(int n=0; n<3; n++)
-            for(int m=n; m<3; m++)
+            for(int m=n; m<3; m++) {
                 C[n][m][i-imin] = simpson_integration_3(Cgrid[n][m][j-1],Cgrid[n][m][j],Cgrid[n][m][j+1],1.0);
+            }
     }
-    for(int n=0; n<3; n++)
-        for(int m=n; m<3; m++)
-            C[n][m][imax-imin-1] = simpson_integration_3(Cgrid[n][m][2*(imax-imin) - 3],Cgrid[n][m][2*(imax-imin) - 2],Cgrid[n][m][2*(imax-imin) - 1],1.0);
+
     // TODO: don't think we need this???
-    /*
     //NOTE: normalization fudge factor
     for(int i=0; i<model->psd->N; i++)
         for(int n=0; n<3; n++)
-            for(int m=n; m<3; m++)
+            for(int m=n; m<3; m++) {
                 C[n][m][i]/=8.;
-    */
+                C[m][n][i] = C[n][m][i];
+            }
     free_sgwb_model(grid);
 }
 
@@ -1046,7 +1072,7 @@ void initialize_instrument_model_wavelet(struct Orbit *orbit, struct Data *data,
     }
     
     // get noise covariance matrix for initial parameters
-    generate_instrument_noise_model_wavelet(wdm,orbit,model);
+    generate_instrument_noise_model_wavelet(wdm, orbit, model);
 }
 
 void initialize_foreground_model(struct Orbit *orbit, struct Data *data, struct ForegroundModel *model)
@@ -1080,6 +1106,22 @@ void initialize_foreground_model(struct Orbit *orbit, struct Data *data, struct 
 
 }
 
+void default_sgwb_injection(double* params, const SGWB_t SGWB_type) {
+    _Static_assert(SGWB_TEMPLATE_COUNT == 1, "Did you add an SGWB template? Edit this switch case, it needs to be exhaustive.");
+    // set default values
+    switch (SGWB_type) {
+        case SGWB_TEMPLATE_POWERLAW:
+            params[0] = -15.45;
+            //params[0] = -8.45;
+            params[1] = 0.66667;
+            break;
+        default:
+            fprintf(stderr,"need default values for SGWB type: %s", SGWB_TEMPLATE_NAMES[SGWB_type]);
+            exit(1);
+            break;
+    }
+}
+
 void initialize_sgwb_model(struct Orbit *orbit, struct Data *data, struct SGWBModel *model, SGWB_t SGWB_type)
 {
     // initialize data models
@@ -1089,18 +1131,7 @@ void initialize_sgwb_model(struct Orbit *orbit, struct Data *data, struct SGWBMo
     for(int n=0; n<model->psd->N; n++)
         model->psd->f[n] = data->fmin + (double)n/data->T;
 
-    _Static_assert(SGWB_TEMPLATE_COUNT == 1, "Did you add an SGWB template? Edit this switch case, it needs to be exhaustive.");
-    // set default values
-    switch (SGWB_type) {
-        case SGWB_TEMPLATE_POWERLAW:
-            model->params[0] = -8.45;
-            model->params[1] = 0.66667;
-            break;
-        default:
-            fprintf(stderr,"need default values for SGWB type: %s", SGWB_TEMPLATE_NAMES[SGWB_type]);
-            exit(1);
-            break;
-    }
+    default_sgwb_injection(model->params, SGWB_type);
     
     model->Tobs  =  data->T;
     // get covariance matrix for initial parameters
@@ -1118,20 +1149,8 @@ void initialize_sgwb_model_wavelet(struct Orbit *orbit, struct Data *data, struc
     // set up psd frequency grid
     for(int n=0; n<model->psd->N; n++)
         model->psd->f[n] = (data->lmin+n)*wdm->df;
-        //model->psd->f[n] = data->fmin + (double)n/data->T;
 
-    _Static_assert(SGWB_TEMPLATE_COUNT == 1, "Did you add an SGWB template? Edit this switch case, it needs to be exhaustive.");
-    // set default values
-    switch (SGWB_type) {
-        case SGWB_TEMPLATE_POWERLAW:
-            model->params[0] = -8.45;
-            model->params[1] = 0.66667;
-            break;
-        default:
-            fprintf(stderr,"need default values for SGWB type: %s", SGWB_TEMPLATE_NAMES[SGWB_type]);
-            exit(1);
-            break;
-    }
+    default_sgwb_injection(model->params, SGWB_type);
     
     model->Tobs  =  data->T;
     // get covariance matrix for initial parameters
@@ -1178,6 +1197,7 @@ void initialize_foreground_model_wavelet(struct Orbit *orbit, struct Data *data,
     /**************************************************
      * Compute galaxy modulation
     **************************************************/
+    // TODO: use Pozzoli et al's analytic response for modulation
     
     double *galaxy_params = double_vector(6); // defines galaxy shape
     galaxy_params[0] = 0.25; // A 0.25    bulge fraction

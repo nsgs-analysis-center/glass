@@ -264,7 +264,7 @@ void initialize_wavelet(struct Wavelets *wdm, double T)
     fprintf(stdout,"\n========================================\n");
 }
 
-void wavelet_index_to_pixel(struct Wavelets *wdm, int *i, int *j, int k)
+void inline wavelet_index_to_pixel(struct Wavelets *wdm, int *i, int *j, int k)
 {
     int NT = wdm->NT;
     
@@ -275,7 +275,7 @@ void wavelet_index_to_pixel(struct Wavelets *wdm, int *i, int *j, int k)
     *j = (k - (*i))/NT; //scary integer math
 }
 
-void wavelet_pixel_to_index(struct Wavelets *wdm, int i, int j, int *k)
+void inline wavelet_pixel_to_index(struct Wavelets *wdm, int i, int j, int *k)
 {
     int NT = wdm->NT;
     

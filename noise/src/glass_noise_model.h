@@ -285,4 +285,9 @@ void GetStationaryNoiseModel(struct Data *data, struct Orbit *orbit, struct Flag
  */
 double sgwb_powerlaw(double f, const double* params);
 
+/**
+ \brief default injection values for an SGWB
+ */
+void default_sgwb_injection(double* params, SGWB_t SGWB_type);
+
 #endif /* noise_model_h */

@@ -1206,9 +1206,9 @@ void print_data(struct Data *data, struct Flags *flags)
         sprintf(filename,"%s/scaleogram_data.dat",data->dataDir);
         fptr=fopen(filename,"w");
 
-        for(int j=data->lmin; j<data->lmax; j++)
+        for(int i=0; i<data->wdm->NT; i++)
         {
-            for(int i=0; i<data->wdm->NT; i++)
+            for(int j=data->lmin; j<data->lmax; j++)
             {
                 wavelet_pixel_to_index(data->wdm,i,j,&k);
                 k-=data->wdm->kmin;

@@ -59,6 +59,7 @@ ldasoft.build
 #Vim junk
 *.swp
 tags
+basis
 
 #install directories
 build
@@ -99,3 +100,5 @@ mbh/src/IMRPhenomD.h
 mbh/src/IMRPhenomT.c
 mbh/src/IMRPhenomT.h
 
+# python junk
+*.ipynb_checkpoints/

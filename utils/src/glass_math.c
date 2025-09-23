@@ -977,14 +977,18 @@ void unwrap_phase(int N, double *phase)
     }
 }
 
-double simpson_integration_3(double f0, double f1, double f2, double h)
+inline double simpson_integration_3(double f0, double f1, double f2, double h)
 {
+    // note: unlike wikipedia, "h" here is the full width
     return h*(f0 + 4.0*f1 + f2)/6.0;
 }
 
-double simpson_integration_5(double f0, double f1, double f2, double f3, double f4, double h)
+inline double simpson_integration_5(double f0, double f1, double f2, double f3, double f4, double h)
 {
-    return h*(f0 + 4.0*f1 + 2.0*f2 + 4.0*f3 + f4)/12.0;
+    // note: unlike wikipedia, "h" here is the full width
+    //return h*(f0 + 4.0*f1 + 2.0*f2 + 4.0*f3 + f4)/12.0;
+    // use Boole's rule here for better error. (6th order instead of 4th)
+    return h*(7.0*f0 + 32.0*f1 + 12.0*f2 + 32.0*f3 + 7.0*f4)/90.0;
 }
 
 static int int_compare(const void* a, const void* b) 
