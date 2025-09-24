@@ -88,22 +88,17 @@ void update_differential_evolution_buffer(struct Proposal **proposal, struct Mod
 double draw_from_mbh_fisher(UNUSED struct Data *data, struct Model *model, struct Source *source, UNUSED struct Proposal *proposal, double *params, unsigned int *seed)
 {
     int i,j;
-    //double sqNP = sqrt((double)source->NP);
-    double Amps[MBH_MODEL_NP];
-    double jump[MBH_MODEL_NP];
-    
-    //draw the eigen-jump amplitudes from N[0,1] scaled by evalue & dimension
-    for(i=0; i<MBH_MODEL_NP; i++)
-    {
-        Amps[i] = rand_r_N_0_1(seed)/sqrt(source->fisher_evalue[i]);
-        jump[i] = 0.0;
-    }
     
     //choose one eigenvector to jump along
     i = (int)(rand_r_U_0_1(seed)*(double)MBH_MODEL_NP);
+
+    //draw the eigen-jump amplitudes from N[0,1] scaled by evalue & dimension
+    double Amp = rand_r_N_0_1(seed)/sqrt(source->fisher_evalue[i]);
+    
+    double jump[MBH_MODEL_NP];
     for (j=0; j<MBH_MODEL_NP; j++)
     {
-        jump[j] += Amps[i]*source->fisher_evectr[j][i];
+        jump[j] = Amp*source->fisher_evectr[i][j];
     }
 
     //check jump value, set to small value if singular

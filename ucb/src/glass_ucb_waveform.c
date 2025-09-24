@@ -1015,12 +1015,12 @@ void ucb_waveform_wavelet(struct Orbit *orbit, struct Wavelets *wdm, double Tobs
     struct CubicSpline *phase_interpolant_Y = alloc_cubic_spline(Nspline);
     struct CubicSpline *phase_interpolant_Z = alloc_cubic_spline(Nspline);
 
-    initialize_cubic_spline(amp_interpolant_X,   time_ssb, tdi_amp->X,SPLINE_EVEN_SAMPLED);
-    initialize_cubic_spline(amp_interpolant_Y,   time_ssb, tdi_amp->Y,SPLINE_EVEN_SAMPLED);
-    initialize_cubic_spline(amp_interpolant_Z,   time_ssb, tdi_amp->Z,SPLINE_EVEN_SAMPLED);
-    initialize_cubic_spline(phase_interpolant_X, time_ssb, tdi_phase->X,SPLINE_EVEN_SAMPLED);
-    initialize_cubic_spline(phase_interpolant_Y, time_ssb, tdi_phase->Y,SPLINE_EVEN_SAMPLED);
-    initialize_cubic_spline(phase_interpolant_Z, time_ssb, tdi_phase->Z,SPLINE_EVEN_SAMPLED);
+    initialize_cubic_spline(amp_interpolant_X,   time_ssb, tdi_amp->X,SPLINE_BINARY_SEARCH);
+    initialize_cubic_spline(amp_interpolant_Y,   time_ssb, tdi_amp->Y,SPLINE_BINARY_SEARCH);
+    initialize_cubic_spline(amp_interpolant_Z,   time_ssb, tdi_amp->Z,SPLINE_BINARY_SEARCH);
+    initialize_cubic_spline(phase_interpolant_X, time_ssb, tdi_phase->X,SPLINE_BINARY_SEARCH);
+    initialize_cubic_spline(phase_interpolant_Y, time_ssb, tdi_phase->Y,SPLINE_BINARY_SEARCH);
+    initialize_cubic_spline(phase_interpolant_Z, time_ssb, tdi_phase->Z,SPLINE_BINARY_SEARCH);
 
     // get freqeuncy wavelet window function for downsampled data
     double *window = double_vector((wdm->NT/2+1));

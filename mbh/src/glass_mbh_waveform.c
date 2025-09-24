@@ -221,8 +221,8 @@ static void reconstruct_td_waveform(double Tobs, double t0, double *time_ssb, st
     struct CubicSpline *amp_interpolant   = alloc_cubic_spline(Nspline);
     struct CubicSpline *phase_interpolant = alloc_cubic_spline(Nspline);
     
-    initialize_cubic_spline(amp_interpolant,   time_ssb, tdi_amp->X, SPLINE_EVEN_SAMPLED);
-    initialize_cubic_spline(phase_interpolant, time_ssb, tdi_phase->X,SPLINE_EVEN_SAMPLED);
+    initialize_cubic_spline(amp_interpolant,   time_ssb, tdi_amp->X, SPLINE_BINARY_SEARCH);
+    initialize_cubic_spline(phase_interpolant, time_ssb, tdi_phase->X,SPLINE_BINARY_SEARCH);
     
     for(n=0; n<N; n++)
     {
@@ -235,8 +235,8 @@ static void reconstruct_td_waveform(double Tobs, double t0, double *time_ssb, st
         }
     }
     
-    initialize_cubic_spline(amp_interpolant,   time_ssb, tdi_amp->Y,SPLINE_EVEN_SAMPLED);
-    initialize_cubic_spline(phase_interpolant, time_ssb, tdi_phase->Y, SPLINE_EVEN_SAMPLED);
+    initialize_cubic_spline(amp_interpolant,   time_ssb, tdi_amp->Y,SPLINE_BINARY_SEARCH);
+    initialize_cubic_spline(phase_interpolant, time_ssb, tdi_phase->Y, SPLINE_BINARY_SEARCH);
     
     for(n=0; n<N; n++)
     {
@@ -249,8 +249,8 @@ static void reconstruct_td_waveform(double Tobs, double t0, double *time_ssb, st
         }
     }
     
-    initialize_cubic_spline(amp_interpolant,   time_ssb, tdi_amp->Z, SPLINE_EVEN_SAMPLED);
-    initialize_cubic_spline(phase_interpolant, time_ssb, tdi_phase->Z, SPLINE_EVEN_SAMPLED);
+    initialize_cubic_spline(amp_interpolant,   time_ssb, tdi_amp->Z, SPLINE_BINARY_SEARCH);
+    initialize_cubic_spline(phase_interpolant, time_ssb, tdi_phase->Z, SPLINE_BINARY_SEARCH);
     
     for(n=0; n<N; n++)
     {
@@ -673,8 +673,8 @@ static void reconstruct_fd_waveform(double Tobs, double *params, double *freq_gr
     struct CubicSpline *amp_interpolant   = alloc_cubic_spline(Nspline);
     struct CubicSpline *phase_interpolant = alloc_cubic_spline(Nspline);
     
-    initialize_cubic_spline(amp_interpolant,   freq_grid, tdi_amp->X, SPLINE_EVEN_SAMPLED);
-    initialize_cubic_spline(phase_interpolant, freq_grid, tdi_phase->X, SPLINE_EVEN_SAMPLED);
+    initialize_cubic_spline(amp_interpolant,   freq_grid, tdi_amp->X, SPLINE_BINARY_SEARCH);
+    initialize_cubic_spline(phase_interpolant, freq_grid, tdi_phase->X, SPLINE_BINARY_SEARCH);
     
     for(int i=0; i<N/2; i++)
     {
@@ -692,8 +692,8 @@ static void reconstruct_fd_waveform(double Tobs, double *params, double *freq_gr
         }
     }
     
-    initialize_cubic_spline(amp_interpolant,   freq_grid, tdi_amp->Y, SPLINE_EVEN_SAMPLED);
-    initialize_cubic_spline(phase_interpolant, freq_grid, tdi_phase->Y, SPLINE_EVEN_SAMPLED);
+    initialize_cubic_spline(amp_interpolant,   freq_grid, tdi_amp->Y, SPLINE_BINARY_SEARCH);
+    initialize_cubic_spline(phase_interpolant, freq_grid, tdi_phase->Y, SPLINE_BINARY_SEARCH);
     
     for(int i=0; i<N/2; i++)
     {
@@ -711,8 +711,8 @@ static void reconstruct_fd_waveform(double Tobs, double *params, double *freq_gr
         }
     }
     
-    initialize_cubic_spline(amp_interpolant,   freq_grid, tdi_amp->Z, SPLINE_EVEN_SAMPLED);
-    initialize_cubic_spline(phase_interpolant, freq_grid, tdi_phase->Z, SPLINE_EVEN_SAMPLED);
+    initialize_cubic_spline(amp_interpolant,   freq_grid, tdi_amp->Z, SPLINE_BINARY_SEARCH);
+    initialize_cubic_spline(phase_interpolant, freq_grid, tdi_phase->Z, SPLINE_BINARY_SEARCH);
     
     for(int i=0; i<N/2; i++)
     {
@@ -864,15 +864,15 @@ void mbh_fd_waveform(struct Orbit *orbit, struct Wavelets *wdm, double Tobs, dou
     struct CubicSpline *phase_tdi_spline_Y = alloc_cubic_spline(Nspline);
     struct CubicSpline *phase_tdi_spline_Z = alloc_cubic_spline(Nspline);
 
-    initialize_cubic_spline(amp_tdi_spline_X,   freq_grid, tdi_amp->X, SPLINE_EVEN_SAMPLED);
-    initialize_cubic_spline(amp_tdi_spline_Y,   freq_grid, tdi_amp->Y, SPLINE_EVEN_SAMPLED);
-    initialize_cubic_spline(amp_tdi_spline_Z,   freq_grid, tdi_amp->Z, SPLINE_EVEN_SAMPLED);
-    initialize_cubic_spline(phase_tdi_spline_X, freq_grid, tdi_phase->X, SPLINE_EVEN_SAMPLED);
-    initialize_cubic_spline(phase_tdi_spline_Y, freq_grid, tdi_phase->Y, SPLINE_EVEN_SAMPLED);
-    initialize_cubic_spline(phase_tdi_spline_Z, freq_grid, tdi_phase->Z, SPLINE_EVEN_SAMPLED);
+    initialize_cubic_spline(amp_tdi_spline_X,   freq_grid, tdi_amp->X, SPLINE_BINARY_SEARCH);
+    initialize_cubic_spline(amp_tdi_spline_Y,   freq_grid, tdi_amp->Y, SPLINE_BINARY_SEARCH);
+    initialize_cubic_spline(amp_tdi_spline_Z,   freq_grid, tdi_amp->Z, SPLINE_BINARY_SEARCH);
+    initialize_cubic_spline(phase_tdi_spline_X, freq_grid, tdi_phase->X, SPLINE_BINARY_SEARCH);
+    initialize_cubic_spline(phase_tdi_spline_Y, freq_grid, tdi_phase->Y, SPLINE_BINARY_SEARCH);
+    initialize_cubic_spline(phase_tdi_spline_Z, freq_grid, tdi_phase->Z, SPLINE_BINARY_SEARCH);
 
     //also need SSB amplitude on the frequency grid (already allocated)
-    initialize_cubic_spline(amp_ssb_spline, freq_grid, amp_ssb, SPLINE_EVEN_SAMPLED);
+    initialize_cubic_spline(amp_ssb_spline, freq_grid, amp_ssb, SPLINE_BINARY_SEARCH);
 
     
     int N=0; //number of wavelet pixels

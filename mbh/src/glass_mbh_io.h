@@ -34,15 +34,6 @@ void parse_mbh_args(int argc, char **argv, struct Flags *flags);
  */
 void print_mbh_chain_files(struct Data *data, struct Model **model, struct Chain *chain, struct Flags *flags, int step);
 
-
-/** @name Chain State File
- Print/read current state of sampler, e.g. to Chain::chainFile
- */
-///@{
-void print_mbh_chain_state(struct Data *data, struct Chain *chain, struct Model *model, struct Flags *flags, FILE *fptr, int step);
-void scan_mbh_chain_state(struct Data *data, struct Chain *chain, struct Model *model, struct Flags *flags, FILE *fptr, int *step);
-///@}
-
 /** @name Massive Black Hole Merger Chain File
  Print/read current state of source model, e.g. to Chain::parameterFile
  */

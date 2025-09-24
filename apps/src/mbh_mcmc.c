@@ -225,6 +225,8 @@ int main(int argc, char *argv[])
         //print_waveform_draw(data, model[chain->index[0]], flags);
 
         //update on sampling efficiency
+        print_chain_state(data, chain, model[chain->index[0]], flags, stdout, mcmc); //writing to file
+        fprintf(stdout,"Sources: %i/%i\n",model[chain->index[0]]->Nlive,model[chain->index[0]]->Neff-1);
         print_acceptance_rates(proposal, MBH_PROPOSAL_NPROP, 0, stdout);
 
         mcmc++;

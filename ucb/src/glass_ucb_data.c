@@ -341,8 +341,8 @@ void UCBInjectSimulatedSource(struct Data *data, struct Orbit *orbit, struct Fla
                     wavelet_pixel_to_index(data->wdm,0,data->lmax,&data->wdm->kmax);
                     
                     //recompute fmin and fmax so they align with a bin
-                    data->fmin = data->lmin*WAVELET_BANDWIDTH;
-                    data->fmax = data->lmax*WAVELET_BANDWIDTH;
+                    data->fmin = f0-512./data->T;//data->lmin*WAVELET_BANDWIDTH;
+                    data->fmax = f0+512./data->T;//data->lmax*WAVELET_BANDWIDTH;
                     data->qmin = (int)(data->fmin*data->T);
                     data->qmax = data->qmin+data->NFFT;
 

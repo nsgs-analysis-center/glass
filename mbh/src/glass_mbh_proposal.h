@@ -23,7 +23,7 @@
 #define glass_mbh_proposal_h
 
 #define MBH_PROPOSAL_NPROP 3 ///< Number of defined proposal distributions for MBH sampler
-#define MBH_DIFFERENTIAL_EVOLUTION_BUFFER 1000 ///< Size of differential buffer for MBH proposal
+#define MBH_DIFFERENTIAL_EVOLUTION_BUFFER 100 ///< Size of differential buffer for MBH proposal
 
 double draw_from_mbh_prior(struct Data *data, struct Model *model, struct Source * source, struct Proposal *proposal, double *params, unsigned int *seed);
 

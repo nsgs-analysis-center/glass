@@ -135,7 +135,7 @@ void print_mbh_chain_files(struct Data *data, struct Model **model, struct Chain
     
     //Print cold chains
     n = chain->index[0];
-    print_mbh_chain_state(data, chain, model[n], flags, chain->chainFile[0], step);
+    print_chain_state(data, chain, model[n], flags, chain->chainFile[0], step);
     
     
     //Print sampling parameters
@@ -145,11 +145,10 @@ void print_mbh_chain_files(struct Data *data, struct Model **model, struct Chain
         print_mbh_source_params(data,model[n]->source[i],chain->parameterFile[0]);
         fprintf(chain->parameterFile[0],"\n");
         
-        fprintf(stdout,"%.12g %.12g ",model[n]->logL,sqrt(2.*(model[n]->logL-data->SNR2)));
-        print_mbh_source_params(data,model[n]->source[i],stdout);
-        fprintf(stdout,"\n");
-        fflush(chain->parameterFile[0]);
-        fflush(stdout);
+//        fprintf(stdout,"%.12g %.12g ",model[n]->logL,sqrt(2.*(model[n]->logL-data->SNR2)));
+//        print_mbh_source_params(data,model[n]->source[i],stdout);
+//        fprintf(stdout,"\n");
+
         if(step>0)
         {
             if(chain->dimensionFile[D]==NULL)
@@ -162,27 +161,6 @@ void print_mbh_chain_files(struct Data *data, struct Model **model, struct Chain
             print_mbh_source_params(data,model[n]->source[i],chain->dimensionFile[D]);
             fprintf(chain->dimensionFile[D],"\n");
         }
-    }
-}
-
-void print_mbh_chain_state(struct Data *data, struct Chain *chain, struct Model *model, struct Flags *flags, FILE *fptr, int step)
-{
-    fprintf(fptr, "%i ",step);
-    fprintf(fptr, "%i ",model->Nlive);
-    fprintf(fptr, "%lg ",model->logL);
-    fprintf(fptr, "\n");
-}
-void scan_mbh_chain_state(struct Data *data, struct Chain *chain, struct Model *model, struct Flags *flags, FILE *fptr, int *step)
-{
-    int check = 0;
-    check += fscanf(fptr, "%i",step);
-    check += fscanf(fptr, "%i",&model->Nlive);
-    check += fscanf(fptr, "%lg",&model->logL);
-
-    if(!check)
-    {
-        fprintf(stderr,"Error reading checkpoint files\n");
-        exit(1);
     }
 }
 

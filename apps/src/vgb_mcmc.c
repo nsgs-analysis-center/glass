@@ -64,9 +64,6 @@ int main(int argc, char *argv[])
     
     char filename[MAXSTRINGSIZE];
 
-    /* allow nested parallelization in mcmc loop (for rebuilding fstat proposal) */
-    omp_set_max_active_levels(2);
-
     /* check arguments */
     print_LISA_ASCII_art(stdout);
     print_version(stdout);

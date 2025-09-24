@@ -134,3 +134,28 @@ void print_acceptance_rates(struct Proposal **proposal, int NProp, int ic, FILE 
         if(proposal[n]->rjweight > 0) fprintf(fptr,"   %.1e  [%s]\n", (double)proposal[n]->accept[ic]/(double)proposal[n]->trial[ic],proposal[n]->name);
     }
 }
+
+void scan_chain_state(struct Data *data, struct Chain *chain, struct Model *model, struct Flags *flags, FILE *fptr, int *step)
+{
+    int check = 0;
+    check += fscanf(fptr, "%i",step);
+    check += fscanf(fptr, "%i",&model->Nlive);
+    check += fscanf(fptr, "%lg",&model->logL);
+    check += fscanf(fptr, "%lg",&model->logLnorm);
+    check += fscanf(fptr, "%lg",&model->t0);
+    if(!check)
+    {
+        fprintf(stderr,"Error reading checkpoint files\n");
+        exit(1);
+    }
+}
+
+void print_chain_state(struct Data *data, struct Chain *chain, struct Model *model, struct Flags *flags, FILE *fptr, int step)
+{
+    fprintf(fptr, "%i ",step);
+    fprintf(fptr, "%i ",model->Nlive);
+    fprintf(fptr, "%lg ",model->logL);
+    fprintf(fptr, "%lg ",model->logLnorm);
+    fprintf(fptr, "%.12g ",model->t0);
+    fprintf(fptr, "\n");
+}

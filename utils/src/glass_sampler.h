@@ -158,4 +158,12 @@ double symmetric_density(UNUSED struct Data *data, UNUSED struct Model *model, U
  */
 void print_acceptance_rates(struct Proposal **proposal, int NProp, int ic, FILE *fptr);
 
+/** @name Chain State File
+ Print/read current state of sampler, e.g. to Chain::chainFile
+ */
+///@{
+void print_chain_state(struct Data *data, struct Chain *chain, struct Model *model, struct Flags *flags, FILE *fptr, int step);
+void scan_chain_state(struct Data *data, struct Chain *chain, struct Model *model, struct Flags *flags, FILE *fptr, int *step);
+///@}
+
 #endif /* glass_sampler_h */

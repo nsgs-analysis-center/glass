@@ -930,7 +930,7 @@ void setup_fstatistic_proposal(struct Orbit *orbit, struct Data *data, struct Fl
     
 
     //grid sizes
-    int n_f     = data->N/2;
+    int n_f     = (int)((data->fmax - data->fmin)*data->T);// data->N/2;
     int n_theta = 20;
     int n_phi   = 20;
     
@@ -941,7 +941,7 @@ void setup_fstatistic_proposal(struct Orbit *orbit, struct Data *data, struct Fl
         n_phi/=3;
     }
     
-    double d_f = (double)data->NFFT/(double)n_f/data->T;
+    double d_f = (int)((data->fmax - data->fmin)*data->T)/(double)n_f/data->T;
 
     double d_theta = 2./(double)n_theta;
     double d_phi   = PI2/(double)n_phi;

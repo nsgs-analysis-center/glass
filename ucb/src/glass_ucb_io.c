@@ -575,46 +575,6 @@ void print_chain_files(struct Data *data, struct Model **model, struct Chain *ch
     }//verbose flag
 }
 
-void scan_chain_state(struct Data *data, struct Chain *chain, struct Model *model, struct Flags *flags, FILE *fptr, int *step)
-{
-    int check = 0;
-    check += fscanf(fptr, "%i",step);
-    check += fscanf(fptr, "%i",&model->Nlive);
-    check += fscanf(fptr, "%lg",&model->logL);
-    check += fscanf(fptr, "%lg",&model->logLnorm);
-    check += fscanf(fptr, "%lg",&model->t0);
-    if(!check)
-    {
-        fprintf(stderr,"Error reading checkpoint files\n");
-        exit(1);
-    }
-    if(flags->verbose)
-    {
-        for(int i=0; i<model->Nlive; i++)
-        {
-            scan_source_params(data,model->source[i],fptr);
-        }
-    }
-    
-}
-
-void print_chain_state(struct Data *data, struct Chain *chain, struct Model *model, struct Flags *flags, FILE *fptr, int step)
-{
-    fprintf(fptr, "%i ",step);
-    fprintf(fptr, "%i ",model->Nlive);
-    fprintf(fptr, "%lg ",model->logL);
-    fprintf(fptr, "%lg ",model->logLnorm);
-    fprintf(fptr, "%.12g ",model->t0);
-    if(flags->verbose)
-    {
-        for(int i=0; i<model->Nlive; i++)
-        {
-            print_source_params(data,model->source[i],fptr);
-        }
-    }
-    fprintf(fptr, "\n");
-}
-
 void scan_calibration_state(struct Data *data, struct Model *model, FILE *fptr, int *step)
 {
     int check = fscanf(fptr, "%i %lg %lg",step, &model->logL,&model->logLnorm);

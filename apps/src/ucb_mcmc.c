@@ -63,9 +63,6 @@ int main(int argc, char *argv[])
     start = time(NULL);
     char filename[MAXSTRINGSIZE];
 
-    /* allow nested parallelization in mcmc loop (for rebuilding fstat proposal) */
-    omp_set_max_active_levels(2);
-
     /* check arguments */
     print_LISA_ASCII_art(stdout);
     print_version(stdout);
@@ -239,7 +236,7 @@ int main(int argc, char *argv[])
             struct Model *trial_ptr = trial[chain->index[ic]];
             copy_model(model_ptr,trial_ptr);
             
-            for(int steps=0; steps < 500; steps++)
+            for(int steps=0; steps < 10*UCB_MODEL_NP; steps++)
             {
                 //reverse jump birth/death or split/merge moves
                 if(rand_r_U_0_1(&chain->r[ic])<0.1 && flags->rj)
