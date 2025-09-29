@@ -631,8 +631,8 @@ void noise_foreground_model_mcmc(struct Data *data, struct InstrumentModel *nois
     
     
     //log(A)
-    prior[0][0] = -86.0;
-    prior[0][1] = -82.0;
+    prior[0][0] = -102.0;
+    prior[0][1] = -99.0;
     
     //f1
     prior[1][0] = log(0.0001);

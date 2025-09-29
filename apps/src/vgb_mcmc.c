@@ -216,9 +216,7 @@ int main(int argc, char *argv[])
     }
 
     /* Setup the rest of the model */
-    struct Prior *prior = NULL;
     struct Proposal **proposal = NULL;
-    struct Model **trial = NULL;
     struct Model **model = NULL;
     struct Prior **prior_vec = malloc(flags->NVB*sizeof(struct Prior *));
     struct Proposal ***proposal_vec = malloc(flags->NVB*sizeof(struct Proposal **));
@@ -278,7 +276,6 @@ int main(int argc, char *argv[])
     print_ucb_catalog_script(flags, data_vec[0], orbit);
     
     //For saving the number of threads actually given
-    int numThreads;
     int mcmc = mcmc_start;
 
     /* The MCMC loop */
@@ -317,9 +314,7 @@ int main(int argc, char *argv[])
         for(int n=0; n<flags->NVB; n++)
         {
             model = model_vec[n];
-            trial = trial_vec[n];
             data = data_vec[n];
-            prior = prior_vec[n];
             proposal = proposal_vec[n];
             chain = chain_vec[n];
             
@@ -377,10 +372,10 @@ int main(int argc, char *argv[])
     //print total run time
     stop = time(NULL);
     
-    printf(" ELAPSED TIME = %g seconds on %i thread(s)\n",(double)(stop-start),numThreads);
+    printf(" ELAPSED TIME = %g seconds on %i thread(s)\n",(double)(stop-start),flags->threads);
     sprintf(filename,"%s/vb_mcmc.log",flags->runDir);
     FILE *runlog = fopen(filename,"a");
-    fprintf(runlog," ELAPSED TIME = %g seconds on %i thread(s)\n",(double)(stop-start),numThreads);
+    fprintf(runlog," ELAPSED TIME = %g seconds on %i thread(s)\n",(double)(stop-start),flags->threads);
     fclose(runlog);
     
     

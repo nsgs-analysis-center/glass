@@ -92,6 +92,9 @@ int main(int argc, char *argv[])
     else if (flags->simNoise)
         SimulateData(data, orbit, flags);
     
+    /* Store DFT copy of simulated data */
+    copy_tdi(data->tdi, data->dft);
+    
     /* print various data products for plotting */
     print_data(data, flags);
     
@@ -163,103 +166,81 @@ int main(int argc, char *argv[])
         foregroundChainFile = fopen(filename,"w");
     }
     
-    int numThreads;
-    int step = 0;
+    int mcmc = 0;
     int NC = chain->NC;
-    
-    #pragma omp parallel num_threads(flags->threads)
+
+    /* The MCMC loop */
+    for(; mcmc < flags->NMCMC;)
     {
-        int threadID;
         
-        //Save individual thread number
-        threadID = omp_get_thread_num();
-        
-        //Only one thread runs this section
-        if(threadID==0)  numThreads = omp_get_num_threads();
-        
-        #pragma omp barrier
-        
-        /* The MCMC loop */
-        for(; step<flags->NMCMC;)
+        // (parallel) loop over chains
+        #pragma omp parallel for num_threads(flags->threads)
+        for(int ic=0; ic<NC; ic++)
         {
-            #pragma omp barrier
+            struct Noise *psd_ptr = psd[chain->index[ic]];
+            struct InstrumentModel *inst_model_ptr = inst_model[chain->index[ic]];
+            struct InstrumentModel *inst_trial_ptr = inst_trial[chain->index[ic]];
+            struct ForegroundModel *conf_model_ptr = conf_model[chain->index[ic]];
+            struct ForegroundModel *conf_trial_ptr = conf_trial[chain->index[ic]];
             
-            // (parallel) loop over chains
-            for(int ic=threadID; ic<NC; ic+=numThreads)
+            for(int steps=0; steps<10; steps++)
             {
-                struct Noise *psd_ptr = psd[chain->index[ic]];
-                struct InstrumentModel *inst_model_ptr = inst_model[chain->index[ic]];
-                struct InstrumentModel *inst_trial_ptr = inst_trial[chain->index[ic]];
-                struct ForegroundModel *conf_model_ptr = conf_model[chain->index[ic]];
-                struct ForegroundModel *conf_trial_ptr = conf_trial[chain->index[ic]];
-
-                for(int mc=0; mc<10; mc++)
-                {
-                    noise_instrument_model_mcmc(orbit, data, inst_model_ptr, inst_trial_ptr, conf_model_ptr, psd_ptr, chain, flags, ic);
-                    if(flags->confNoise) noise_foreground_model_mcmc(data, inst_model_ptr, conf_model_ptr, conf_trial_ptr, psd_ptr, chain, flags, ic);
-                }
-            }// end (parallel) loop over chains
-            
-            //Next section is single threaded. Every thread must get here before continuing
-            
-            #pragma omp barrier
-            
-            if(threadID==0)
-            {
-                noise_ptmcmc(inst_model, chain, flags);
-                
-                if(step%(flags->NMCMC/10)==0)printf("noise_mcmc at step %i\n",step);
-                
-                // print chain files
-                fprintf(noiseChainFile,"%i %.12g ",step,inst_model[chain->index[0]]->logL);
-                print_instrument_state(inst_model[chain->index[0]], noiseChainFile);
-                fprintf(noiseChainFile,"\n");
-
-                if(flags->confNoise) 
-                {
-                    fprintf(foregroundChainFile,"%i %.12g ",step,conf_model[chain->index[0]]->logL);
-                    print_foreground_state(conf_model[chain->index[0]], foregroundChainFile);
-                    fprintf(foregroundChainFile,"\n");
-                }
-
-                if(step%(flags->NMCMC/10)==0)
-                {
-                    generate_instrument_noise_model(orbit,inst_model[chain->index[0]]);
-                    sprintf(filename,"%s/current_instrument_noise_model.dat",data->dataDir);
-                    print_noise_model(inst_model[chain->index[0]]->psd, filename);
-
-                    if(flags->confNoise)
-                    {
-                        generate_galactic_foreground_model(conf_model[chain->index[0]]);
-                        sprintf(filename,"%s/current_foreground_noise_model.dat",data->dataDir);
-                        print_noise_model(conf_model[chain->index[0]]->psd, filename);
-                    }
-                }
-                
-                if(step%data->downsample==0 && step/data->downsample < data->Nwave)
-                {
-                    generate_instrument_noise_model(orbit,inst_model[chain->index[0]]);
-                    if(flags->confNoise)
-                    {
-                        generate_galactic_foreground_model(conf_model[chain->index[0]]);
-                        generate_full_covariance_matrix(inst_model[chain->index[0]]->psd,conf_model[chain->index[0]]->psd, data->Nchannel);
-                    }
-                    
-                    for(int n=0; n<data->NFFT; n++)
-                        for(int i=0; i<data->Nchannel; i++)
-                            data->S_pow[n][i][step/data->downsample] = inst_model[chain->index[0]]->psd->C[i][i][n];
-                }
-
-                step++;
-                
-                
+                noise_instrument_model_mcmc(orbit, data, inst_model_ptr, inst_trial_ptr, conf_model_ptr, psd_ptr, chain, flags, ic);
+                if(flags->confNoise) noise_foreground_model_mcmc(data, inst_model_ptr, conf_model_ptr, conf_trial_ptr, psd_ptr, chain, flags, ic);
             }
-            //Can't continue MCMC until single thread is finished
-            #pragma omp barrier
-            
-        }// end of MCMC loop
+        }// end (parallel) loop over chains
         
-    }// End of parallelization
+        //Next section is single threaded. Every thread must get here before continuing
+        
+        noise_ptmcmc(inst_model, chain, flags);
+        
+        if(mcmc%(flags->NMCMC/10)==0)printf("noise_mcmc at step %i\n",mcmc);
+        
+        // print chain files
+        fprintf(noiseChainFile,"%i %.12g ",mcmc,inst_model[chain->index[0]]->logL);
+        print_instrument_state(inst_model[chain->index[0]], noiseChainFile);
+        fprintf(noiseChainFile,"\n");
+        
+        if(flags->confNoise)
+        {
+            fprintf(foregroundChainFile,"%i %.12g ",mcmc,conf_model[chain->index[0]]->logL);
+            print_foreground_state(conf_model[chain->index[0]], foregroundChainFile);
+            fprintf(foregroundChainFile,"\n");
+        }
+        
+        if(mcmc%(flags->NMCMC/10)==0)
+        {
+            generate_instrument_noise_model(orbit,inst_model[chain->index[0]]);
+            sprintf(filename,"%s/current_instrument_noise_model.dat",data->dataDir);
+            print_noise_model(inst_model[chain->index[0]]->psd, filename);
+            
+            if(flags->confNoise)
+            {
+                generate_galactic_foreground_model(conf_model[chain->index[0]]);
+                sprintf(filename,"%s/current_foreground_noise_model.dat",data->dataDir);
+                print_noise_model(conf_model[chain->index[0]]->psd, filename);
+            }
+        }
+        
+        if(mcmc%data->downsample==0 && mcmc/data->downsample < data->Nwave)
+        {
+            generate_instrument_noise_model(orbit,inst_model[chain->index[0]]);
+            if(flags->confNoise)
+            {
+                generate_galactic_foreground_model(conf_model[chain->index[0]]);
+                generate_full_covariance_matrix(inst_model[chain->index[0]]->psd,conf_model[chain->index[0]]->psd, data->Nchannel);
+            }
+            
+            for(int n=0; n<data->NFFT; n++)
+                for(int i=0; i<data->Nchannel; i++)
+                    data->S_pow[n][i][mcmc/data->downsample] = inst_model[chain->index[0]]->psd->C[i][i][n];
+        }
+        
+        mcmc++;
+        
+        
+    }// end of MCMC loop
+    
     
     fclose(noiseChainFile);
     if(flags->confNoise)fclose(foregroundChainFile);

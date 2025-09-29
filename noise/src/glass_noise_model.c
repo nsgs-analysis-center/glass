@@ -390,7 +390,7 @@ void generate_instrument_noise_model(struct Orbit *orbit, struct InstrumentModel
         //Normalization
         for(int i=0; i<model->psd->Nchannel; i++)
             for(int j=0; j<model->psd->Nchannel; j++)
-                model->psd->C[i][j][n] /= 2.0;
+                model->psd->C[i][j][n] /= 4.0;
     }
 }
 
@@ -482,6 +482,11 @@ void generate_galactic_foreground_model(struct ForegroundModel *model)
                 model->psd->C[1][0][n] = model->psd->C[2][0][n] = model->psd->C[2][1][n] = -0.5*t*Sgal;
                 break;
         }
+        
+        //Normalization
+        for(int i=0; i<model->psd->Nchannel; i++)
+            for(int j=0; j<model->psd->Nchannel; j++)
+                model->psd->C[i][j][n] /= 4.0;
     }
 }
 
@@ -752,8 +757,8 @@ void initialize_instrument_model(struct Orbit *orbit, struct Data *data, struct 
     // initialize noise levels
     for(int i=0; i<model->Nlink; i++)
     {
-        model->soms[i] = 2.25e-22;
-        model->sacc[i] = 9.00e-30;
+        model->soms[i] = 1.28e-22;
+        model->sacc[i] = 5.76e-30;
     }
     
     // get noise covariance matrix for initial parameters

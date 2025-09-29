@@ -695,7 +695,7 @@ void save_waveforms(struct Data *data, struct Model *model, int mcmc)
     int n_re,n_im;
     double A_re,A_im,E_re,E_im,X_re,X_im,Y_re,Y_im,Z_re,Z_im,R_re,R_im;
     
-    if(!strcmp(data->format,"fourier"))
+    if(!strcmp(data->basis,"fourier"))
     {
         switch(data->Nchannel)
         {
