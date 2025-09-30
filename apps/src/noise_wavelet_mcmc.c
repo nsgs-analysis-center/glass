@@ -117,6 +117,8 @@ int main(int argc, char *argv[])
         AddNoiseWavelet(data,data->tdi);
     }
     /* Store DFT copy of simulated data */
+    // TODO: is this right?
+    data->qmin = data->lmin;
     if(!flags->strainData) wavelet_layer_to_fourier_transform(data);
     
     /* print various data products for plotting */
