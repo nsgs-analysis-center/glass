@@ -357,7 +357,8 @@ struct Noise
     
     double ***C;    //!<Covariance matrix
     double ***invC; //!<Inverse covariance matrix>
-    double *detC;   //!<Determinent of covariance matrix
+    //double *detC;   //!<Determinent of covariance matrix
+    double *logdetC;   //!<Log determinent of covariance matrix
     
     double *transfer;
     ///@}

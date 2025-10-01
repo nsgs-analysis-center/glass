@@ -281,12 +281,12 @@ void invert_noise_covariance_matrix(struct Noise *noise)
         {
             case 1:
                 X=0;
-                noise->detC[n] = noise->C[X][X][n];
+                noise->logdetC[n] = log(noise->C[X][X][n]);
                 noise->invC[X][X][n] = 1./noise->C[X][X][n];
                 break;
             case 2:
                 A=0, E=1;
-                noise->detC[n] = noise->C[A][A][n]*noise->C[E][E][n];
+                noise->logdetC[n] = log(noise->C[A][A][n]) + log(noise->C[E][E][n]);
                 noise->invC[A][A][n] = 1./noise->C[A][A][n];
                 noise->invC[E][E][n] = 1./noise->C[E][E][n];
                 break;
@@ -298,8 +298,9 @@ void invert_noise_covariance_matrix(struct Noise *noise)
                 double cxy = noise->C[X][Y][n];
                 double cxz = noise->C[X][Z][n];
                 double cyz = noise->C[Y][Z][n];
-                noise->detC[n] = cxx*(czz*cyy - cyz*cyz) - cxy*(cxy*czz - cxz*cyz) + cxz*(cxy*cyz - cyy*cxz);
-                double invdetC = 1./noise->detC[n];
+                double detC = cxx*(czz*cyy - cyz*cyz) - cxy*(cxy*czz - cxz*cyz) + cxz*(cxy*cyz - cyy*cxz);
+                noise->logdetC[n] = log(detC);
+                double invdetC = 1./detC;
                 noise->invC[X][X][n] = (cyy*czz - cyz*cyz)*invdetC;
                 noise->invC[Y][Y][n] = (czz*cxx - cxz*cxz)*invdetC;
                 noise->invC[Z][Z][n] = (cxx*cyy - cxy*cxy)*invdetC;

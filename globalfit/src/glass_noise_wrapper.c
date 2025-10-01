@@ -58,7 +58,7 @@ void select_noise_segment(struct Noise *psd_full, struct Data *data, struct Chai
                 memcpy(model[n]->noise->invC[i][j], psd_full->invC[i][j]+dq, data->N*sizeof(double));
             }
         }
-        memcpy(model[n]->noise->detC, psd_full->detC+dq, data->N*sizeof(double));
+        memcpy(model[n]->noise->logdetC, psd_full->logdetC+dq, data->N*sizeof(double));
 
     }
 

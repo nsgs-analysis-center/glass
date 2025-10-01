@@ -303,7 +303,8 @@ void alloc_noise(struct Noise *noise, int N, int Nlayer, int Nchannel)
         }
     }
 
-    noise->detC     = calloc(N,sizeof(double));
+    noise->logdetC  = malloc(N*sizeof(double));
+    for (size_t i=0; i<N; i++) noise->logdetC[i] = -INFINITY;
     noise->transfer = calloc(N,sizeof(double));
     
     int n;
@@ -370,7 +371,7 @@ void copy_noise(struct Noise *origin, struct Noise *copy)
     copy_Cij(origin->C, copy->C, origin->Nchannel, origin->N);
     copy_Cij(origin->invC, copy->invC, origin->Nchannel, origin->N);
 
-    memcpy(copy->detC, origin->detC, origin->N*sizeof(double));
+    memcpy(copy->logdetC, origin->logdetC, origin->N*sizeof(double));
     memcpy(copy->transfer, origin->transfer, origin->N*sizeof(double));
 }
 
@@ -416,7 +417,7 @@ void free_noise(struct Noise *noise)
     }
     free(noise->C);
     free(noise->invC);
-    free(noise->detC);
+    free(noise->logdetC);
     free(noise->transfer);
     free(noise);
 }

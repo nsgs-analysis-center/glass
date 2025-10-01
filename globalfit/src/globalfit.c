@@ -456,7 +456,7 @@ static void share_noise_model(struct NoiseData *noise_data,
             MPI_Bcast(global_fit->psd->invC[i][j], global_fit->psd->N, MPI_DOUBLE, root, MPI_COMM_WORLD);
         }
     }
-    MPI_Bcast(global_fit->psd->detC, global_fit->psd->N, MPI_DOUBLE, root, MPI_COMM_WORLD);
+    MPI_Bcast(global_fit->psd->logdetC, global_fit->psd->N, MPI_DOUBLE, root, MPI_COMM_WORLD);
 }
 
 static void create_residual(struct GlobalFitData *global_fit, int UCB_Flag, int VGB_Flag, int MBH_Flag)
@@ -881,7 +881,7 @@ int main(int argc, char *argv[])
             MPI_Bcast(global_fit->psd->invC[i][j], global_fit->psd->N, MPI_DOUBLE, root, MPI_COMM_WORLD);
         }
     }
-    MPI_Bcast(global_fit->psd->detC, global_fit->psd->N, MPI_DOUBLE, root, MPI_COMM_WORLD);
+    MPI_Bcast(global_fit->psd->logdetC, global_fit->psd->N, MPI_DOUBLE, root, MPI_COMM_WORLD);
 
     share_noise_model(noise_data,ucb_data,vgb_data,global_fit,root,procID);
 

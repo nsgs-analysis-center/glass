@@ -912,7 +912,7 @@ double noise_log_likelihood(struct Data *data, struct Noise *noise)
             break;
     }
     for(int n=0; n<N; n++)
-        logL -= log(noise->detC[n]);
+        logL -= noise->logdetC[n];
     
     return logL;
 }
@@ -922,7 +922,7 @@ static inline double wavelet_nwip_linear(const double* __restrict a, const doubl
     // TODO: use lapack/blas here? this is just a.b.invC
     double arg = 0.0;
     #pragma omp simd reduction(+:arg)
-    for(int k=0; k<N; k++)
+    for(size_t k=0; k<N; k++)
     {
         arg += a[k]*b[k]*invC[k];
     }
@@ -956,7 +956,7 @@ double noise_log_likelihood_wavelet(struct Data *data, struct Noise *noise)
             break;
     }
     for(int n=0; n<N; n++)
-        logL -= log(noise->detC[n]);
+        logL -= noise->logdetC[n];
     
     return logL;
     // this comment constitutes an offering to the diety responsible for the correct factors of 2
@@ -978,13 +978,13 @@ double noise_delta_log_likelihood(struct Data *data, struct SplineModel *model_x
     dlogL -= -0.5*fourier_nwip(tdi->A+2*imin, tdi->A+2*imin, psd_x->invC[0][0]+imin, N);
     dlogL -= -0.5*fourier_nwip(tdi->E+2*imin, tdi->E+2*imin, psd_x->invC[1][1]+imin, N);
     for(int n=imin; n<imin+N; n++)
-        dlogL += log(psd_x->detC[n]);
+        dlogL += psd_x->logdetC[n];
 
     /* add contribution for proposed state y */
     dlogL += -0.5*fourier_nwip(tdi->A+2*imin, tdi->A+2*imin, psd_y->invC[0][0]+imin, N);
     dlogL += -0.5*fourier_nwip(tdi->E+2*imin, tdi->E+2*imin, psd_y->invC[1][1]+imin, N);
     for(int n=imin; n<imin+N; n++)
-        dlogL -= log(psd_y->detC[n]);
+        dlogL -= psd_y->logdetC[n];
     
     return dlogL;
 }

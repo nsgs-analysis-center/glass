@@ -286,7 +286,7 @@ void noise_spline_model_rjmcmc(struct Orbit *orbit, struct Data *data, struct Sp
                     model_y->spline->C[n][n][k] = model_x->spline->C[n][n][k];
                     model_y->spline->invC[n][n][k] = model_x->spline->invC[n][n][k];
                 }
-                model_y->spline->detC[k] = model_x->spline->detC[k];
+                model_y->spline->logdetC[k] = model_x->spline->logdetC[k];
             }
             
             //get grid place for new point
