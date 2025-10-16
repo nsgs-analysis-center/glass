@@ -856,6 +856,7 @@ dependencies = [
     { name = "numpy" },
     { name = "pandas" },
     { name = "seaborn" },
+    { name = "snakebar" },
 ]
 
 [package.metadata]
@@ -866,6 +867,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=2.3.2" },
     { name = "pandas", specifier = ">=2.3.1" },
     { name = "seaborn", specifier = ">=0.13.2" },
+    { name = "snakebar", specifier = ">=0.1.1" },
 ]
 
 [[package]]
@@ -1591,6 +1593,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/94/e7/b2c673351809dca68a0e064b6af791aa332cf192da575fd474ed7d6f16a2/six-1.17.0.tar.gz", hash = "sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81", size = 34031, upload-time = "2024-12-04T17:35:28.174Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b7/ce/149a00dd41f10bc29e5921b496af8b574d8413afcd5e30dfa0ed46c2cc5e/six-1.17.0-py2.py3-none-any.whl", hash = "sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274", size = 11050, upload-time = "2024-12-04T17:35:26.475Z" },
+]
+
+[[package]]
+name = "snakebar"
+version = "0.1.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/60/88/d853998f27a4f018403d09591dbed51db8e1e218a246e1c0a4af89e5762d/snakebar-0.1.1.tar.gz", hash = "sha256:08051bf7143063f867257958310b3343812f2ad86c0d43eecc418b5b7cde2d19", size = 5759, upload-time = "2025-10-02T20:45:56.304Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/97/1b/f48ba568f747d39c3838fb71c60e9af2bab315f30b6848a304f2428e28db/snakebar-0.1.1-py3-none-any.whl", hash = "sha256:68a60cd53201c4e9a98cae9dade96dca08edb14507c0501db385dde5fd01b3c0", size = 6052, upload-time = "2025-10-02T20:45:54.599Z" },
 ]
 
 [[package]]

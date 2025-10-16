@@ -372,11 +372,20 @@ struct SGWBResponse
     ///@name Each independent channel response 
     ///@{
     int N; // length of channel response
-    struct CubicSplineEvenSampling* spline_logRXX; // for now, only store XX and XY. Only indep combinations with equal arms
-    struct CubicSplineEvenSampling* spline_logRXY;
+    struct CubicSplineEvenSampling* spline_logRXX;
+    struct CubicSplineEvenSampling* spline_logRYY;
+    struct CubicSplineEvenSampling* spline_logRZZ;
+    struct CubicSplineEvenSampling* spline_asinhRXY;
+    struct CubicSplineEvenSampling* spline_asinhRXZ;
+    struct CubicSplineEvenSampling* spline_asinhRYZ;
     double *logf;
     double *logXX;
-    double *logXY;
+    double *logYY;
+    double *logZZ;
+    double *asinhXY;
+    double *asinhXZ;
+    double *asinhYZ;
+    double asinh_scale;
     ///@}
 };
 

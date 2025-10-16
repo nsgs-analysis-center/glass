@@ -149,32 +149,57 @@ void alloc_pop_sgwb_response(struct SGWBResponse* sgwbr, char* fname) {
     // memory leak
     sgwbr->logf = malloc(sizeof(double) * *N); 
     sgwbr->logXX = malloc(sizeof(double) * *N);
-    sgwbr->logXY = malloc(sizeof(double) * *N);
+    sgwbr->logYY = malloc(sizeof(double) * *N);
+    sgwbr->logZZ = malloc(sizeof(double) * *N);
+    sgwbr->asinhXY = malloc(sizeof(double) * *N);
+    sgwbr->asinhXZ = malloc(sizeof(double) * *N);
+    sgwbr->asinhYZ = malloc(sizeof(double) * *N);
+    sgwbr->asinh_scale = 1e-7;
     for (int i=0;i<*N;i++) {
-        double f,XX,XY;
-        fscanf(ff,"%lf %lf %lf\n",&f,&XX,&XY);
+        double f,XX,YY,ZZ,XY,XZ,YZ;
+        fscanf(ff,"%lf %lf %lf %lf %lf %lf %lf\n",&f,&XX,&YY,&ZZ,&XY,&XZ,&YZ);
         sgwbr->logf[i] = log(f);
         sgwbr->logXX[i] = log(XX);
-        sgwbr->logXY[i] = log(fabs(XY));
+        sgwbr->logYY[i] = log(YY);
+        sgwbr->logZZ[i] = log(ZZ);
+        sgwbr->asinhXY[i] = asinh(XY / sgwbr->asinh_scale);
+        sgwbr->asinhXZ[i] = asinh(XZ / sgwbr->asinh_scale);
+        sgwbr->asinhYZ[i] = asinh(YZ / sgwbr->asinh_scale);
     }
     fclose(ff);
 
 
     // memory leak
-    sgwbr->spline_logRXX = alloc_cubic_spline_even_sampling(*N);
-    sgwbr->spline_logRXY = alloc_cubic_spline_even_sampling(*N);
+    sgwbr->spline_logRXX   = alloc_cubic_spline_even_sampling(*N);
+    sgwbr->spline_logRYY   = alloc_cubic_spline_even_sampling(*N);
+    sgwbr->spline_logRZZ   = alloc_cubic_spline_even_sampling(*N);
+    sgwbr->spline_asinhRXY = alloc_cubic_spline_even_sampling(*N);
+    sgwbr->spline_asinhRXZ = alloc_cubic_spline_even_sampling(*N);
+    sgwbr->spline_asinhRYZ = alloc_cubic_spline_even_sampling(*N);
     double dlogf = sgwbr->logf[1] - sgwbr->logf[0];
     initialize_cubic_spline_even_sampling(sgwbr->spline_logRXX, sgwbr->logf, sgwbr->logXX, dlogf);
-    initialize_cubic_spline_even_sampling(sgwbr->spline_logRXY, sgwbr->logf, sgwbr->logXY, dlogf);
+    initialize_cubic_spline_even_sampling(sgwbr->spline_logRYY, sgwbr->logf, sgwbr->logYY, dlogf);
+    initialize_cubic_spline_even_sampling(sgwbr->spline_logRZZ, sgwbr->logf, sgwbr->logZZ, dlogf);
+    initialize_cubic_spline_even_sampling(sgwbr->spline_asinhRXY, sgwbr->logf, sgwbr->asinhXY, dlogf);
+    initialize_cubic_spline_even_sampling(sgwbr->spline_asinhRXZ, sgwbr->logf, sgwbr->asinhXZ, dlogf);
+    initialize_cubic_spline_even_sampling(sgwbr->spline_asinhRYZ, sgwbr->logf, sgwbr->asinhYZ, dlogf);
 
 }
 
 void free_sgwb_response(struct SGWBResponse *sgwbr) {
     free(sgwbr->logf);
     free(sgwbr->logXX);
-    free(sgwbr->logXY);
+    free(sgwbr->logYY);
+    free(sgwbr->logZZ);
+    free(sgwbr->asinhXY);
+    free(sgwbr->asinhXZ);
+    free(sgwbr->asinhYZ);
     free_cubic_spline_even_sampling(sgwbr->spline_logRXX);
-    free_cubic_spline_even_sampling(sgwbr->spline_logRXY);
+    free_cubic_spline_even_sampling(sgwbr->spline_logRYY);
+    free_cubic_spline_even_sampling(sgwbr->spline_logRZZ);
+    free_cubic_spline_even_sampling(sgwbr->spline_asinhRXY);
+    free_cubic_spline_even_sampling(sgwbr->spline_asinhRXZ);
+    free_cubic_spline_even_sampling(sgwbr->spline_asinhRYZ);
     free(sgwbr);
 }
 
@@ -703,7 +728,7 @@ void generate_sgwb_model(struct SGWBModel *model)
         
         switch(model->psd->Nchannel)
         {
-            double Rxx, Rxy;
+            double Rxx, Ryy, Rzz, Rxy, Rxz, Ryz;
             case 1:
             case 2:
                 fprintf(stderr, "Unimplemented error! SGWB covariance generation with Nchannels = %d\n",model->psd->Nchannel);
@@ -712,11 +737,18 @@ void generate_sgwb_model(struct SGWBModel *model)
             case 3:
                 double logf = log(f);
                 Rxx =  exp(spline_interpolation_even_sampling(model->R->spline_logRXX, logf));
-                Rxy = -exp(spline_interpolation_even_sampling(model->R->spline_logRXY, logf));
+                Ryy =  exp(spline_interpolation_even_sampling(model->R->spline_logRYY, logf));
+                Rzz =  exp(spline_interpolation_even_sampling(model->R->spline_logRZZ, logf));
+                Rxy = model->R->asinh_scale * sinh(spline_interpolation_even_sampling(model->R->spline_asinhRXY, logf));
+                Rxz = model->R->asinh_scale * sinh(spline_interpolation_even_sampling(model->R->spline_asinhRXZ, logf));
+                Ryz = model->R->asinh_scale * sinh(spline_interpolation_even_sampling(model->R->spline_asinhRYZ, logf));
                 // note that, in equal-arm LISA, XYZ: Rxx = Ryy = Rzz, and Rxy = Rxz = Ryz = -0.5*Rxx
-                model->psd->C[0][0][n] = model->psd->C[1][1][n] = model->psd->C[2][2][n] = Rxx*Sgw;
-                model->psd->C[0][1][n] = model->psd->C[0][2][n] = model->psd->C[1][2][n] = Rxy*Sgw;
-                model->psd->C[1][0][n] = model->psd->C[2][0][n] = model->psd->C[2][1][n] = Rxy*Sgw;
+                model->psd->C[0][0][n] = Rxx*Sgw;
+                model->psd->C[1][1][n] = Ryy*Sgw;
+                model->psd->C[2][2][n] = Rzz*Sgw;
+                model->psd->C[0][1][n] = model->psd->C[1][0][n] = Rxy*Sgw;
+                model->psd->C[0][2][n] = model->psd->C[2][0][n] = Rxz*Sgw;
+                model->psd->C[1][2][n] = model->psd->C[2][1][n] = Ryz*Sgw;
                 break;
         }
     }
@@ -1111,9 +1143,10 @@ void default_sgwb_injection(double* params, const SGWB_t SGWB_type) {
     // set default values
     switch (SGWB_type) {
         case SGWB_TEMPLATE_POWERLAW:
-            params[0] = -15.45;
+            params[0] = -14.9;
             //params[0] = -8.45;
-            params[1] = 0.66667;
+            params[1] = 2./3.;
+            //params[1] = 0.0;
             break;
         default:
             fprintf(stderr,"need default values for SGWB type: %s", SGWB_TEMPLATE_NAMES[SGWB_type]);
@@ -1121,6 +1154,7 @@ void default_sgwb_injection(double* params, const SGWB_t SGWB_type) {
             break;
     }
 }
+
 
 void initialize_sgwb_model(struct Orbit *orbit, struct Data *data, struct SGWBModel *model, SGWB_t SGWB_type)
 {

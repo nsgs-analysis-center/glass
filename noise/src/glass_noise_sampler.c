@@ -65,6 +65,8 @@ void spline_ptmcmc(struct SplineModel **model, struct Chain *chain, struct Flags
     }
 }
 
+// TODO: compare ptmcmc methods. Some people do pairwise random swaps
+
 void noise_ptmcmc(struct InstrumentModel **model, struct Chain *chain, struct Flags *flags)
 {
     int a, b;
@@ -112,6 +114,7 @@ void noise_ptmcmc(struct InstrumentModel **model, struct Chain *chain, struct Fl
     }
 }
 
+// TODO: this is log-uniform not uniform!
 static double uniform_frequency_draw(double fmin, double fmax, unsigned int *r)
 {
     return exp(log(fmin) + (log(fmax) - log(fmin))*rand_r_U_0_1(r));
@@ -888,6 +891,78 @@ void noise_sgwb_model_mcmc(struct Data *data, struct InstrumentModel *noise, str
         free(correlation_matrix[n]);
     free(correlation_matrix);
 }
+void noise_sgwb_model_mcmc_wavelet_dumb(struct Data *data, struct InstrumentModel *noise, struct ForegroundModel *galaxy, struct SGWBModel *model, struct SGWBModel *trial, struct Noise *psd, struct Chain *chain, struct Flags *flags, int ic)
+{
+    //shorthand pointers
+    struct SGWBModel *model_x = model;
+    struct SGWBModel *model_y = trial;
+    copy_sgwb_model(model_x, model_y);
+
+    // skip initializing likelihood
+
+    //set priors
+    const double (*prior)[2] = default_sgwb_priors[model_x->SGWB_type];
+    double u = rand_r_U_0_1(&chain->r[ic]);
+    double scale = 1.0;
+    if (u < 0.10) {
+        scale = 4;
+    }
+    else if (u < 0.20) {
+        scale = 1e0;
+    }
+    else {
+        scale = 1e-1;
+    }
+    for (size_t i=0; i<model_y->Nparams; i++) {
+        double r = rand_r_N_0_1(&chain->r[ic]);
+        double prior_extent = prior[i][1] - prior[i][0];
+        // choose jump size
+        model_y->params[i] += scale*r/12.*prior_extent;
+        // for now, periodic
+        if (model_y->params[i] > prior[i][1] || model_y->params[i] < prior[i][0])
+            model_y->params[i] = fmod(model_y->params[i] + prior_extent - prior[i][0], prior_extent) + prior[i][0];
+    }
+    int debug_inj = 0;
+    if (debug_inj > 0) {
+        switch (debug_inj) {
+            case 1:
+                model_y->params[0] = -12.0;
+                model_y->params[1] = 0.0;
+                break;
+            case 2:
+                model_y->params[0] = -13.0;
+                model_y->params[1] = 0.0;
+                break;
+            case 3:
+                model_y->params[0] = -14.0;
+                model_y->params[1] = 0.0;
+                break;
+        }
+    }
+    generate_sgwb_model_wavelet(data->wdm, model_y);
+    generate_full_dynamic_covariance_matrix(data->wdm, noise, galaxy, model_y, psd);
+    invert_noise_covariance_matrix(psd);
+    model_y->logL = noise_log_likelihood_wavelet(data, psd);
+    //model_y->logL = -0.5*(pow((model_y->params[0] - -12.0) / 0.1,2) + pow((model_y->params[1] - 0) / 0.1, 2));
+
+
+    double logH = (model_y->logL - model_x->logL)/chain->temperature[ic];
+    double loga = log(rand_r_U_0_1(&chain->r[ic]));
+    if (logH > loga) {
+        printf("accepted %lf, %lf\n", model_y->params[0], model_y->params[1]);
+        printf("\told logL: %g\n", model_x->logL);
+        printf("\tnew logL: %g\n", model_y->logL);
+        printf("\tscale %g\n", scale);
+        copy_sgwb_model(model_y, model_x);
+        noise->logL = model_x->logL;
+    }
+    else {
+        printf("rejected %lf, %lf\n", model_y->params[0], model_y->params[1]);
+        printf("\told logL: %g\n", model_x->logL);
+        printf("\tnew logL: %g\n", model_y->logL);
+        printf("\tscale %g\n", scale);
+    }
+}
 
 void noise_sgwb_model_mcmc_wavelet(struct Data *data, struct InstrumentModel *noise, struct ForegroundModel *galaxy, struct SGWBModel *model, struct SGWBModel *trial, struct Noise *psd, struct Chain *chain, struct Flags *flags, int ic)
 {
@@ -932,7 +1007,7 @@ void noise_sgwb_model_mcmc_wavelet(struct Data *data, struct InstrumentModel *no
     switch (model_x->SGWB_type) {
         case SGWB_TEMPLATE_POWERLAW:
             //log(A_p)
-            prior[0][0] = -16.0;
+            prior[0][0] = -20.0;
             prior[0][1] = -4.0;
 
             //alpha_p

@@ -258,22 +258,22 @@ int main(int argc, char *argv[])
     int NC = chain->NC;
     
     // TODO improve paralellization
-    #pragma omp parallel num_threads(flags->threads)
+    //#pragma omp parallel num_threads(flags->threads)
     {
         int threadID;
         
         //Save individual thread number
-        threadID = omp_get_thread_num();
+        threadID = 0;//omp_get_thread_num();
         
         //Only one thread runs this section
-        if(threadID==0)  numThreads = omp_get_num_threads();
+        if(threadID==0)  numThreads = 1;//omp_get_num_threads();
         
-        #pragma omp barrier
+        //#pragma omp barrier
         
         /* The MCMC loop */
         for(; step<flags->NMCMC;)
         {
-            #pragma omp barrier
+            //#pragma omp barrier
             
             // (parallel) loop over chains
             for(int ic=threadID; ic<NC; ic+=numThreads)
@@ -292,18 +292,23 @@ int main(int argc, char *argv[])
                     // noise_instrument_model_mcmc_wavelet(orbit, data, inst_model_ptr, inst_trial_ptr, conf_model_ptr, sgwb_model_ptr, psd_ptr, chain, flags, ic);
                     // TODO implement this!
                     //if(flags->confNoise) noise_foreground_model_mcmc_wavelet(data, inst_model_ptr, conf_model_ptr, conf_trial_ptr, sgwb_model_ptr, psd_ptr, chain, flags, ic);
-                    if(flags->sgwbTemplate>=0) noise_sgwb_model_mcmc_wavelet(data, inst_model_ptr, conf_model_ptr, sgwb_model_ptr, sgwb_trial_ptr, psd_ptr, chain, flags, ic);
+                    //if(flags->sgwbTemplate>=0) noise_sgwb_model_mcmc_wavelet(data, inst_model_ptr, conf_model_ptr, sgwb_model_ptr, sgwb_trial_ptr, psd_ptr, chain, flags, ic);
+                    if(flags->sgwbTemplate>=0) noise_sgwb_model_mcmc_wavelet_dumb(data, inst_model_ptr, conf_model_ptr, sgwb_model_ptr, sgwb_trial_ptr, psd_ptr, chain, flags, ic);
+                    // TODO: the logLs aren't tracked well at all here. We should probably refactor to have some kind of WaveletNoise struct that can handle all these components...
+                    // for now, update logL in all models. We have to touch them even though they're fine...
+                    inst_model_ptr->logL = sgwb_model_ptr->logL;
+                    conf_model_ptr->logL = sgwb_model_ptr->logL;
                 }
             }// end (parallel) loop over chains
             
             //Next section is single threaded. Every thread must get here before continuing
             
-            #pragma omp barrier
+            //#pragma omp barrier
             
             if(threadID==0)
             {
-                // TODO why inst_model?
-                noise_ptmcmc(inst_model, chain, flags);
+                // TODO fix this to be the model-agnostic stochastic component struct once we make it
+                //noise_ptmcmc(inst_model, chain, flags);
                 
                 if(step%(flags->NMCMC/10)==0)printf("noise_wavelet_mcmc at step %i\n",step);
                 
@@ -346,6 +351,7 @@ int main(int argc, char *argv[])
                     }
                 }
                 
+                /*
                 if(step%data->downsample==0 && step/data->downsample < data->Nwave)
                 {
                     generate_instrument_noise_model_wavelet(data->wdm, orbit, inst_model[chain->index[0]]);
@@ -363,13 +369,14 @@ int main(int argc, char *argv[])
                         for(int i=0; i<data->Nchannel; i++)
                             data->S_pow[n][i][step/data->downsample] = scaleogram[chain->index[0]]->C[i][i][n];
                 }
+                */
 
                 step++;
                 
                 
             }
             //Can't continue MCMC until single thread is finished
-            #pragma omp barrier
+            //#pragma omp barrier
             
         }// end of MCMC loop
         

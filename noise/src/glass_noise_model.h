@@ -93,8 +93,8 @@ typedef enum {
     SGWB_TEMPLATE_COUNT // leave this here, counts length of enum
 } SGWB_t;
 // note that if this array ever becomes extremely large, maybe swap to extern
-static const char* SGWB_TEMPLATE_NAMES[] = {"powerlaw"};
-static const int SGWB_TEMPLATE_NPARAMS[] = {2};
+static const char* SGWB_TEMPLATE_NAMES[SGWB_TEMPLATE_COUNT] = {"powerlaw"};
+static const int SGWB_TEMPLATE_NPARAMS[SGWB_TEMPLATE_COUNT] = {2};
 _Static_assert(sizeof(SGWB_TEMPLATE_NAMES)/sizeof(SGWB_TEMPLATE_NAMES[0]) == SGWB_TEMPLATE_COUNT,
         "Did you add an SGWB template but not its name?");
 _Static_assert(sizeof(SGWB_TEMPLATE_NPARAMS)/sizeof(SGWB_TEMPLATE_NPARAMS[0]) == SGWB_TEMPLATE_COUNT,
@@ -288,6 +288,24 @@ double sgwb_powerlaw(double f, const double* params);
 /**
  \brief default injection values for an SGWB
  */
-void default_sgwb_injection(double* params, SGWB_t SGWB_type);
+void default_sgwb_injections(double* params, SGWB_t SGWB_type);
+
+/**
+ \brief default priors for an SGWB
+ */
+
+
+_Static_assert(SGWB_TEMPLATE_COUNT == 1, "Did you add an SGWB template? Add a default prior here.");
+static const double default_powerlaw_prior[SGWB_TEMPLATE_NPARAMS[SGWB_TEMPLATE_POWERLAW]][2] = {
+    // log Ap
+    { -15.0, -4.0},
+    // alpha_p
+    { -2.0, 2.0},
+};
+_Static_assert(SGWB_TEMPLATE_COUNT == 1, "Did you add an SGWB template? Edit this list of default priors, it needs to be exhaustive.");
+static const double (*default_sgwb_priors[SGWB_TEMPLATE_COUNT])[2] = {
+    [SGWB_TEMPLATE_POWERLAW] = default_powerlaw_prior
+};
+
 
 #endif /* noise_model_h */
