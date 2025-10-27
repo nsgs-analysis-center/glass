@@ -933,12 +933,12 @@ void noise_sgwb_model_mcmc_wavelet_dumb(struct Data *data, struct InstrumentMode
     if (debug_inj > 0) {
         switch (debug_inj) {
             case 1:
-                model_y->params[0] = -4.005576;
+                model_y->params[0] = -9.005576;
                 model_y->params[1] =  0.544482;
                 break;
             case 2:
-                model_y->params[0] = -13.0;
-                model_y->params[1] = 0.0;
+                model_y->params[0] = -8.;
+                model_y->params[1] = 2./3.;
                 break;
             case 3:
                 model_y->params[0] = -14.0;
@@ -958,22 +958,18 @@ void noise_sgwb_model_mcmc_wavelet_dumb(struct Data *data, struct InstrumentMode
     double logH = (model_y->logL - model_x->logL)/chain->temperature[ic];
     double loga = log(rand_r_U_0_1(&chain->r[ic]));
     if (logH > loga) {
-        /*
         printf("accepted %lf, %lf\n", model_y->params[0], model_y->params[1]);
         printf("\told logL: %g\n", model_x->logL);
         printf("\tnew logL: %g\n", model_y->logL);
         printf("\tscale %g\n", scale);
-        */
         copy_sgwb_model(model_y, model_x);
         noise->logL = model_x->logL;
     }
     else {
-        /*
         printf("rejected %lf, %lf\n", model_y->params[0], model_y->params[1]);
         printf("\told logL: %g\n", model_x->logL);
         printf("\tnew logL: %g\n", model_y->logL);
         printf("\tscale %g\n", scale);
-        */
     }
 }
 
