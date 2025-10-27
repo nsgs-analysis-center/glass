@@ -961,6 +961,29 @@ static inline double wavelet_nwip_linear(const double* __restrict a, const doubl
     return arg;
 }
 
+double my_noise_log_likelihood_wavelet(struct Data *data, struct Noise *noise) {
+    struct TDI *tdi = data->tdi;
+    const double log2pi = log(2*M_PI);
+    double logL = 0.0;
+    #pragma omp simd reduction(+:logL)
+    for (int i=0; i<data->wdm->NT; i++)
+        for (int j=data->lmin; j<data->lmax; j++) {
+            int k;
+            wavelet_pixel_to_index(data->wdm,i,j,&k);
+            k -= data->wdm->kmin;
+            logL -= 0.5*tdi->X[k]*tdi->X[k]*noise->invC[0][0][k];
+            logL -= 0.5*tdi->Y[k]*tdi->Y[k]*noise->invC[1][1][k];
+            logL -= 0.5*tdi->Z[k]*tdi->Z[k]*noise->invC[2][2][k];
+            logL -= tdi->X[k]*tdi->Y[k]*noise->invC[0][1][k];
+            logL -= tdi->X[k]*tdi->Z[k]*noise->invC[0][2][k];
+            logL -= tdi->Y[k]*tdi->Z[k]*noise->invC[1][2][k];
+            logL -= noise->logdetC[k];
+    }
+    logL -= data->N * log2pi;
+
+    return logL;
+}
+
 double noise_log_likelihood_wavelet(struct Data *data, struct Noise *noise)
 {
     double logL = 0.0;

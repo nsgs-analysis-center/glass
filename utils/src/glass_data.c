@@ -1068,6 +1068,20 @@ void AddNoise(struct Data *data, struct TDI *tdi)
     free(L);
     free(C);
 }
+/*
+void MyAddNoiseWavelet(struct Data *data, struct TDI *tdi)
+{
+    printf("   ...adding (Robbie's version) of a Gaussian noise realization\n");
+    for (int i=0; i<wdm->NT; i++) {
+        for (int j=data->lmin; j<data->lmax; j++) {
+            int k;
+            wavelet_pixel_to_index(data->wdm,i,j,&k);
+            k -= data->wdm->kmin;
+
+        }
+    }
+}
+*/
 
 void AddNoiseWavelet(struct Data *data, struct TDI *tdi)
 {

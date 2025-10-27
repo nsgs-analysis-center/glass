@@ -921,7 +921,7 @@ void noise_sgwb_model_mcmc_wavelet_dumb(struct Data *data, struct InstrumentMode
     }
     for (size_t i=0; i<model_y->Nparams; i++) {
         double r = rand_r_N_0_1(&chain->r[ic]);
-        printf("%lf\n",r);
+        //printf("%lf\n",r);
         double prior_extent = prior[i][1] - prior[i][0];
         // choose jump size
         model_y->params[i] += scale*r/12.*prior_extent;
@@ -949,27 +949,47 @@ void noise_sgwb_model_mcmc_wavelet_dumb(struct Data *data, struct InstrumentMode
     generate_sgwb_model_wavelet(data->wdm, model_y);
     generate_full_dynamic_covariance_matrix(data->wdm, noise, galaxy, model_y, psd);
     invert_noise_covariance_matrix(psd);
-    if (debug_inj > 0)
+    // DEBUG note: this seems to work just fine, same as injection...
+    if (debug_inj > 0) {
+        const double rtol = 1e-8;
         print_noise_model_dynamic(data, psd, "./debug_scaleogram.dat");
-    model_y->logL = noise_log_likelihood_wavelet(data, psd);
+        // invC test. C*invC == id?
+        for (size_t k=0; k < data->N; k++) {
+            for (size_t i=0; i<3; i++) {
+                for (size_t j=0; j<3; j++) {
+                    double prod = 0.0;
+                    for (size_t l=0; l<3; l++) {
+                        prod += psd->invC[i][l][k] * psd->C[l][j][k];
+                    }
+                    if ( ( (i != j) && fabs(prod) > rtol) || ((i==j) && fabs(prod - 1.0) > rtol) )
+                        printf("Inverse is bad. At k==%zu, (C*invC)[%zu][%zu] == %lg\n", k, i, j, prod);
+                }
+            }
+        }
+    }
+    model_y->logL = my_noise_log_likelihood_wavelet(data, psd);
     //model_y->logL = -0.5*(pow((model_y->params[0] - -12.0) / 0.1,2) + pow((model_y->params[1] - 0) / 0.1, 2));
 
 
     double logH = (model_y->logL - model_x->logL)/chain->temperature[ic];
     double loga = log(rand_r_U_0_1(&chain->r[ic]));
     if (logH > loga) {
+        /*
         printf("accepted %lf, %lf\n", model_y->params[0], model_y->params[1]);
         printf("\told logL: %g\n", model_x->logL);
         printf("\tnew logL: %g\n", model_y->logL);
         printf("\tscale %g\n", scale);
+        */
         copy_sgwb_model(model_y, model_x);
         noise->logL = model_x->logL;
     }
     else {
+        /*
         printf("rejected %lf, %lf\n", model_y->params[0], model_y->params[1]);
         printf("\told logL: %g\n", model_x->logL);
         printf("\tnew logL: %g\n", model_y->logL);
         printf("\tscale %g\n", scale);
+        */
     }
 }
 

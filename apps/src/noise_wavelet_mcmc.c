@@ -114,6 +114,7 @@ int main(int argc, char *argv[])
         initialize_sgwb_model_wavelet(orbit, data, &sgwb_inj, flags->sgwbTemplate);
         generate_full_dynamic_covariance_matrix(data->wdm, &inst_inj, &conf_inj, &sgwb_inj, data->noise);
 
+        //AddNoiseWavelet(data,data->tdi);
         AddNoiseWavelet(data,data->tdi);
     }
     /* Store DFT copy of simulated data */
