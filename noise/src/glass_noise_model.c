@@ -1166,7 +1166,7 @@ void default_sgwb_injection(double* params, const SGWB_t SGWB_type) {
     // set default values
     switch (SGWB_type) {
         case SGWB_TEMPLATE_POWERLAW:
-            params[0] = -8.0;
+            params[0] = -21.0;
             //params[0] = -8.45;
             params[1] = 2./3.;
             //params[1] = 0.0;
@@ -1207,7 +1207,13 @@ void initialize_sgwb_model_wavelet(struct Orbit *orbit, struct Data *data, struc
     for(int n=0; n<model->psd->N; n++)
         model->psd->f[n] = (data->lmin+n)*wdm->df;
 
-    default_sgwb_injection(model->params, SGWB_type);
+    if (SGWB_type == SGWB_TEMPLATE_POWERLAW) {
+        model->params[0] = -12.0;
+        model->params[1] = 0.0;
+    } else {
+        default_sgwb_injection(model->params, SGWB_type);
+    }
+
     
     model->Tobs  =  data->T;
     // get covariance matrix for initial parameters

@@ -113,10 +113,13 @@ int main(int argc, char *argv[])
         struct SGWBModel sgwb_inj = {0};
         initialize_sgwb_model_wavelet(orbit, data, &sgwb_inj, flags->sgwbTemplate);
         generate_full_dynamic_covariance_matrix(data->wdm, &inst_inj, &conf_inj, &sgwb_inj, data->noise);
+        // alloc tdi data
+        alloc_tdi(data->tdi, data->N, 3);
 
         //AddNoiseWavelet(data,data->tdi);
-        AddNoiseWavelet(data,data->tdi);
+        MyAddNoiseWavelet(data,data->tdi);
     }
+
     /* Store DFT copy of simulated data */
     // TODO: is this right?
     data->qmin = data->lmin;
@@ -226,7 +229,7 @@ int main(int argc, char *argv[])
     /* get initial likelihood */
         // TODO struct Noise doesn't have a logL... what's the point of getting the initial logLs anyway?
         invert_noise_covariance_matrix(scaleogram[ic]);
-        double logL = noise_log_likelihood_wavelet(data, scaleogram[ic]);
+        double logL = my_noise_log_likelihood_wavelet(data, scaleogram[ic]);
         inst_model[ic]->logL = logL;
         sgwb_model[ic]->logL = logL;
         conf_model[ic]->logL = logL;

@@ -301,6 +301,8 @@ void matrix_multiply(double **A, double **B, double **AB, int N);
  */
 void cholesky_decomp(double **A, double **L, int N);
 
+void my_cholesky_decomp(int N, const double A[N][N], double L[N][N]);
+
 /**
  \brief Wrapper to `GLASS` cubic spline interpolation routines.
 

@@ -916,18 +916,23 @@ void noise_sgwb_model_mcmc_wavelet_dumb(struct Data *data, struct InstrumentMode
     else if (u < 0.50) {
         scale = 1e-2;
     }
-    else {
+    else if (u < 0.70) {
         scale = 1e-3;
+    }
+    else {
+        scale = 1e-5;
     }
     for (size_t i=0; i<model_y->Nparams; i++) {
         double r = rand_r_N_0_1(&chain->r[ic]);
         //printf("%lf\n",r);
         double prior_extent = prior[i][1] - prior[i][0];
         // choose jump size
-        model_y->params[i] += scale*r/12.*prior_extent;
-        // for now, periodic
-        if (model_y->params[i] > prior[i][1] || model_y->params[i] < prior[i][0])
-            model_y->params[i] = fmod(model_y->params[i] + prior_extent - prior[i][0], prior_extent) + prior[i][0];
+        double jump = model_y->params[i] + scale*r/12.*prior_extent;
+        model_y->params[i] = jump;
+        if (jump > prior[i][1] || jump < prior[i][0]) {
+            // try again if out of prior
+            return;
+        }
     }
     const int debug_inj = 0;
     if (debug_inj > 0) {

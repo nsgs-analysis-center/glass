@@ -313,7 +313,7 @@ void alloc_noise(struct Noise *noise, int N, int Nlayer, int Nchannel)
         for(int i=0; i<Nchannel; i++) noise->C[i][i][n] = 1.0;
         for(int i=0; i<Nchannel; i++)
         {
-            for(int j=i+1; i<Nchannel; i++)
+            for(int j=i+1; j<Nchannel; j++)
             {
                 noise->C[i][j][n] = 0.0;
                 noise->C[j][i][n] = 0.0;
@@ -1068,20 +1068,35 @@ void AddNoise(struct Data *data, struct TDI *tdi)
     free(L);
     free(C);
 }
-/*
 void MyAddNoiseWavelet(struct Data *data, struct TDI *tdi)
 {
     printf("   ...adding (Robbie's version) of a Gaussian noise realization\n");
-    for (int i=0; i<wdm->NT; i++) {
+    double L[3][3] = {0}; // will be Cholesky decomposition of covariance
+    double C[3][3] = {0}; // non-ragged copy of covariance
+    double n[3] = {0}; // vector of random normals
+    unsigned int r = data->nseed;
+    double fudge_factor = 3; // is there an Nchannels we forgot somewhere? Empirically, this makes the data gaussian though
+    for (int i=0; i<data->wdm->NT; i++) {
         for (int j=data->lmin; j<data->lmax; j++) {
             int k;
             wavelet_pixel_to_index(data->wdm,i,j,&k);
             k -= data->wdm->kmin;
-
+            for (int i=0; i<3; i++)
+                for (int j=0; j<3; j++) {
+                    C[i][j] = data->noise->C[i][j][k];
+                }
+            my_cholesky_decomp(3, C, L);
+            for (int i=0; i<3; i++)
+                n[i] = rand_r_N_0_1(&r);
+            for (int i=0; i<3; i++)
+                for (int j=0; j<3; j++) {
+                    tdi->X[k] += L[0][j] * n[j] / fudge_factor;
+                    tdi->Y[k] += L[1][j] * n[j] / fudge_factor;
+                    tdi->Z[k] += L[2][j] * n[j] / fudge_factor;
+                }
         }
     }
 }
-*/
 
 void AddNoiseWavelet(struct Data *data, struct TDI *tdi)
 {
@@ -1227,7 +1242,7 @@ void print_data(struct Data *data, struct Flags *flags)
             {
                 wavelet_pixel_to_index(data->wdm,i,j,&k);
                 k-=data->wdm->kmin;
-                fprintf(fptr,"%lg %lg %.14e %.14e %.14e\n", i*data->wdm->dt, j*data->wdm->df + WAVELET_BANDWIDTH/2,tdi->X[k]*tdi->X[k], tdi->Y[k]*tdi->Y[k], tdi->Z[k]*tdi->Z[k]);
+                fprintf(fptr,"%lg %lg %.14e %.14e %.14e\n", i*data->wdm->dt, j*data->wdm->df, tdi->X[k]*tdi->X[k], tdi->Y[k]*tdi->Y[k], tdi->Z[k]*tdi->Z[k]);
             }
             fprintf(fptr,"\n");
         }
@@ -1260,9 +1275,9 @@ void print_data(struct Data *data, struct Flags *flags)
         tdi = data->dwt;
         sprintf(filename,"%s/dwt_data.dat",data->dataDir);
         fptr=fopen(filename,"w");
-        for(int j=data->lmin; j<data->lmax; j++)
+        for(int i=0; i<data->wdm->NT; i++)
         {
-            for(int i=0; i<data->wdm->NT; i++)
+            for(int j=data->lmin; j<data->lmax; j++)
             {
                 wavelet_pixel_to_index(data->wdm,i,j,&k);
                 k-=data->wdm->kmin;

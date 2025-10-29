@@ -299,7 +299,7 @@ void invert_noise_covariance_matrix(struct Noise *noise)
                 double cxz = noise->C[X][Z][n];
                 double cyz = noise->C[Y][Z][n];
                 // This gives NaNs lots of the time, try a Cholesky-like decomposition
-                double olddetC = cxx*(czz*cyy - cyz*cyz) - cxy*(cxy*czz - cxz*cyz) + cxz*(cxy*cyz - cyy*cxz);
+                //double olddetC = cxx*(czz*cyy - cyz*cyz) - cxy*(cxy*czz - cxz*cyz) + cxz*(cxy*cyz - cyy*cxz);
                 double d1 = cxx;
                 double d2 = cyy - cxy*cxy/d1;
                 double t  = cyz - cxy*cxz/d1;
@@ -580,6 +580,17 @@ void matrix_multiply(double **A, double **B, double **AB, int N)
     
 }
 
+void my_cholesky_decomp(int N, const double A[N][N], double L[N][N]) {
+    for (size_t i = 0; i < N; ++i)
+        for (size_t j = 0; j < N; ++j)
+            L[i][j] = A[i][j];
+    int info = LAPACKE_dpotrf(LAPACK_ROW_MAJOR, 'L', N, &L[0][0], N);
+    // zero the upper triangle for a clean lower-triangular L
+    for (size_t i = 0; i < N; ++i)
+        for (size_t j = i + 1; j < N; ++j)
+            L[i][j] = 0.0;
+}
+
 
 void cholesky_decomp(double **A, double **L, int N)
 {
@@ -599,7 +610,7 @@ void cholesky_decomp(double **A, double **L, int N)
     LAPACKE_dpotrf(LAPACK_ROW_MAJOR,'L',N,matrix,N);
     
     //copy cholesky decomposition into output matrix
-    for(int i=0; i<N; i++) for(int j=0; j<N; j++)  L[i][j] = matrix[2*i+j];
+    for(int i=0; i<N; i++) for(int j=0; j<N; j++)  L[i][j] = matrix[N*i+j];
     
     //zero upper half of matrix (copy of A)
     for(int i=0; i<N; i++) for(int j=i+1; j<N; j++) L[i][j] = 0.0;
