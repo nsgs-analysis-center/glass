@@ -284,7 +284,7 @@ int main(int argc, char *argv[])
             {
                 struct Noise *psd_ptr = scaleogram[chain->index[ic]];
                 struct InstrumentModel *inst_model_ptr = inst_model[chain->index[ic]];
-                //struct InstrumentModel *inst_trial_ptr = inst_trial[chain->index[ic]];
+                struct InstrumentModel *inst_trial_ptr = inst_trial[chain->index[ic]];
                 struct ForegroundModel *conf_model_ptr = conf_model[chain->index[ic]];
                 //struct ForegroundModel *conf_trial_ptr = conf_trial[chain->index[ic]];
                 struct SGWBModel       *sgwb_model_ptr = sgwb_model[chain->index[ic]];
@@ -292,8 +292,7 @@ int main(int argc, char *argv[])
 
                 for(int mc=0; mc<10; mc++)
                 {
-                    // TODO implement this!
-                    // noise_instrument_model_mcmc_wavelet(orbit, data, inst_model_ptr, inst_trial_ptr, conf_model_ptr, sgwb_model_ptr, psd_ptr, chain, flags, ic);
+                    noise_instrument_model_mcmc_wavelet(orbit, data, inst_model_ptr, inst_trial_ptr, conf_model_ptr, sgwb_model_ptr, psd_ptr, chain, flags, ic);
                     // TODO implement this!
                     //if(flags->confNoise) noise_foreground_model_mcmc_wavelet(data, inst_model_ptr, conf_model_ptr, conf_trial_ptr, sgwb_model_ptr, psd_ptr, chain, flags, ic);
                     //if(flags->sgwbTemplate>=0) noise_sgwb_model_mcmc_wavelet(data, inst_model_ptr, conf_model_ptr, sgwb_model_ptr, sgwb_trial_ptr, psd_ptr, chain, flags, ic);
