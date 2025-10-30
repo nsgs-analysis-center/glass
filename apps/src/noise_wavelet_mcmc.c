@@ -180,12 +180,15 @@ int main(int argc, char *argv[])
     // remember, plan here for now is to not sample over foreground model in wavelet basis, but still sample over noise/sgwb
     if(flags->confNoise)printf("   ...initialize foreground noise model\n");
     struct ForegroundModel **conf_model = malloc(chain->NC*sizeof(struct ForegroundModel *));
+    struct ForegroundModel **conf_trial = malloc(chain->NC*sizeof(struct ForegroundModel *));
     for(int ic=0; ic<chain->NC; ic++)
     {
         conf_model[ic] = malloc(sizeof(struct ForegroundModel));
+        conf_trial[ic] = malloc(sizeof(struct ForegroundModel));
         if(flags->confNoise) 
         {
            initialize_foreground_model_wavelet(orbit, data, conf_model[ic]);
+           initialize_foreground_model_wavelet(orbit, data, conf_trial[ic]);
         }
     }
     if(flags->confNoise)
@@ -286,21 +289,17 @@ int main(int argc, char *argv[])
                 struct InstrumentModel *inst_model_ptr = inst_model[chain->index[ic]];
                 struct InstrumentModel *inst_trial_ptr = inst_trial[chain->index[ic]];
                 struct ForegroundModel *conf_model_ptr = conf_model[chain->index[ic]];
-                //struct ForegroundModel *conf_trial_ptr = conf_trial[chain->index[ic]];
+                struct ForegroundModel *conf_trial_ptr = conf_trial[chain->index[ic]];
                 struct SGWBModel       *sgwb_model_ptr = sgwb_model[chain->index[ic]];
                 struct SGWBModel       *sgwb_trial_ptr = sgwb_trial[chain->index[ic]];
 
                 for(int mc=0; mc<10; mc++)
                 {
                     noise_instrument_model_mcmc_wavelet(orbit, data, inst_model_ptr, inst_trial_ptr, conf_model_ptr, sgwb_model_ptr, psd_ptr, chain, flags, ic);
-                    // TODO implement this!
-                    //if(flags->confNoise) noise_foreground_model_mcmc_wavelet(data, inst_model_ptr, conf_model_ptr, conf_trial_ptr, sgwb_model_ptr, psd_ptr, chain, flags, ic);
-                    //if(flags->sgwbTemplate>=0) noise_sgwb_model_mcmc_wavelet(data, inst_model_ptr, conf_model_ptr, sgwb_model_ptr, sgwb_trial_ptr, psd_ptr, chain, flags, ic);
+                    // Note that we do not sample over the galaxy's modulation, only its spectral shape
+                    if(flags->confNoise) noise_foreground_model_mcmc_wavelet(data, inst_model_ptr, conf_model_ptr, conf_trial_ptr, sgwb_model_ptr, psd_ptr, chain, flags, ic);
                     if(flags->sgwbTemplate>=0) noise_sgwb_model_mcmc_wavelet_dumb(data, inst_model_ptr, conf_model_ptr, sgwb_model_ptr, sgwb_trial_ptr, psd_ptr, chain, flags, ic);
                     // TODO: the logLs aren't tracked well at all here. We should probably refactor to have some kind of WaveletNoise struct that can handle all these components...
-                    // for now, update logL in all models. We have to touch them even though they're fine...
-                    inst_model_ptr->logL = sgwb_model_ptr->logL;
-                    conf_model_ptr->logL = sgwb_model_ptr->logL;
                 }
             }// end (parallel) loop over chains
             
@@ -354,6 +353,7 @@ int main(int argc, char *argv[])
                     }
                 }
                 
+                // TODO: what should this code below do?
                 /*
                 if(step%data->downsample==0 && step/data->downsample < data->Nwave)
                 {

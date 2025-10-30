@@ -731,6 +731,7 @@ void noise_foreground_model_mcmc(struct Data *data, struct InstrumentModel *nois
         {
             copy_foreground_model(model_y, model_x);
             noise->logL = model_x->logL;
+            sgwb->logL = model_x->logL;
         }
     }
  
@@ -987,6 +988,7 @@ void noise_sgwb_model_mcmc_wavelet_dumb(struct Data *data, struct InstrumentMode
         */
         copy_sgwb_model(model_y, model_x);
         noise->logL = model_x->logL;
+        galaxy->logL = model_x->logL;
     }
     else {
         /*
@@ -1175,6 +1177,145 @@ void noise_instrument_model_mcmc_wavelet(struct Orbit *orbit, struct Data *data,
         free(correlation_matrix[n]);
     free(correlation_matrix);
 
+}
+
+void noise_foreground_model_mcmc_wavelet(struct Data *data, struct InstrumentModel *noise, struct ForegroundModel *model, struct ForegroundModel *trial, struct SGWBModel *sgwb, struct Noise *psd, struct Chain *chain, struct Flags *flags, int ic)
+{
+    double logH  = 0.0; //(log) Hastings ratio
+    double loga  = 1.0; //(log) transition probability
+    
+    double logPx  = 0.0; //(log) prior density for model x (current state)
+    double logPy  = 0.0; //(log) prior density for model y (proposed state)
+    
+    //shorthand pointers
+    struct ForegroundModel *model_x = model;
+    struct ForegroundModel *model_y = trial;
+    copy_foreground_model(model_x,model_y);
+    
+    //skip initializing likelhood
+    
+    //set priors
+    double **prior = malloc(sizeof(double *)*model_x->Nparams);
+    for(int n=0; n<model_x->Nparams; n++)
+        prior[n] = malloc(sizeof(double)*2);
+    
+    //set correlation matrix
+    double *acc_jump_vec = malloc(model_x->Nparams*sizeof(double));
+    double **correlation_matrix = malloc(model_x->Nparams*sizeof(double *));
+    for(int n=0; n<model_x->Nparams; n++)
+    {
+        correlation_matrix[n] = malloc(model_x->Nparams*sizeof(double));
+        correlation_matrix[n][n] = +1.0;
+    }
+    correlation_matrix[0][1] = correlation_matrix[1][0] = -1.0;
+    correlation_matrix[0][2] = correlation_matrix[2][0] = -1.0;
+    correlation_matrix[0][3] = correlation_matrix[3][0] = -1.0;
+    correlation_matrix[0][4] = correlation_matrix[4][0] = +1.0;
+
+    correlation_matrix[1][2] = correlation_matrix[2][1] = +1.0;
+    correlation_matrix[1][3] = correlation_matrix[3][1] = +1.0;
+    correlation_matrix[1][4] = correlation_matrix[4][1] = -1.0;
+
+    correlation_matrix[2][3] = correlation_matrix[3][2] = +1.0;
+    correlation_matrix[2][4] = correlation_matrix[4][2] = -1.0;
+
+    correlation_matrix[3][4] = correlation_matrix[4][3] = -1.0;
+    
+    
+    //log(A)
+    prior[0][0] = -86.0;
+    prior[0][1] = -82.0;
+    
+    //f1
+    prior[1][0] = log(0.0001);
+    prior[1][1] = log(0.01);
+    
+    //alpha
+    prior[2][0] = 0.0;
+    prior[2][1] = 3.0;
+    
+    //fk
+    prior[3][0] = log(0.0001);
+    prior[3][1] = log(0.1);
+    
+    //f2
+    prior[4][0] = log(0.00001);
+    prior[4][1] = log(0.01);
+        
+    for(int mc=0; mc<10; mc++)
+    {
+        
+        /* get proposed noise parameters */
+        
+        //get jump sizes
+        double scale;
+        if(rand_r_U_0_1(&chain->r[ic])>0.75)
+            scale = 0.1;
+        else if(rand_r_U_0_1(&chain->r[ic])>0.5)
+            scale = 0.01;
+        else if(rand_r_U_0_1(&chain->r[ic])>0.25)
+            scale = 0.001;
+        else
+            scale = 0.0001;
+        
+        if(rand_r_U_0_1(&chain->r[ic])<0.5)
+        {
+            //pick which parameter to update
+            int i = (int)(rand_r_U_0_1(&chain->r[ic])* (double)model_x->Nparams);
+            model_y->sgal[i] = model_x->sgal[i] + scale * 0.5*(prior[i][1]+prior[i][0]) * rand_r_N_0_1(&chain->r[ic]);
+        }
+        else
+        {
+            //jump along correlated directions
+            double jump=rand_r_N_0_1(&chain->r[ic]);
+            for(int n=0; n<model_x->Nparams; n++)
+            {
+                acc_jump_vec[n] = scale *  0.5*(prior[n][1]+prior[n][0]) * jump;
+                model_y->sgal[n] = model_x->sgal[n];
+            }
+            
+            //pick which vector
+            int i = (int)(rand_r_U_0_1(&chain->r[ic])* (double)model_x->Nparams);
+            
+            //jump
+            for(int j=0; j<model_x->Nparams; j++)
+                model_y->sgal[j] += correlation_matrix[i][j] * acc_jump_vec[j];
+
+        }
+        
+        //check priors
+        for(int n=0; n<model_y->Nparams; n++)
+            if(model_y->sgal[n] < prior[n][0] || model_y->sgal[n] > prior[n][1])
+                logPy = -INFINITY;
+        
+        //get noise covariance matrix for initial parameters
+        if(logPy > -INFINITY && !flags->prior)
+        {
+            generate_galactic_foreground_model_wavelet(data->wdm, model_y);
+            generate_full_dynamic_covariance_matrix(data->wdm, noise, model_y, sgwb, psd);
+            invert_noise_covariance_matrix(psd);
+            
+            model_y->logL = my_noise_log_likelihood_wavelet(data, psd);
+            
+            logH += (model_y->logL - model_x->logL)/chain->temperature[ic]; //delta logL
+        }
+        logH += logPy - logPx; //priors
+        
+        loga = log(rand_r_U_0_1(&chain->r[ic]));
+        if(logH > loga)
+        {
+            copy_foreground_model(model_y, model_x);
+            noise->logL = model_x->logL;
+            sgwb->logL = model_x->logL;
+        }
+    }
+ 
+    free(acc_jump_vec);   
+    for(int n=0; n<model_x->Nparams; n++) free(prior[n]);
+    free(prior);
+    for(int n=0; n<model_x->Nparams; n++)
+        free(correlation_matrix[n]);
+    free(correlation_matrix);
 }
 
 void noise_sgwb_model_mcmc_wavelet(struct Data *data, struct InstrumentModel *noise, struct ForegroundModel *galaxy, struct SGWBModel *model, struct SGWBModel *trial, struct Noise *psd, struct Chain *chain, struct Flags *flags, int ic)
