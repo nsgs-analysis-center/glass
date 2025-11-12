@@ -297,7 +297,7 @@ void default_sgwb_injection(double* params, SGWB_t SGWB_type);
 
 
 _Static_assert(SGWB_TEMPLATE_COUNT == 1, "Did you add an SGWB template? Add a default prior here.");
-static const double default_powerlaw_prior[SGWB_TEMPLATE_NPARAMS[SGWB_TEMPLATE_POWERLAW]][2] = {
+static const double default_powerlaw_prior[][2] = {
     // log Ap
     { -22.0, -7.0},
     // alpha_p
