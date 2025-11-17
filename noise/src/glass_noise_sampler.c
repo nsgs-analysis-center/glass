@@ -1153,7 +1153,7 @@ void noise_instrument_model_mcmc_wavelet(struct Orbit *orbit, struct Data *data,
         //get noise covariance matrix for initial parameters
         if(logPy > -INFINITY && !flags->prior)
         {
-            generate_instrument_noise_model_wavelet(data->wdm,orbit,model_y);
+            generate_instrument_noise_model_wavelet(data->wdm, orbit, model_y);
             generate_full_dynamic_covariance_matrix(data->wdm, model_y, galaxy, sgwb, psd);
             invert_noise_covariance_matrix(psd);
             

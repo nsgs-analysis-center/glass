@@ -297,8 +297,8 @@ int main(int argc, char *argv[])
                 {
                     noise_instrument_model_mcmc_wavelet(orbit, data, inst_model_ptr, inst_trial_ptr, conf_model_ptr, sgwb_model_ptr, psd_ptr, chain, flags, ic);
                     // Note that we do not sample over the galaxy's modulation, only its spectral shape
-                    if(flags->confNoise) noise_foreground_model_mcmc_wavelet(data, inst_model_ptr, conf_model_ptr, conf_trial_ptr, sgwb_model_ptr, psd_ptr, chain, flags, ic);
-                    if(flags->sgwbTemplate>=0) noise_sgwb_model_mcmc_wavelet_dumb(data, inst_model_ptr, conf_model_ptr, sgwb_model_ptr, sgwb_trial_ptr, psd_ptr, chain, flags, ic);
+                    //if(flags->confNoise) noise_foreground_model_mcmc_wavelet(data, inst_model_ptr, conf_model_ptr, conf_trial_ptr, sgwb_model_ptr, psd_ptr, chain, flags, ic);
+                    //if(flags->sgwbTemplate>=0) noise_sgwb_model_mcmc_wavelet_dumb(data, inst_model_ptr, conf_model_ptr, sgwb_model_ptr, sgwb_trial_ptr, psd_ptr, chain, flags, ic);
                     // TODO: the logLs aren't tracked well at all here. We should probably refactor to have some kind of WaveletNoise struct that can handle all these components...
                 }
             }// end (parallel) loop over chains
