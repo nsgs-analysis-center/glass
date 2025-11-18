@@ -1245,6 +1245,7 @@ void noise_foreground_model_mcmc_wavelet(struct Data *data, struct InstrumentMod
         
     for(int mc=0; mc<10; mc++)
     {
+        logH = 0.0;
         
         /* get proposed noise parameters */
         
