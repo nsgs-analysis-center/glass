@@ -1053,6 +1053,7 @@ void noise_instrument_model_mcmc_wavelet(struct Orbit *orbit, struct Data *data,
 
     for(int mc=0; mc<10; mc++)
     {
+        logH = 0.0;
         //get jump sizes
         double acc_jump,oms_jump;
         double scale;
@@ -1159,7 +1160,7 @@ void noise_instrument_model_mcmc_wavelet(struct Orbit *orbit, struct Data *data,
             
             model_y->logL = my_noise_log_likelihood_wavelet(data, psd);
             
-            logH += (model_y->logL - model_x->logL)/chain->temperature[ic]; //delta logL
+            logH = (model_y->logL - model_x->logL)/chain->temperature[ic]; //delta logL
         }
         logH += logPy - logPx; //priors
         

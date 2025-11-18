@@ -979,7 +979,7 @@ double my_noise_log_likelihood_wavelet(struct Data *data, struct Noise *noise) {
             logL -= tdi->Y[k]*tdi->Z[k]*noise->invC[1][2][k];
             logL -= noise->logdetC[k];
     }
-    logL -= data->N * log2pi;
+    logL -= 3 * data->N * log2pi;
 
     return logL;
 }
@@ -1207,12 +1207,7 @@ void initialize_sgwb_model_wavelet(struct Orbit *orbit, struct Data *data, struc
     for(int n=0; n<model->psd->N; n++)
         model->psd->f[n] = (data->lmin+n)*wdm->df;
 
-    if (SGWB_type == SGWB_TEMPLATE_POWERLAW) {
-        model->params[0] = -12.0;
-        model->params[1] = 0.0;
-    } else {
-        default_sgwb_injection(model->params, SGWB_type);
-    }
+    default_sgwb_injection(model->params, SGWB_type);
 
     
     model->Tobs  =  data->T;
@@ -1236,6 +1231,7 @@ void initialize_foreground_model_wavelet(struct Orbit *orbit, struct Data *data,
     // initialize constant foreground parameters levels 
     model->Tobs  =  data->T;
     model->Amp   =  1.2826e-44;
+    //model->Amp   =  1.2826e-53;
     model->alpha =  1.629667;
     model->f2    =  4.810781e-4;
 

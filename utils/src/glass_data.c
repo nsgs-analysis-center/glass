@@ -1075,7 +1075,6 @@ void MyAddNoiseWavelet(struct Data *data, struct TDI *tdi)
     double C[3][3] = {0}; // non-ragged copy of covariance
     double n[3] = {0}; // vector of random normals
     unsigned int r = data->nseed;
-    double fudge_factor = 3; // is there an Nchannels we forgot somewhere? Empirically, this makes the data gaussian though
     for (int i=0; i<data->wdm->NT; i++) {
         for (int j=data->lmin; j<data->lmax; j++) {
             int k;
@@ -1088,12 +1087,11 @@ void MyAddNoiseWavelet(struct Data *data, struct TDI *tdi)
             my_cholesky_decomp(3, C, L);
             for (int i=0; i<3; i++)
                 n[i] = rand_r_N_0_1(&r);
-            for (int i=0; i<3; i++)
-                for (int j=0; j<3; j++) {
-                    tdi->X[k] += L[0][j] * n[j] / fudge_factor;
-                    tdi->Y[k] += L[1][j] * n[j] / fudge_factor;
-                    tdi->Z[k] += L[2][j] * n[j] / fudge_factor;
-                }
+            for (int j=0; j<3; j++) {
+                tdi->X[k] += L[0][j] * n[j];
+                tdi->Y[k] += L[1][j] * n[j];
+                tdi->Z[k] += L[2][j] * n[j];
+            }
         }
     }
 }
