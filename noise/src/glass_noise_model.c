@@ -651,6 +651,7 @@ void generate_galactic_foreground_model_wavelet(struct Wavelets *wdm, struct For
         grid->psd->f[n] = grid_fmin + wdm->df/2.0*n;
 
     // initialize foreground parameters levels
+    map_array_to_foreground_params(model);
     grid->Tobs  = model->Tobs;
     grid->Amp   = model->Amp;
     grid->f1    = model->f1;

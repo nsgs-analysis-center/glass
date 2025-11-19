@@ -72,6 +72,10 @@ void print_noise_model_dynamic(struct Data *data, struct Noise *noise, char file
 void print_noise_model(struct Noise *noise, char filename[])
 {
     FILE *fptr = fopen(filename,"w");
+    if (fptr==NULL) {
+        fprintf(stderr, "filesystem error, couldn't open %s for writing.", filename);
+        exit(-1);
+    }
     for(int i=0; i<noise->N; i++)
     {
         fprintf(fptr,"%lg ",noise->f[i]);

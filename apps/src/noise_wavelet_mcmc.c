@@ -246,18 +246,21 @@ int main(int argc, char *argv[])
     
     sprintf(filename,"%s/noise_chain.dat",chain->chainDir);
     FILE *noiseChainFile = fopen(filename,"w");
+    if (noiseChainFile == NULL) {fprintf(stderr, "Filesystem error, couldn't open %s for writing\n", filename); exit(-1);}
 
     FILE *foregroundChainFile = NULL;
     if(flags->confNoise)
     {
         sprintf(filename,"%s/foreground_chain.dat",chain->chainDir);
         foregroundChainFile = fopen(filename,"w");
+        if (foregroundChainFile == NULL) {fprintf(stderr, "Filesystem error, couldn't open %s for writing\n", filename); exit(-1);}
     }
     FILE *sgwbChainFile = NULL;
     if(flags->sgwbTemplate>=0)
     {
         sprintf(filename,"%s/sgwb_chain.dat",chain->chainDir);
         sgwbChainFile = fopen(filename,"w");
+        if (sgwbChainFile == NULL) {fprintf(stderr, "Filesystem error, couldn't open %s for writing\n", filename); exit(-1);}
     }
     
     int numThreads;
@@ -295,10 +298,10 @@ int main(int argc, char *argv[])
 
                 for(int mc=0; mc<10; mc++)
                 {
-                    noise_instrument_model_mcmc_wavelet(orbit, data, inst_model_ptr, inst_trial_ptr, conf_model_ptr, sgwb_model_ptr, psd_ptr, chain, flags, ic);
+                    //noise_instrument_model_mcmc_wavelet(orbit, data, inst_model_ptr, inst_trial_ptr, conf_model_ptr, sgwb_model_ptr, psd_ptr, chain, flags, ic);
                     // Note that we do not sample over the galaxy's modulation, only its spectral shape
                     if(flags->confNoise) noise_foreground_model_mcmc_wavelet(data, inst_model_ptr, conf_model_ptr, conf_trial_ptr, sgwb_model_ptr, psd_ptr, chain, flags, ic);
-                    if(flags->sgwbTemplate>=0) noise_sgwb_model_mcmc_wavelet_dumb(data, inst_model_ptr, conf_model_ptr, sgwb_model_ptr, sgwb_trial_ptr, psd_ptr, chain, flags, ic);
+                    //if(flags->sgwbTemplate>=0) noise_sgwb_model_mcmc_wavelet_dumb(data, inst_model_ptr, conf_model_ptr, sgwb_model_ptr, sgwb_trial_ptr, psd_ptr, chain, flags, ic);
                     // TODO: the logLs aren't tracked well at all here. We should probably refactor to have some kind of WaveletNoise struct that can handle all these components...
                 }
             }// end (parallel) loop over chains

@@ -1224,8 +1224,10 @@ void noise_foreground_model_mcmc_wavelet(struct Data *data, struct InstrumentMod
     
     
     //log(A)
-    prior[0][0] = -86.0;
-    prior[0][1] = -82.0;
+    //prior[0][0] = -86.0;
+    //prior[0][1] = -82.0;
+    prior[0][0] = -110.0;
+    prior[0][1] = -80.0;
     
     //f1
     prior[1][0] = log(0.0001);
@@ -1293,13 +1295,14 @@ void noise_foreground_model_mcmc_wavelet(struct Data *data, struct InstrumentMod
         //get noise covariance matrix for initial parameters
         if(logPy > -INFINITY && !flags->prior)
         {
+            map_array_to_foreground_params(model_y);
             generate_galactic_foreground_model_wavelet(data->wdm, model_y);
             generate_full_dynamic_covariance_matrix(data->wdm, noise, model_y, sgwb, psd);
             invert_noise_covariance_matrix(psd);
             
             model_y->logL = my_noise_log_likelihood_wavelet(data, psd);
             
-            logH += (model_y->logL - model_x->logL)/chain->temperature[ic]; //delta logL
+            logH = (model_y->logL - model_x->logL)/chain->temperature[ic]; //delta logL
         }
         logH += logPy - logPx; //priors
         
