@@ -1337,20 +1337,10 @@ void noise_sgwb_model_mcmc_wavelet(struct Data *data, struct InstrumentModel *no
     struct SGWBModel *model_y = trial;
     copy_sgwb_model(model_x, model_y);
     
-    //initialize likelhood
-    //TODO: this shouldn't be necessary!
-    generate_sgwb_model_wavelet(data->wdm, model_x);
-    //TODO not necessary to copy Cij?
-    //copy_Cij(model_x->psd->C, psd->C, psd->Nchannel, psd->N);
-    generate_full_dynamic_covariance_matrix(data->wdm, noise, galaxy, model_x, psd);
-    invert_noise_covariance_matrix(psd);
-    model_x->logL = noise_log_likelihood_wavelet(data, psd);
-
+    //skip initializing likelhood
     
     //set priors
-    double **prior = malloc(sizeof(double *)*model_x->Nparams);
-    for(int n=0; n<model_x->Nparams; n++)
-        prior[n] = malloc(sizeof(double)*2);
+    const double (*prior)[2] = default_sgwb_priors[model_x->SGWB_type];
     
     //set correlation matrix
     double *acc_jump_vec = malloc(model_x->Nparams*sizeof(double));
@@ -1360,29 +1350,10 @@ void noise_sgwb_model_mcmc_wavelet(struct Data *data, struct InstrumentModel *no
         correlation_matrix[n] = malloc(model_x->Nparams*sizeof(double));
         correlation_matrix[n][n] = +1.0;
     }
-    
-    
-    _Static_assert(SGWB_TEMPLATE_COUNT == 1, "Did you add an SGWB template? Edit this switch case, it needs to be exhaustive.");
-    switch (model_x->SGWB_type) {
-        case SGWB_TEMPLATE_POWERLAW:
-            //log(A_p)
-            prior[0][0] = -20.0;
-            prior[0][1] = -4.0;
-
-            //alpha_p
-            prior[1][0] = -3.0;
-            prior[1][1] =  1.0;
-            correlation_matrix[0][1] = correlation_matrix[1][0] = 0.0;
-            break;
-        default:
-            fprintf(stderr, "SGWB %s has no defined priors! Add them in noise_sgwb_model_mcmc_wavelet", SGWB_TEMPLATE_NAMES[model_x->SGWB_type]);
-            exit(1);
-            break;
-    }
-    //printf("prior init\n");
         
     for(int mc=0; mc<10; mc++)
     {
+        logH = 0.0;
         
         /* get proposed noise parameters */
         
@@ -1441,10 +1412,10 @@ void noise_sgwb_model_mcmc_wavelet(struct Data *data, struct InstrumentModel *no
             generate_full_dynamic_covariance_matrix(data->wdm, noise, galaxy, model_y, psd);
             invert_noise_covariance_matrix(psd);
             
-            model_y->logL = noise_log_likelihood_wavelet(data, psd);
+            model_y->logL = my_noise_log_likelihood_wavelet(data, psd);
             //printf("trial %g %g %g\n", model_y->params[0], model_y->params[1], model_y->logL);
             
-            logH += (model_y->logL - model_x->logL)/chain->temperature[ic]; //delta logL
+            logH = (model_y->logL - model_x->logL)/chain->temperature[ic]; //delta logL
         }
         logH += logPy - logPx; //priors
         
@@ -1454,12 +1425,11 @@ void noise_sgwb_model_mcmc_wavelet(struct Data *data, struct InstrumentModel *no
             //printf("accepted %g %g %g\n", model_x->params[0], model_x->params[1], model_x->logL);
             copy_sgwb_model(model_y, model_x);
             noise->logL = model_x->logL;
+            galaxy->logL = model_x->logL;
         }
     }
  
     free(acc_jump_vec);   
-    for(int n=0; n<model_x->Nparams; n++) free(prior[n]);
-    free(prior);
     for(int n=0; n<model_x->Nparams; n++)
         free(correlation_matrix[n]);
     free(correlation_matrix);

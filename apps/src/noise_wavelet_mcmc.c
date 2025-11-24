@@ -315,7 +315,7 @@ int main(int argc, char *argv[])
                 // TODO fix this to be the model-agnostic stochastic component struct once we make it
                 //noise_ptmcmc(inst_model, chain, flags);
                 
-                if(step%(flags->NMCMC/10)==0)printf("noise_wavelet_mcmc at step %i\n",step);
+                if(step%(flags->NMCMC/100)==0)printf("noise_wavelet_mcmc at step %i\n",step);
                 
                 // print chain files
                 fprintf(noiseChainFile,"%i %.12g ",step,inst_model[chain->index[0]]->logL);
@@ -336,7 +336,7 @@ int main(int argc, char *argv[])
                     fprintf(sgwbChainFile, "\n");
                 }
 
-                if(step%(flags->NMCMC/10)==0)
+                if(step%(flags->NMCMC/100)==0)
                 {
                     generate_instrument_noise_model_wavelet(data->wdm, orbit, inst_model[chain->index[0]]);
                     sprintf(filename,"%s/current_instrument_noise_model.dat",data->dataDir);
