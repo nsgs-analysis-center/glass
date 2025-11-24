@@ -104,14 +104,14 @@ int main(int argc, char *argv[])
     if(flags->strainData)
         ReadData(data,orbit,flags);
     else if(flags->simNoise) {
-        // TODO: choose injections?
         // inject some noise
+        //TODO: turn off components more efficiently
         struct InstrumentModel inst_inj = {0};
         initialize_instrument_model_wavelet(orbit, data, &inst_inj);
         struct ForegroundModel conf_inj = {0};
-        initialize_foreground_model_wavelet(orbit, data, &conf_inj);
+        if (flags->confNoise) initialize_foreground_model_wavelet(orbit, data, &conf_inj);
         struct SGWBModel sgwb_inj = {0};
-        initialize_sgwb_model_wavelet(orbit, data, &sgwb_inj, flags->sgwbTemplate);
+        if (flags->sgwbTemplate>=0) initialize_sgwb_model_wavelet(orbit, data, &sgwb_inj, flags->sgwbTemplate);
         generate_full_dynamic_covariance_matrix(data->wdm, &inst_inj, &conf_inj, &sgwb_inj, data->noise);
         // alloc tdi data
         alloc_tdi(data->tdi, data->N, 3);
@@ -183,8 +183,8 @@ int main(int argc, char *argv[])
     struct ForegroundModel **conf_trial = malloc(chain->NC*sizeof(struct ForegroundModel *));
     for(int ic=0; ic<chain->NC; ic++)
     {
-        conf_model[ic] = malloc(sizeof(struct ForegroundModel));
-        conf_trial[ic] = malloc(sizeof(struct ForegroundModel));
+        conf_model[ic] = calloc(1,sizeof(struct ForegroundModel));
+        conf_trial[ic] = calloc(1,sizeof(struct ForegroundModel));
         if(flags->confNoise) 
         {
            initialize_foreground_model_wavelet(orbit, data, conf_model[ic]);
@@ -204,8 +204,8 @@ int main(int argc, char *argv[])
     struct SGWBModel **sgwb_trial = malloc(chain->NC*sizeof(struct SGWBModel *));
     for (int ic=0; ic<chain->NC; ic++)
     {
-        sgwb_model[ic] = malloc(sizeof(struct SGWBModel));
-        sgwb_trial[ic] = malloc(sizeof(struct SGWBModel));
+        sgwb_model[ic] = calloc(1,sizeof(struct SGWBModel));
+        sgwb_trial[ic] = calloc(1,sizeof(struct SGWBModel));
         if(flags->sgwbTemplate>=0) 
         {
            initialize_sgwb_model_wavelet(orbit, data, sgwb_model[ic], flags->sgwbTemplate);
@@ -223,14 +223,10 @@ int main(int argc, char *argv[])
     // TODO need stationary flag
     for(int ic=0; ic<chain->NC; ic++)
     {
-        if(!flags->confNoise || flags->sgwbTemplate<0){
-            printf("error: only support conf and sgwb on!");
-            return -1;
-        }
         generate_full_dynamic_covariance_matrix(data->wdm, inst_model[ic], conf_model[ic], sgwb_model[ic], scaleogram[ic]);
 
-    /* get initial likelihood */
-        // TODO struct Noise doesn't have a logL... what's the point of getting the initial logLs anyway?
+        /* get initial likelihoods */
+        // TODO does every component need a logL?
         invert_noise_covariance_matrix(scaleogram[ic]);
         double logL = my_noise_log_likelihood_wavelet(data, scaleogram[ic]);
         inst_model[ic]->logL = logL;

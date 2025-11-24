@@ -824,6 +824,7 @@ void generate_full_covariance_matrix(struct Noise *full, struct Noise *component
     }
 }
 
+
 void generate_full_dynamic_covariance_matrix(struct Wavelets *wdm, struct InstrumentModel *inst, struct ForegroundModel *conf, struct SGWBModel *sgwb, struct Noise *full)
 {
     int k;
@@ -848,21 +849,25 @@ void generate_full_dynamic_covariance_matrix(struct Wavelets *wdm, struct Instru
             full->C[1][2][k] = inst->psd->C[1][2][j-jmin];
 
             //modulated galactic foreground
-            full->C[0][0][k] += conf->psd->C[0][0][j-jmin]*spline_interpolation_even_sampling(conf->modulation->XX_spline, t);
-            full->C[1][1][k] += conf->psd->C[1][1][j-jmin]*spline_interpolation_even_sampling(conf->modulation->YY_spline, t);
-            full->C[2][2][k] += conf->psd->C[2][2][j-jmin]*spline_interpolation_even_sampling(conf->modulation->ZZ_spline, t);
-            full->C[0][1][k] += conf->psd->C[0][1][j-jmin]*spline_interpolation_even_sampling(conf->modulation->XY_spline, t);
-            full->C[0][2][k] += conf->psd->C[0][2][j-jmin]*spline_interpolation_even_sampling(conf->modulation->XZ_spline, t);
-            full->C[1][2][k] += conf->psd->C[1][2][j-jmin]*spline_interpolation_even_sampling(conf->modulation->YZ_spline, t);
+            if (conf->Nparams > 0) { // this is 0 when confusion is disabled
+                full->C[0][0][k] += conf->psd->C[0][0][j-jmin]*spline_interpolation_even_sampling(conf->modulation->XX_spline, t);
+                full->C[1][1][k] += conf->psd->C[1][1][j-jmin]*spline_interpolation_even_sampling(conf->modulation->YY_spline, t);
+                full->C[2][2][k] += conf->psd->C[2][2][j-jmin]*spline_interpolation_even_sampling(conf->modulation->ZZ_spline, t);
+                full->C[0][1][k] += conf->psd->C[0][1][j-jmin]*spline_interpolation_even_sampling(conf->modulation->XY_spline, t);
+                full->C[0][2][k] += conf->psd->C[0][2][j-jmin]*spline_interpolation_even_sampling(conf->modulation->XZ_spline, t);
+                full->C[1][2][k] += conf->psd->C[1][2][j-jmin]*spline_interpolation_even_sampling(conf->modulation->YZ_spline, t);
+            }
 
 
             //stationary stochastic background
-            full->C[0][0][k] += sgwb->psd->C[0][0][j-jmin];
-            full->C[1][1][k] += sgwb->psd->C[1][1][j-jmin];
-            full->C[2][2][k] += sgwb->psd->C[2][2][j-jmin];
-            full->C[0][1][k] += sgwb->psd->C[0][1][j-jmin];
-            full->C[0][2][k] += sgwb->psd->C[0][2][j-jmin];
-            full->C[1][2][k] += sgwb->psd->C[1][2][j-jmin];
+            if (sgwb->Nparams > 0) { // this is 0 when sgwb is disabled
+                full->C[0][0][k] += sgwb->psd->C[0][0][j-jmin];
+                full->C[1][1][k] += sgwb->psd->C[1][1][j-jmin];
+                full->C[2][2][k] += sgwb->psd->C[2][2][j-jmin];
+                full->C[0][1][k] += sgwb->psd->C[0][1][j-jmin];
+                full->C[0][2][k] += sgwb->psd->C[0][2][j-jmin];
+                full->C[1][2][k] += sgwb->psd->C[1][2][j-jmin];
+            }
 
             //noise covariance matrix is symmetric
             full->C[1][0][k] = full->C[0][1][k]; 
@@ -900,7 +905,7 @@ static void generate_full_stationary_covariance_matrix(struct Wavelets *wdm, str
             full->C[2][2][k] += conf->psd->C[2][2][j-jmin];
             full->C[0][1][k] -= conf->psd->C[0][1][j-jmin]/2.;
             full->C[0][2][k] -= conf->psd->C[0][2][j-jmin]/2.;
-            full->C[1][2][k] -= conf->psd->C[1][2][j-jmin]/2.; // TODO why 2 here??
+            full->C[1][2][k] -= conf->psd->C[1][2][j-jmin]/2.; // 2 here is baked in response
 
             //stationary stochastic background
             full->C[0][0][k] += sgwb->psd->C[0][0][j-jmin];
