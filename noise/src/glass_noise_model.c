@@ -990,6 +990,29 @@ double my_noise_log_likelihood_wavelet(struct Data *data, struct Noise *noise) {
     return logL;
 }
 
+double my_noise_log_likelihood(struct Data *data, struct Noise *noise)
+{
+    double logL = 0.0;
+    const double log2pi = log(2*M_PI);
+    
+    struct TDI *tdi = data->tdi;
+    
+    int N = data->NFFT;
+    #pragma omp simd reduction(+:logL)
+    for (int n=0; n<N; n++) {
+        logL += -0.5*tdi->X[n]*tdi->X[n]*noise->invC[0][0][n];
+        logL += -0.5*tdi->Y[n]*tdi->Y[n]*noise->invC[1][1][n];
+        logL += -0.5*tdi->Z[n]*tdi->Z[n]*noise->invC[2][2][n];
+        logL += -tdi->X[n]*tdi->Y[n]*noise->invC[0][1][n];
+        logL += -tdi->X[n]*tdi->Z[n]*noise->invC[0][2][n];
+        logL += -tdi->Y[n]*tdi->Z[n]*noise->invC[1][2][n];
+        logL -= noise->logdetC[n];
+    }
+    logL -= 3 * N * log2pi;
+    
+    return logL;
+}
+
 double noise_log_likelihood_wavelet(struct Data *data, struct Noise *noise)
 {
     double logL = 0.0;

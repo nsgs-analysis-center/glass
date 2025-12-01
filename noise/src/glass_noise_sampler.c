@@ -404,8 +404,8 @@ void noise_instrument_model_mcmc(struct Orbit *orbit, struct Data *data, struct 
     struct InstrumentModel *model_y = trial;
     copy_instrument_model(model_x,model_y);
 
-    //initialize likelihood
-    //TODO: this shouldn't be necessary
+    //skip initialize likelihood
+    /*
     generate_instrument_noise_model(orbit,model_x);
     copy_Cij(model_x->psd->C, psd->C, psd->Nchannel, psd->N);
     if(flags->confNoise) 
@@ -415,6 +415,7 @@ void noise_instrument_model_mcmc(struct Orbit *orbit, struct Data *data, struct 
     invert_noise_covariance_matrix(psd);
     
     model_x->logL = noise_log_likelihood(data, psd);
+    */
     
     
     //set priors
@@ -567,7 +568,7 @@ void noise_instrument_model_mcmc(struct Orbit *orbit, struct Data *data, struct 
             
             invert_noise_covariance_matrix(psd);
             
-            model_y->logL = noise_log_likelihood(data, psd);
+            model_y->logL = my_noise_log_likelihood(data, psd);
             
             logH += (model_y->logL - model_x->logL)/chain->temperature[ic]; //delta logL
         }
@@ -578,6 +579,7 @@ void noise_instrument_model_mcmc(struct Orbit *orbit, struct Data *data, struct 
         {
             copy_instrument_model(model_y, model_x);
             if(flags->confNoise) galaxy->logL = model_x->logL;
+            if(flags->sgwbTemplate>=0) sgwb->logL = model_x->logL;
         }
     }
 
@@ -602,7 +604,8 @@ void noise_foreground_model_mcmc(struct Data *data, struct InstrumentModel *nois
     copy_foreground_model(model_x,model_y);
     
     //initialize likelhood
-    //TODO: this shouldn't be necessary!
+    // skip initialization
+    /*
     generate_galactic_foreground_model(model_x);
     copy_Cij(model_x->psd->C, psd->C, psd->Nchannel, psd->N);
     generate_full_covariance_matrix(psd, noise->psd, data->Nchannel);
@@ -610,6 +613,7 @@ void noise_foreground_model_mcmc(struct Data *data, struct InstrumentModel *nois
         generate_full_covariance_matrix(psd,sgwb->psd, data->Nchannel);
     invert_noise_covariance_matrix(psd);
     model_x->logL = noise_log_likelihood(data, psd);
+    */
 
     
     //set priors
@@ -720,7 +724,7 @@ void noise_foreground_model_mcmc(struct Data *data, struct InstrumentModel *nois
             
             invert_noise_covariance_matrix(psd);
             
-            model_y->logL = noise_log_likelihood(data, psd);
+            model_y->logL = my_noise_log_likelihood(data, psd);
             
             logH += (model_y->logL - model_x->logL)/chain->temperature[ic]; //delta logL
         }
@@ -759,7 +763,8 @@ void noise_sgwb_model_mcmc(struct Data *data, struct InstrumentModel *noise, str
     //printf("copied first sgwb\n");
     
     //initialize likelhood
-    //TODO: this shouldn't be necessary!
+    // skip initializing
+    /*
     generate_sgwb_model(model_x);
     copy_Cij(model_x->psd->C, psd->C, psd->Nchannel, psd->N);
     generate_full_covariance_matrix(psd, noise->psd, data->Nchannel);
@@ -768,6 +773,7 @@ void noise_sgwb_model_mcmc(struct Data *data, struct InstrumentModel *noise, str
     invert_noise_covariance_matrix(psd);
     model_x->logL = noise_log_likelihood(data, psd);
     //printf("likelihood init\n");
+    */
 
     
     //set priors
@@ -869,7 +875,7 @@ void noise_sgwb_model_mcmc(struct Data *data, struct InstrumentModel *noise, str
             
             invert_noise_covariance_matrix(psd);
             
-            model_y->logL = noise_log_likelihood(data, psd);
+            model_y->logL = my_noise_log_likelihood(data, psd);
             //printf("trial %g %g %g\n", model_y->params[0], model_y->params[1], model_y->logL);
             
             logH += (model_y->logL - model_x->logL)/chain->temperature[ic]; //delta logL
@@ -882,6 +888,7 @@ void noise_sgwb_model_mcmc(struct Data *data, struct InstrumentModel *noise, str
             //printf("accepted %g %g %g\n", model_x->params[0], model_x->params[1], model_x->logL);
             copy_sgwb_model(model_y, model_x);
             noise->logL = model_x->logL;
+            galaxy->logL = model_x->logL;
         }
     }
  

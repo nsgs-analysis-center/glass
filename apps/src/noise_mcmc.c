@@ -154,7 +154,9 @@ int main(int argc, char *argv[])
     for(int ic=0; ic<chain->NC; ic++)
     {
         invert_noise_covariance_matrix(inst_model[ic]->psd);
-        inst_model[ic]->logL = noise_log_likelihood(data, inst_model[ic]->psd);
+        inst_model[ic]->logL = my_noise_log_likelihood(data, inst_model[ic]->psd);
+        conf_model[ic]->logL = inst_model[ic]->logL;
+        sgwb_model[ic]->logL = inst_model[ic]->logL;
     }
 
     sprintf(filename,"%s/full_noise_model.dat",data->dataDir);

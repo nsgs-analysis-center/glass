@@ -242,6 +242,7 @@ void update_spline_noise_model(struct SplineModel *model, int new_knot, int min_
  @return \f$  \ln p({\rm data}|{\rm spline}) \f$
  */
 double noise_log_likelihood(struct Data *data, struct Noise *noise);
+double my_noise_log_likelihood(struct Data *data, struct Noise *noise);
 double noise_log_likelihood_wavelet(struct Data *data, struct Noise *noise);
 double my_noise_log_likelihood_wavelet(struct Data *data, struct Noise *noise);
 

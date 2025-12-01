@@ -7,3 +7,8 @@ breaking changes that would be nice:
   - PSD/Scaleogram struct? Stochastic contribution. members: PSD, modulation, logL, params.
   - model types build off of this so a pointer cast works
   - modular sampler with priors / proposals custom per source but that's it.
+
+
+## fixes
+
+- fourier noise app doesn't write `dft_data.dat` or `power_data.dat` correctly
