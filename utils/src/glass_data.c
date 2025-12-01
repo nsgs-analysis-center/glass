@@ -1175,8 +1175,7 @@ void AddNoiseWavelet(struct Data *data, struct TDI *tdi)
     free(L);
     free(C);
 }
-
-void SimulateData(struct Data *data, struct Orbit *orbit, struct Flags *flags)
+void SimulateDataWithoutPrinting(struct Data *data, struct Orbit *orbit, struct Flags *flags)
 {
     if(!flags->quiet) fprintf(stdout,"\n==== SimulateData ====\n");
     struct TDI *tdi = data->tdi;
@@ -1191,6 +1190,11 @@ void SimulateData(struct Data *data, struct Orbit *orbit, struct Flags *flags)
     
     //Add Gaussian noise to injection
     if(flags->simNoise) AddNoise(data,tdi);
+}
+
+void SimulateData(struct Data *data, struct Orbit *orbit, struct Flags *flags)
+{
+    SimulateDataWithoutPrinting(data, orbit, flags);
     
     //print various data products for plotting
     print_data(data, flags);

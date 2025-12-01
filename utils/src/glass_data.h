@@ -515,6 +515,7 @@ void MyAddNoiseWavelet(struct Data *data, struct TDI *tdi);
  \brief Generate noise-only simulated data
  */
 void SimulateData(struct Data *data, struct Orbit *orbit, struct Flags *flags);
+void SimulateDataWithoutPrinting(struct Data *data, struct Orbit *orbit, struct Flags *flags);
 
 /** @name Wrapper functions that call data print functions */
 ///@{
