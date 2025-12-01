@@ -32,7 +32,7 @@ find_package(MPI REQUIRED)
 # set cflags
 if(APPLE)
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Xpreprocessor")
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -I/opt/homebrew/Cellar/libomp/21.1.4/include")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -I/opt/homebrew/Cellar/libomp/21.1.5/include")
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -I/opt/homebrew/Cellar/openblas/0.3.30/include")
   link_directories("/opt/homebrew/lib/")
 endif()
