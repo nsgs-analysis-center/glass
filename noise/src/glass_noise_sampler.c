@@ -995,7 +995,8 @@ void noise_sgwb_model_mcmc_wavelet_dumb(struct Data *data, struct InstrumentMode
         */
         copy_sgwb_model(model_y, model_x);
         noise->logL = model_x->logL;
-        galaxy->logL = model_x->logL;
+        if (galaxy)
+            galaxy->logL = model_x->logL;
     }
     else {
         /*
@@ -1175,8 +1176,10 @@ void noise_instrument_model_mcmc_wavelet(struct Orbit *orbit, struct Data *data,
         if(logH > loga)
         {
             copy_instrument_model(model_y, model_x);
-            sgwb->logL   = model_y->logL;
-            galaxy->logL = model_y->logL;
+            if (sgwb)
+                sgwb->logL   = model_y->logL;
+            if (galaxy)
+                galaxy->logL = model_y->logL;
         }
     }
 
@@ -1318,7 +1321,8 @@ void noise_foreground_model_mcmc_wavelet(struct Data *data, struct InstrumentMod
         {
             copy_foreground_model(model_y, model_x);
             noise->logL = model_x->logL;
-            sgwb->logL = model_x->logL;
+            if (sgwb)
+                sgwb->logL = model_x->logL;
         }
     }
  

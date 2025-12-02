@@ -1175,7 +1175,8 @@ void AddNoiseWavelet(struct Data *data, struct TDI *tdi)
     free(L);
     free(C);
 }
-void SimulateDataWithoutPrinting(struct Data *data, struct Orbit *orbit, struct Flags *flags)
+
+void SimulateData(struct Data *data, struct Orbit *orbit, struct Flags *flags)
 {
     if(!flags->quiet) fprintf(stdout,"\n==== SimulateData ====\n");
     struct TDI *tdi = data->tdi;
@@ -1190,15 +1191,9 @@ void SimulateDataWithoutPrinting(struct Data *data, struct Orbit *orbit, struct 
     
     //Add Gaussian noise to injection
     if(flags->simNoise) AddNoise(data,tdi);
-}
 
-void SimulateData(struct Data *data, struct Orbit *orbit, struct Flags *flags)
-{
-    SimulateDataWithoutPrinting(data, orbit, flags);
-    
     //print various data products for plotting
     print_data(data, flags);
-
 }
 
 void print_data(struct Data *data, struct Flags *flags)
@@ -1207,10 +1202,13 @@ void print_data(struct Data *data, struct Flags *flags)
     FILE *fptr;
     char filename[256];
     struct TDI *tdi = NULL;
+    int lendir = 0;
     
     
     /* Power spectra */
     tdi = data->dft;
+    lendir = strnlen(data->dataDir, MAXSTRINGSIZE);
+    if (lendir==0) return;
     sprintf(filename,"%s/power_data.dat",data->dataDir);
     fptr=fopen(filename,"w");
     for(int i=0; i<data->NFFT; i++)

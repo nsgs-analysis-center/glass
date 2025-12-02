@@ -105,14 +105,22 @@ int main(int argc, char *argv[])
         ReadData(data,orbit,flags);
     else if(flags->simNoise) {
         // inject some noise
-        //TODO: turn off components more efficiently
         struct InstrumentModel inst_inj = {0};
         initialize_instrument_model_wavelet(orbit, data, &inst_inj);
         struct ForegroundModel conf_inj = {0};
-        if (flags->confNoise) initialize_foreground_model_wavelet(orbit, data, &conf_inj);
+        struct ForegroundModel *conf_ptr = NULL;
+        if (flags->confNoise) {
+            conf_ptr = &conf_inj;
+            initialize_foreground_model_wavelet(orbit, data, conf_ptr);
+        }
         struct SGWBModel sgwb_inj = {0};
-        if (flags->sgwbTemplate>=0) initialize_sgwb_model_wavelet(orbit, data, &sgwb_inj, flags->sgwbTemplate);
-        generate_full_dynamic_covariance_matrix(data->wdm, &inst_inj, &conf_inj, &sgwb_inj, data->noise);
+        struct SGWBModel *sgwb_ptr = NULL;
+        // NOTE: refactored so these pointers being NULL means excluded from cov matrix
+        if (flags->sgwbTemplate>=0) {
+            sgwb_ptr = &sgwb_inj;
+            initialize_sgwb_model_wavelet(orbit, data, sgwb_ptr, flags->sgwbTemplate);
+        }
+        generate_full_dynamic_covariance_matrix(data->wdm, &inst_inj, conf_ptr, sgwb_ptr, data->noise);
         // alloc tdi data
         alloc_tdi(data->tdi, data->N, 3);
 
@@ -179,20 +187,16 @@ int main(int argc, char *argv[])
     // See GetDynamicNoiseModel and GetStationaryNoiseModel
     // remember, plan here for now is to not sample over foreground model in wavelet basis, but still sample over noise/sgwb
     if(flags->confNoise)printf("   ...initialize foreground noise model\n");
-    struct ForegroundModel **conf_model = malloc(chain->NC*sizeof(struct ForegroundModel *));
-    struct ForegroundModel **conf_trial = malloc(chain->NC*sizeof(struct ForegroundModel *));
-    for(int ic=0; ic<chain->NC; ic++)
-    {
-        conf_model[ic] = calloc(1,sizeof(struct ForegroundModel));
-        conf_trial[ic] = calloc(1,sizeof(struct ForegroundModel));
-        if(flags->confNoise) 
+    struct ForegroundModel **conf_model = calloc(chain->NC,sizeof(struct ForegroundModel *));
+    struct ForegroundModel **conf_trial = calloc(chain->NC,sizeof(struct ForegroundModel *));
+    if (flags->confNoise) {
+        for(int ic=0; ic<chain->NC; ic++)
         {
-           initialize_foreground_model_wavelet(orbit, data, conf_model[ic]);
-           initialize_foreground_model_wavelet(orbit, data, conf_trial[ic]);
+            conf_model[ic] = malloc(sizeof(struct ForegroundModel));
+            conf_trial[ic] = malloc(sizeof(struct ForegroundModel));
+            initialize_foreground_model_wavelet(orbit, data, conf_model[ic]);
+            initialize_foreground_model_wavelet(orbit, data, conf_trial[ic]);
         }
-    }
-    if(flags->confNoise)
-    {
         // NOTE: these do not include the modulation prefactors
         sprintf(filename,"%s/foreground_noise_model.dat",data->dataDir);
         print_noise_model(conf_model[0]->psd, filename);
@@ -200,20 +204,16 @@ int main(int argc, char *argv[])
 
     /* Initialize SGWB Model */
     if(flags->sgwbTemplate>=0) printf("   ...initialize SGWB model\n");
-    struct SGWBModel **sgwb_model = malloc(chain->NC*sizeof(struct SGWBModel *));
-    struct SGWBModel **sgwb_trial = malloc(chain->NC*sizeof(struct SGWBModel *));
-    for (int ic=0; ic<chain->NC; ic++)
-    {
-        sgwb_model[ic] = calloc(1,sizeof(struct SGWBModel));
-        sgwb_trial[ic] = calloc(1,sizeof(struct SGWBModel));
-        if(flags->sgwbTemplate>=0) 
+    struct SGWBModel **sgwb_model = calloc(chain->NC,sizeof(struct SGWBModel *));
+    struct SGWBModel **sgwb_trial = calloc(chain->NC,sizeof(struct SGWBModel *));
+    if(flags->sgwbTemplate>=0) {
+        for (int ic=0; ic<chain->NC; ic++)
         {
-           initialize_sgwb_model_wavelet(orbit, data, sgwb_model[ic], flags->sgwbTemplate);
-           initialize_sgwb_model_wavelet(orbit, data, sgwb_trial[ic], flags->sgwbTemplate);
+            sgwb_model[ic] = malloc(sizeof(struct SGWBModel));
+            sgwb_trial[ic] = malloc(sizeof(struct SGWBModel));
+            initialize_sgwb_model_wavelet(orbit, data, sgwb_model[ic], flags->sgwbTemplate);
+            initialize_sgwb_model_wavelet(orbit, data, sgwb_trial[ic], flags->sgwbTemplate);
         }
-    }
-    if(flags->sgwbTemplate>=0)
-    {
         sprintf(filename,"%s/sgwb_noise_model.dat",data->dataDir);
         print_noise_model(sgwb_model[0]->psd, filename);
     }
@@ -230,8 +230,10 @@ int main(int argc, char *argv[])
         invert_noise_covariance_matrix(scaleogram[ic]);
         double logL = my_noise_log_likelihood_wavelet(data, scaleogram[ic]);
         inst_model[ic]->logL = logL;
-        sgwb_model[ic]->logL = logL;
-        conf_model[ic]->logL = logL;
+        if (sgwb_model[ic])
+            sgwb_model[ic]->logL = logL;
+        if (conf_model[ic]) 
+            conf_model[ic]->logL = logL;
     }
 
     sprintf(filename,"%s/full_noise_model.dat",data->dataDir);

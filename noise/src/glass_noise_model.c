@@ -849,7 +849,7 @@ void generate_full_dynamic_covariance_matrix(struct Wavelets *wdm, struct Instru
             full->C[1][2][k] = inst->psd->C[1][2][j-jmin];
 
             //modulated galactic foreground
-            if (conf->Nparams > 0) { // this is 0 when confusion is disabled
+            if (conf) { // this is NULL when confusion is disabled
                 full->C[0][0][k] += conf->psd->C[0][0][j-jmin]*spline_interpolation_even_sampling(conf->modulation->XX_spline, t);
                 full->C[1][1][k] += conf->psd->C[1][1][j-jmin]*spline_interpolation_even_sampling(conf->modulation->YY_spline, t);
                 full->C[2][2][k] += conf->psd->C[2][2][j-jmin]*spline_interpolation_even_sampling(conf->modulation->ZZ_spline, t);
@@ -860,7 +860,7 @@ void generate_full_dynamic_covariance_matrix(struct Wavelets *wdm, struct Instru
 
 
             //stationary stochastic background
-            if (sgwb->Nparams > 0) { // this is 0 when sgwb is disabled
+            if (sgwb) { // this is NULL when sgwb is disabled
                 full->C[0][0][k] += sgwb->psd->C[0][0][j-jmin];
                 full->C[1][1][k] += sgwb->psd->C[1][1][j-jmin];
                 full->C[2][2][k] += sgwb->psd->C[2][2][j-jmin];
