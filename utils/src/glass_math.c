@@ -749,6 +749,7 @@ void glass_inverse_complex_fft(double *data, int N)
 
 void glass_forward_real_fft(double *data, int N)
 {
+    // TODO: try stack allocation here
     kiss_fftr_cfg cfg = kiss_fftr_alloc(N, 0, NULL, NULL); // 0 indicates forward FFT;
     kiss_fft_scalar *timedata = malloc(N*sizeof(kiss_fft_scalar));
     kiss_fft_cpx    *freqdata = malloc((N/2+1)*sizeof(kiss_fft_cpx));

@@ -987,6 +987,41 @@ void GetNoiseModel(struct Data *data, struct Orbit *orbit, struct Flags *flags)
     }
 }
 
+void MyAddNoise(struct Data *data, struct TDI *tdi)
+{
+    printf("   ...adding (Robbie's version of a) Gaussian noise realization\n");
+    //set RNG for noise
+    unsigned int r = data->nseed;
+
+    int Nc = data->Nchannel;
+    double L[Nc][Nc]; // will be Cholesky decomposition of covariance
+    double C[Nc][Nc]; // non-ragged copy of covariance
+    double n[Nc]; // vector of random normals
+    for (int k=0; k<data->NFFT; k++) {
+        for (int i=0; i<Nc; i++)
+            for (int j=0; j<Nc; j++) {
+                C[i][j] = data->noise->C[i][j][k];
+            }
+        my_cholesky_decomp(Nc, C, L);
+        // real part
+        for (int m=0; m<Nc; m++)
+            n[m] = rand_r_N_0_1(&r) / M_SQRT2; // note 2 here -- variance of real or imaginary part
+        for (int m=0; m<Nc; m++) {
+            tdi->X[2*k] += L[0][m] * n[m];
+            tdi->Y[2*k] += L[1][m] * n[m];
+            tdi->Z[2*k] += L[2][m] * n[m];
+        }
+        // imag part
+        for (int m=0; m<Nc; m++)
+            n[m] = rand_r_N_0_1(&r) / M_SQRT2; // note 2 here -- variance of real or imaginary part
+        for (int m=0; m<Nc; m++) {
+            tdi->X[2*k+1] += L[0][m] * n[m];
+            tdi->Y[2*k+1] += L[1][m] * n[m];
+            tdi->Z[2*k+1] += L[2][m] * n[m];
+        }
+    }
+}
+
 void AddNoise(struct Data *data, struct TDI *tdi)
 {
     
@@ -1032,8 +1067,8 @@ void AddNoise(struct Data *data, struct TDI *tdi)
         {
             for(int j=0; j<data->Nchannel; j++)
             {
-                n_re[i] += L[i][j]*u_re[j]/sqrt(2.);
-                n_im[i] += L[i][j]*u_im[j]/sqrt(2.);
+                n_re[i] += L[i][j]*u_re[j]/M_SQRT2;
+                n_im[i] += L[i][j]*u_im[j]/M_SQRT2;
             }
         }
         
@@ -1070,7 +1105,7 @@ void AddNoise(struct Data *data, struct TDI *tdi)
 }
 void MyAddNoiseWavelet(struct Data *data, struct TDI *tdi)
 {
-    printf("   ...adding (Robbie's version) of a Gaussian noise realization\n");
+    printf("   ...adding (Robbie's version of a) Gaussian noise realization\n");
     double L[3][3] = {0}; // will be Cholesky decomposition of covariance
     double C[3][3] = {0}; // non-ragged copy of covariance
     double n[3] = {0}; // vector of random normals
@@ -1080,17 +1115,17 @@ void MyAddNoiseWavelet(struct Data *data, struct TDI *tdi)
             int k;
             wavelet_pixel_to_index(data->wdm,i,j,&k);
             k -= data->wdm->kmin;
-            for (int i=0; i<3; i++)
-                for (int j=0; j<3; j++) {
-                    C[i][j] = data->noise->C[i][j][k];
+            for (int m=0; m<3; m++)
+                for (int n=0; n<3; n++) {
+                    C[m][n] = data->noise->C[m][n][k];
                 }
             my_cholesky_decomp(3, C, L);
-            for (int i=0; i<3; i++)
-                n[i] = rand_r_N_0_1(&r) * M_SQRT2; // note 2 here -- variance of real or imaginary part
-            for (int j=0; j<3; j++) {
-                tdi->X[k] += L[0][j] * n[j];
-                tdi->Y[k] += L[1][j] * n[j];
-                tdi->Z[k] += L[2][j] * n[j];
+            for (int m=0; m<3; m++)
+                n[m] = rand_r_N_0_1(&r) / M_SQRT2; // note 2 here -- variance of real or imaginary part
+            for (int m=0; m<3; m++) {
+                tdi->X[k] += L[0][m] * n[m];
+                tdi->Y[k] += L[1][m] * n[m];
+                tdi->Z[k] += L[2][m] * n[m];
             }
         }
     }
@@ -1187,10 +1222,15 @@ void SimulateData(struct Data *data, struct Orbit *orbit, struct Flags *flags)
     data->qmax = data->qmin+data->NFFT;
 
     //Get noise spectrum for data segment
-    GetNoiseModel(data,orbit,flags);
-    
+    // TODO: switching here to use inst model
+    //GetNoiseModel(data,orbit,flags);
+    struct InstrumentModel *inst = malloc(sizeof(struct InstrumentModel));
+    initialize_instrument_model(orbit, data, inst);
+    copy_noise(inst->psd, data->noise);
+    free_instrument_model(inst); 
+
     //Add Gaussian noise to injection
-    if(flags->simNoise) AddNoise(data,tdi);
+    if(flags->simNoise) MyAddNoise(data,tdi);
 
     //print various data products for plotting
     print_data(data, flags);

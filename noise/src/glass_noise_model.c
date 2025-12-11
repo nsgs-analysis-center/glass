@@ -980,9 +980,9 @@ double my_noise_log_likelihood_wavelet(struct Data *data, struct Noise *noise) {
             logL -= 0.5*tdi->X[k]*tdi->X[k]*noise->invC[0][0][k];
             logL -= 0.5*tdi->Y[k]*tdi->Y[k]*noise->invC[1][1][k];
             logL -= 0.5*tdi->Z[k]*tdi->Z[k]*noise->invC[2][2][k];
-            logL -= tdi->X[k]*tdi->Y[k]*noise->invC[0][1][k];
-            logL -= tdi->X[k]*tdi->Z[k]*noise->invC[0][2][k];
-            logL -= tdi->Y[k]*tdi->Z[k]*noise->invC[1][2][k];
+            logL -=     tdi->X[k]*tdi->Y[k]*noise->invC[0][1][k];
+            logL -=     tdi->X[k]*tdi->Z[k]*noise->invC[0][2][k];
+            logL -=     tdi->Y[k]*tdi->Z[k]*noise->invC[1][2][k];
             logL -= noise->logdetC[k];
     }
     logL -= 3 * data->N * log2pi;
@@ -1000,12 +1000,21 @@ double my_noise_log_likelihood(struct Data *data, struct Noise *noise)
     int N = data->NFFT;
     #pragma omp simd reduction(+:logL)
     for (int n=0; n<N; n++) {
-        logL += -0.5*tdi->X[n]*tdi->X[n]*noise->invC[0][0][n];
-        logL += -0.5*tdi->Y[n]*tdi->Y[n]*noise->invC[1][1][n];
-        logL += -0.5*tdi->Z[n]*tdi->Z[n]*noise->invC[2][2][n];
-        logL += -tdi->X[n]*tdi->Y[n]*noise->invC[0][1][n];
-        logL += -tdi->X[n]*tdi->Z[n]*noise->invC[0][2][n];
-        logL += -tdi->Y[n]*tdi->Z[n]*noise->invC[1][2][n];
+        double rex = tdi->X[2*n], imx = tdi->X[2*n+1];
+        double rey = tdi->Y[2*n], imy = tdi->Y[2*n+1];
+        double rez = tdi->Z[2*n], imz = tdi->Z[2*n+1];
+        double xx = rex*rex + imx*imx;
+        double yy = rey*rey + imy*imy;
+        double zz = rez*rez + imz*imz;
+        double xy = rex*rey + imx*imy; // note this is really (x*conj(y) + y*conj(x))/2
+        double xz = rex*rez + imx*imz;
+        double yz = rey*rez + imy*imz;
+        logL -= 0.5*xx*noise->invC[0][0][n];
+        logL -= 0.5*yy*noise->invC[1][1][n];
+        logL -= 0.5*zz*noise->invC[2][2][n];
+        logL -=     xy*noise->invC[0][1][n];
+        logL -=     xz*noise->invC[0][2][n];
+        logL -=     yz*noise->invC[1][2][n];
         logL -= noise->logdetC[n];
     }
     logL -= 3 * N * log2pi;

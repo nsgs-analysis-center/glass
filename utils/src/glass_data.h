@@ -507,6 +507,7 @@ void GetNoiseModel(struct Data *data, struct Orbit *orbit, struct Flags *flags);
 /** @name Add simulated Gaussian noise realization to data */
 ///@{
 void AddNoise(struct Data *data, struct TDI *tdi);
+void MyAddNoise(struct Data *data, struct TDI *tdi);
 void AddNoiseWavelet(struct Data *data, struct TDI *tdi);
 void MyAddNoiseWavelet(struct Data *data, struct TDI *tdi);
 ///@}
