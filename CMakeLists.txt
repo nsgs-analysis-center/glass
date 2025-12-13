@@ -16,14 +16,16 @@ foreach(policy
 endforeach()
 
 # Set compiler
-#set(CMAKE_C_COMPILER mpicc)
-set(CMAKE_C_COMPILER /opt/homebrew/Cellar/llvm/21.1.7/bin/clang)
+set(CMAKE_C_COMPILER mpicc)
+#set(CMAKE_C_COMPILER /opt/homebrew/Cellar/llvm/21.1.7/bin/clang)
 
 project(glass VERSION 2.0.0 LANGUAGES C)
 
 # External packages
 find_package(LAPACK REQUIRED)
-find_package(OpenBLAS REQUIRED)
+set(LAPACK_LIBRARIES lapacke gfortran ${LAPACK_LIBRARIES})
+#find_package(OpenBLAS REQUIRED)
+find_package(BLAS REQUIRED)
 find_package(OpenMP REQUIRED)
 find_package(HDF5 REQUIRED)
 find_package(MPI REQUIRED)
@@ -37,7 +39,10 @@ if(APPLE)
   link_directories("/opt/homebrew/lib/")
 endif()
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fopenmp -Wall -std=gnu99 -glldb -O0 -march=native")
+#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fopenmp -Wall -std=gnu99 -glldb -O0 -march=native")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fopenmp -Wall -std=gnu99 -ggdb -O0 -march=native -lgfortran")
+link_directories("/usr/lib/x86_64-linux-gnu/")
+#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fopenmp -Wall -std=gnu99 -O3 -march=native -ffast-math -lgfortran")
 #set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fopenmp -Wall -std=gnu99 -O3 -march=native -ffast-math")
 
 # Set git version header file

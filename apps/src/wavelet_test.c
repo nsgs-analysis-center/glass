@@ -7,7 +7,7 @@
 int main(int argc, char** argv) {
     // make fake data
 
-    double data[N] = {0};
+    double data[N];
     for (int i = 0; i < N; i++) {
         data[i] = sin(i*2*M_PI*0.1);
     }
