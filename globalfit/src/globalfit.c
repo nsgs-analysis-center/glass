@@ -621,8 +621,21 @@ static void print_usage()
 {
     print_glass_usage();
     print_ucb_usage();
+    
+    fprintf(stdout,"EXAMPLE:\n");
+    fprintf(stdout,"global_fit \n");
+    fprintf(stdout,"\n");
     exit(0);
 }
+
+// Define a simple task function
+void perform_mbh_task(int task_id, int proc_id);
+void perform_even_ucb_task(int task_id, int proc_id);
+void perform_odd_ucb_task(int task_id, int proc_id);
+void perform_psd_task(int task_id, int proc_id);
+
+void run_block(int proc_id, int Nproc, int Ntask, void task(int,int));
+
 
 int main(int argc, char *argv[])
 {
