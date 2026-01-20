@@ -1009,12 +1009,12 @@ double my_noise_log_likelihood(struct Data *data, struct Noise *noise)
         double xy = rex*rey + imx*imy; // note this is really (x*conj(y) + y*conj(x))/2
         double xz = rex*rez + imx*imz;
         double yz = rey*rez + imy*imz;
-        logL -= 0.5*xx*noise->invC[0][0][n];
-        logL -= 0.5*yy*noise->invC[1][1][n];
-        logL -= 0.5*zz*noise->invC[2][2][n];
-        logL -=     xy*noise->invC[0][1][n];
-        logL -=     xz*noise->invC[0][2][n];
-        logL -=     yz*noise->invC[1][2][n];
+        logL -= 0.5*xx*noise->invC[0][0][n]*2;
+        logL -= 0.5*yy*noise->invC[1][1][n]*2;
+        logL -= 0.5*zz*noise->invC[2][2][n]*2;
+        logL -=     xy*noise->invC[0][1][n]*2;
+        logL -=     xz*noise->invC[0][2][n]*2;
+        logL -=     yz*noise->invC[1][2][n]*2;
         logL -= noise->logdetC[n];
     }
     logL -= 3 * N * log2pi;

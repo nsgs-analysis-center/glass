@@ -45,6 +45,10 @@ void print_noise_model_dynamic(struct Data *data, struct Noise *noise, char file
 {
     struct Wavelets* wdm = data->wdm;
     FILE *fptr = fopen(filename,"w");
+    if (!fptr) {
+        fprintf(stderr, "Unable to open file for writing! %s\n", filename);
+        exit(-1);
+    }
     int k;
     int jmin=(int)round(noise->f[0]/wdm->df);
     int jmax=(int)round(noise->f[noise->N-1]/wdm->df)+1; 

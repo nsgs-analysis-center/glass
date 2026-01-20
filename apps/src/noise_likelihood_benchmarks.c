@@ -24,7 +24,7 @@
 #include <time.h>
 #include <assert.h>
 
-#define NTOT 1000
+#define NTOT 10
 #define NBINS 20
 #define NFFT_TEST 1000
 
