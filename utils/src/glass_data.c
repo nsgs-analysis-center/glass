@@ -1121,7 +1121,8 @@ void MyAddNoiseWavelet(struct Data *data, struct TDI *tdi)
                 }
             my_cholesky_decomp(3, C, L);
             for (int m=0; m<3; m++)
-                n[m] = rand_r_N_0_1(&r) / M_SQRT2; // note 2 here -- variance of real or imaginary part
+                n[m] = rand_r_N_0_1(&r) * M_SQRT2; // note 2 here -- variance of real or imaginary part
+                //n[m] = rand_r_N_0_1(&r) / M_SQRT2; // note 2 here -- variance of real or imaginary part
             for (int m=0; m<3; m++) {
                 tdi->X[k] += L[0][m] * n[m];
                 tdi->Y[k] += L[1][m] * n[m];

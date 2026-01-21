@@ -1135,10 +1135,18 @@ void initialize_instrument_model(struct Orbit *orbit, struct Data *data, struct 
         model->psd->f[n] = data->fmin + (double)n/data->T;
 
     // initialize noise levels
+    /* NOTE: changed to match wavelet */
+    /*
     for(int i=0; i<model->Nlink; i++)
     {
         model->soms[i] = 2.25e-22;
         model->sacc[i] = 9.00e-30;
+    }
+    */
+    for(int i=0; i<model->Nlink; i++)
+    {
+        model->soms[i] = 1.28e-22;
+        model->sacc[i] = 5.76e-30;
     }
     
     // get noise covariance matrix for initial parameters
