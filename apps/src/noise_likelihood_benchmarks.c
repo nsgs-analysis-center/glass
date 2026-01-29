@@ -192,6 +192,19 @@ int main(int argc, char *argv[])
     initialize_orbit(&data, &orbit, &flags);
     // simulate data
     SimulateData(&data, &orbit, &flags);
+    // Write data
+    FILE* fptr = NULL;
+    fptr = fopen("./simulated_data_fft.dat", "w");
+    if (fptr) {
+        for (int i=0; i<data->NFFT; i++) {
+            //             f   rex imx rey imy rez imz
+            fprintf(fptr, "%lg %lg %lg %lg %lg %lg %lg\n", f, data.dft->X[2*i], data.dft->X[2*i+1], data.dft->Y[2*i], data.dft->Y[2*i+1], data.dft->Z[2*i], data.dft->Z[2*i+1]);
+        }
+        fclose(fptr);
+    } else {
+        printf("Couldn't open data output file for writing!\n");
+    }
+     
     // TODO: GetNoiseModel has C[i][j][k] /= 4. Currently skipping it __entirely__
     // AddNoise has (correct) variance PSD/2
     whitening_test(data.tdi->X, data.noise->C[0][0], data.NFFT);
