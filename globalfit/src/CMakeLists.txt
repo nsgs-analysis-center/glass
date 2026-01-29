@@ -13,6 +13,6 @@ if(APPLE)
    target_link_libraries(global_fit omp)
 endif()
 target_link_libraries(global_fit ${LAPACK_LIBRARIES} ${BLAS_LIBRARIES} ${HDF5_LIBRARIES})
-target_link_libraries(global_fit m gfortran)
+target_link_libraries(global_fit m)
 install(TARGETS global_fit DESTINATION bin)
 

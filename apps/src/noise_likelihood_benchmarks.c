@@ -196,7 +196,8 @@ int main(int argc, char *argv[])
     FILE* fptr = NULL;
     fptr = fopen("./simulated_data_fft.dat", "w");
     if (fptr) {
-        for (int i=0; i<data->NFFT; i++) {
+        for (int i=0; i<data.NFFT; i++) {
+            double f = (double)(i+data.qmin)/data.T;
             //             f   rex imx rey imy rez imz
             fprintf(fptr, "%lg %lg %lg %lg %lg %lg %lg\n", f, data.dft->X[2*i], data.dft->X[2*i+1], data.dft->Y[2*i], data.dft->Y[2*i+1], data.dft->Z[2*i], data.dft->Z[2*i+1]);
         }
