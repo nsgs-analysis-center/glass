@@ -199,7 +199,7 @@ int main(int argc, char *argv[])
         for (int i=0; i<data.NFFT; i++) {
             double f = (double)(i+data.qmin)/data.T;
             //             f   rex imx rey imy rez imz
-            fprintf(fptr, "%lg %lg %lg %lg %lg %lg %lg\n", f, data.dft->X[2*i], data.dft->X[2*i+1], data.dft->Y[2*i], data.dft->Y[2*i+1], data.dft->Z[2*i], data.dft->Z[2*i+1]);
+            fprintf(fptr, "%lg %lg %lg %lg %lg %lg %lg\n", f, data.tdi->X[2*i], data.tdi->X[2*i+1], data.tdi->Y[2*i], data.tdi->Y[2*i+1], data.tdi->Z[2*i], data.tdi->Z[2*i+1]);
         }
         fclose(fptr);
     } else {
