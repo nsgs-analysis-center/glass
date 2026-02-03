@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <assert.h>
 #include "glass_utils.h"
 #include "glass_noise.h"
 #include "gitversion.h"
@@ -731,16 +732,90 @@ void ReadHDF5(struct Data *data, struct TDI *tdi, struct TDI *tdi_dwt, struct Fl
 
 void ReadASCII(struct Data *data, struct TDI *tdi)
 {
+    // for now, assume the data is saved as ascii fft, then convert to wavelet if needed
+
     double f;
     double junk;
-    
+
     FILE *fptr = fopen(data->fileName,"r");
+    
+    if (data->Nchannel == 2) {
+        //count number of samples
+        int Nsamples = 0;
+        while(!feof(fptr))
+        {
+            int check = fscanf(fptr,"%lg %lg %lg %lg %lg",&f,&junk,&junk,&junk,&junk);
+            if(!check)
+            {
+                fprintf(stderr,"Error reading %s\n",data->fileName);
+                exit(1);
+            }
+            Nsamples++;
+        }
+        rewind(fptr);
+        Nsamples--;
+        
+        //load full dataset into TDI structure
+        alloc_tdi(tdi, 2*Nsamples, 3);
+        
+        for(int n=0; n<Nsamples; n++)
+        {
+            int check = fscanf(fptr,"%lg %lg %lg %lg %lg",&f,&tdi->A[2*n],&tdi->A[2*n+1],&tdi->E[2*n],&tdi->E[2*n+1]);
+            if(!check)
+            {
+                fprintf(stderr,"Error reading %s\n",data->fileName);
+                exit(1);
+            }
+            
+        }
+    }
+    else {
+        //count number of samples
+        int Nsamples = 0;
+        while(!feof(fptr))
+        {
+            int check = fscanf(fptr,"%lg %lg %lg %lg %lg %lg %lg",&f,&junk,&junk,&junk,&junk, &junk, &junk);
+            if(!check)
+            {
+                fprintf(stderr,"Error reading %s\n",data->fileName);
+                exit(1);
+            }
+            Nsamples++;
+        }
+        rewind(fptr);
+        Nsamples--;
+        
+        //load full dataset into TDI structure
+        alloc_tdi(tdi, 2*Nsamples, 3);
+        
+        for(int n=0; n<Nsamples; n++)
+        {
+            int check = fscanf(fptr,"%lg %lg %lg %lg %lg %lg %lg",&f,&tdi->X[2*n],&tdi->X[2*n+1],&tdi->Y[2*n],&tdi->Y[2*n+1],&tdi->Z[2*n],&tdi->Z[2*n+1]);
+            if(!check)
+            {
+                fprintf(stderr,"Error reading %s\n",data->fileName);
+                exit(1);
+            }
+            
+        }
+    }
+    fclose(fptr);
+
+}
+
+void ReadASCII_timeseries(struct Data* data, struct TDI* tdi_dft, struct TDI* tdi_dwt)
+{
+    double t;
+    double junk;
+
+    FILE *fptr = fopen(data->fileName,"r");
+    assert(data->Nchannel == 3);
     
     //count number of samples
     int Nsamples = 0;
     while(!feof(fptr))
     {
-        int check = fscanf(fptr,"%lg %lg %lg %lg %lg",&f,&junk,&junk,&junk,&junk);
+        int check = fscanf(fptr,"%lg %lg %lg %lg",&t,&junk,&junk,&junk);
         if(!check)
         {
             fprintf(stderr,"Error reading %s\n",data->fileName);
@@ -750,21 +825,57 @@ void ReadASCII(struct Data *data, struct TDI *tdi)
     }
     rewind(fptr);
     Nsamples--;
-    
-    //load full dataset into TDI structure
-    alloc_tdi(tdi, 2*Nsamples, 3);
-    
+
+    struct TDI tdi_td = {0};
+    alloc_tdi(&tdi_td, Nsamples, 3);
     for(int n=0; n<Nsamples; n++)
     {
-        int check = fscanf(fptr,"%lg %lg %lg %lg %lg",&f,&tdi->A[2*n],&tdi->A[2*n+1],&tdi->E[2*n],&tdi->E[2*n+1]);
+        int check = fscanf(fptr,"%lg %lg %lg %lg", &t, &tdi_td.X[n], &tdi_td.Y[n], &tdi_td.Z[n]);
         if(!check)
         {
             fprintf(stderr,"Error reading %s\n",data->fileName);
             exit(1);
         }
+            
+    }
+    double Tobs = t;
+    double dt = Tobs / Nsamples;
+
+
+    //load full dataset into TDI structure
+    alloc_tdi(tdi_dft, Nsamples, 3);
+    tdi_dft->delta = 1./Tobs;
+    alloc_tdi(tdi_dwt, Nsamples, 3);
+
+    // TODO: in principle, detrend, window here
+
+    for (int n=0; n<Nsamples; n++) {
+        tdi_dft->X[n] = tdi_td.X[n];
+        tdi_dft->Y[n] = tdi_td.Y[n];
+        tdi_dft->Z[n] = tdi_td.Z[n];
+    }
+    glass_forward_real_fft(tdi_dft->X,Nsamples);
+    glass_forward_real_fft(tdi_dft->Y,Nsamples);
+    glass_forward_real_fft(tdi_dft->Z,Nsamples);
+
+    /* Wavelet transform time-domain TDI channels */
+    if(!strcmp(data->basis,"wavelet"))
+    {
+        for(int n=0; n<Nsamples; n++)
+        {
+            tdi_dwt->X[n] = tdi_td.X[n];
+            tdi_dwt->Y[n] = tdi_td.Y[n];
+            tdi_dwt->Z[n] = tdi_td.Z[n];
+        }
+
+        wavelet_transform(data->wdm, tdi_dwt->X);
+        wavelet_transform(data->wdm, tdi_dwt->Y);
+        wavelet_transform(data->wdm, tdi_dwt->Z);
+        
+        /* populate AET channels because I can't let go */
+        for(int n=0; n<Nsamples; n++) XYZ2AET(tdi_dwt->X[n], tdi_dwt->Y[n], tdi_dwt->Z[n], &tdi_dwt->A[n], &tdi_dwt->E[n], &tdi_dwt->T[n]);
         
     }
-    fclose(fptr);
 }
 
 void ReadData(struct Data *data, struct Orbit *orbit, struct Flags *flags)
@@ -777,8 +888,14 @@ void ReadData(struct Data *data, struct Orbit *orbit, struct Flags *flags)
     
     if(flags->hdf5Data)
         ReadHDF5(data,tdi_full_dft,tdi_full_dwt,flags);
-    else
-        ReadASCII(data,tdi_full_dft);
+    else {
+        if (flags->timeseries) {
+            ReadASCII_timeseries(data,tdi_full_dft, tdi_full_dwt);
+        } else {
+            ReadASCII(data,tdi_full_dft);
+        }
+    }
+
     
     
     /* select frequency segment */
@@ -1531,6 +1648,7 @@ void parse_data_args(int argc, char **argv, struct Data *data, struct Orbit *orb
     flags->burnin      = 1;
     flags->debug       = 0;
     flags->strainData  = 0;
+    flags->timeseries  = false;
     flags->hdf5Data    = 0;
     flags->psd         = 0;
     flags->orbit       = 0;
@@ -1686,6 +1804,10 @@ void parse_data_args(int argc, char **argv, struct Data *data, struct Orbit *orb
                     checkfile(optarg);
                     flags->strainData = 1;
                     sprintf(data->fileName,"%s",optarg);
+                }
+                if(strcmp("timeseries", long_options[long_index].name) == 0)
+                {
+                    flags->timeseries = true;
                 }
                 if(strcmp("h5-data", long_options[long_index].name) == 0)
                 {

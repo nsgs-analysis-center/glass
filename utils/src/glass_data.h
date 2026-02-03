@@ -180,6 +180,7 @@ struct Flags
     int knownSource;//!<`[--known-source; default=FALSE]`: injection is known binary, will need polarization and phase to be internally generated. Sets Flags::fixSky = `TRUE`.
     int detached;   //!<`[--detached; default=FALSE]`: assume binary is detached, fdot prior becomes \f$U[\dot{f}(\mathcal{M}_c=0.15),\dot{f}(\mathcal{M}_c=1.00)]\f$
     int strainData; //!<`[--data=FILENAME; default=FALSE]`: read data from ASCII file instead of simulate internally.
+    bool timeseries;//!<`[--data=FILENAME; default=FALSE]`: whether or not given ASCII file is a timeseries. If false, assumed to be frequency domain.
     int hdf5Data;   //!<'[--hdf5Data=FILENAME; default=FALSE]`: read data from LDC HDF5 file (compatible w/ Sangria dataset).
     int orbit;      //!<`[--orbit=FILENAME; default=FALSE]`: use numerical spacecraft ephemerides supplied in `FILENAME`. `--orbit` argument sets flag to `TRUE`.
     int prior;      //!<`[--prior; default=FALSE]`: set log-likelihood to constant for testing detailed balance.
@@ -498,6 +499,11 @@ void ReadHDF5(struct Data *data, struct TDI *tdi, struct TDI *tdi_dwt, struct Fl
  \brief Reads ASCII data using `--data` flag
  */
 void ReadASCII(struct Data *data, struct TDI *tdi);
+
+/**
+ \brief Reads ASCII timeseries data using `--data` flag
+ */
+void ReadASCII_timeseries(struct Data *data, struct TDI *tdi_dft, struct TDI* tdi_dwt);
 
 /**
  \brief Get theoretical noise PSDs for TDI channels
