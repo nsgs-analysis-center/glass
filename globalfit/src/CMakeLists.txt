@@ -10,7 +10,7 @@ add_executable(global_fit globalfit.c glass_ucb_wrapper.h glass_noise_wrapper.h 
 target_link_libraries(global_fit glass)
 target_link_libraries(global_fit mpi)
 if(APPLE)
-   target_link_libraries(global_fit omp)
+   target_link_libraries(global_fit OpenMP::OpenMP_C)
 endif()
 target_link_libraries(global_fit ${LAPACK_LIBRARIES} ${BLAS_LIBRARIES} ${HDF5_LIBRARIES})
 target_link_libraries(global_fit m)
