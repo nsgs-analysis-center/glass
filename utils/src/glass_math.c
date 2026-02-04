@@ -775,6 +775,7 @@ void glass_forward_real_fft(double *data, int N)
 
 void glass_inverse_real_fft(double *data, int N)
 {
+    // TODO: if we used floats we could probably avoid any allocs here
     kiss_fftr_cfg cfg = kiss_fftr_alloc(N, 1, NULL, NULL); // 0 indicates forward FFT;
     kiss_fft_scalar *timedata = malloc(N*sizeof(kiss_fft_scalar));
     kiss_fft_cpx    *freqdata = malloc((N/2+1)*sizeof(kiss_fft_cpx));
@@ -785,8 +786,8 @@ void glass_inverse_real_fft(double *data, int N)
         freqdata[i].i = data[2*i+1];
     }
     
-    // Perform the rFFT
-    kiss_fftr(cfg, timedata, freqdata);
+    // Perform the inverse rFFT
+    kiss_fftri(cfg, freqdata, timedata);
     
     for(int i=0; i<N; i++)  data[i] = timedata[i];
     
