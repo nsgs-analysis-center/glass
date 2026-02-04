@@ -38,6 +38,14 @@ if(APPLE)
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -I/opt/homebrew/opt/openblas/include")
   link_directories("/opt/homebrew/lib/")
 endif()
+#Force to use Homebrew's libomp (same one OpenBLAS uses)
+if(APPLE)
+set_target_properties(OpenMP::OpenMP_C PROPERTIES
+    INTERFACE_COMPILE_OPTIONS "-Xpreprocessor;-fopenmp"
+    INTERFACE_INCLUDE_DIRECTORIES "/opt/homebrew/opt/libomp/include"
+    INTERFACE_LINK_LIBRARIES "/opt/homebrew/opt/libomp/lib/libomp.dylib"
+)
+endif()
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -std=gnu99 -glldb -O0 -march=native")
 #set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fopenmp -Wall -std=gnu99 -ggdb -O0 -march=native -lgfortran")
