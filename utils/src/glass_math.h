@@ -22,6 +22,7 @@
 #ifndef math_h
 #define math_h
 
+
 struct CubicSpline
 {
     int N;       //!<Number of grid points to be interpolated

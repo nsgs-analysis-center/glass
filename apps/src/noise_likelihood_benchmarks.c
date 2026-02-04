@@ -152,6 +152,15 @@ int main(int argc, char *argv[])
     printf("numpy has:\n");
     printf("\t%g + j*%g\n", 1.0, 0.0);
 
+    printf("IFFT of FFT(impulse):\n");
+    glass_inverse_real_fft(&test_data, NFFT_TEST);
+    if (fabs(test_data[0] - 1.0) > 1e-10)
+        printf("\tMismatch, impulse should be 1.0, got %lf\n", test_data[0]);
+    for (int i=1; i<NFFT_TEST/2; i++) {
+        if ((abs(test_data[i]) > 1e-10))
+            printf("\tNon-impulse result at index %d : %lf\n", i, test_data[i]);
+    }
+
 
     /*
     memset(&test_data,0,sizeof(test_data));
@@ -206,20 +215,35 @@ int main(int argc, char *argv[])
         printf("Couldn't open data output file for writing!\n");
     }
     // Write data
-    double Xtime[data.N];
-    double Ytime[data.N];
-    double Ztime[data.N];
-    for (int i=0; i<data.N; i++) {
-        Xtime[i] = data.tdi->X[i];
-        Ytime[i] = data.tdi->Y[i];
-        Ztime[i] = data.tdi->Z[i];
+    // need to zero pad! we only have a band-limited part FFT, not full freq content
+    int N = (int)floor(data.T / LISA_CADENCE);
+    double df = 1./data.T;
+    double *Xtime = malloc(sizeof(double)*N);
+    double *Ytime = malloc(sizeof(double)*N);
+    double *Ztime = malloc(sizeof(double)*N);
+    int emin = 2 * (int)floor(data.fmin / df);
+    int emax = 2 * (int)floor(data.fmax / df);
+    printf("Did we get the indices right?\n");
+    printf("\temax - emin: %d\n", emax-emin);
+    printf("\tdata.N: %d\n", data.N);
+    for (int i=0; i<N; i++) {
+        double f = (i/2)*df;
+        if ((data.fmin < f) && (f < data.fmax)) {
+            Xtime[i] = data.tdi->X[i-emin];
+            Ytime[i] = data.tdi->Y[i-emin];
+            Ztime[i] = data.tdi->Z[i-emin];
+        } else {
+            Xtime[i] = 0;
+            Ytime[i] = 0;
+            Ztime[i] = 0;
+        }
     }
-    glass_inverse_real_fft(&Xtime, data.N);
-    glass_inverse_real_fft(&Ytime, data.N);
-    glass_inverse_real_fft(&Ztime, data.N);
+    glass_inverse_real_fft(Xtime, N);
+    glass_inverse_real_fft(Ytime, N);
+    glass_inverse_real_fft(Ztime, N);
     fptr = fopen("./simulated_data_timeseries.dat", "w");
     if (fptr) {
-        for (int i=0; i<data.N; i++) {
+        for (int i=0; i<N; i++) {
             double t = i*LISA_CADENCE;
             //             t   x y z
             fprintf(fptr, "%lg %lg %lg %lg\n", t, Xtime[i], Ytime[i], Ztime[i]);
@@ -228,6 +252,9 @@ int main(int argc, char *argv[])
     } else {
         printf("Couldn't open data output file for writing!\n");
     }
+    free(Xtime);
+    free(Ytime);
+    free(Ztime);
      
     // TODO: GetNoiseModel has C[i][j][k] /= 4. Currently skipping it __entirely__
     // AddNoise has (correct) variance PSD/2

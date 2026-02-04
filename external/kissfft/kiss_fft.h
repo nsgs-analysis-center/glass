@@ -80,7 +80,8 @@ extern "C" {
 #else
 # ifndef kiss_fft_scalar
 /*  default is float */
-#   define kiss_fft_scalar float
+#   define kiss_fft_scalar double
+// changed to double by Robbie. 20260204
 # endif
 #endif
 
