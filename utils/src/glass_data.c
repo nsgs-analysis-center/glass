@@ -1743,6 +1743,7 @@ void parse_data_args(int argc, char **argv, struct Data *data, struct Orbit *orb
         {"h5-no-ucb-hi",no_argument, 0, 0 },
         {"h5-no-vgb",   no_argument, 0, 0 },
         {"h5-no-noise", no_argument, 0, 0 },
+        {"timeseries",  no_argument, 0, 0 },
         {0, 0, 0, 0}
     };
     
@@ -1778,6 +1779,7 @@ void parse_data_args(int argc, char **argv, struct Data *data, struct Orbit *orb
                 if(strcmp("h5-no-vgb",   long_options[long_index].name) == 0) flags->no_vgb     = 1;
                 if(strcmp("h5-no-ucb-hi",long_options[long_index].name) == 0) flags->no_ucb_hi  = 1;
                 if(strcmp("h5-no-noise", long_options[long_index].name) == 0) flags->no_noise   = 1;
+                if(strcmp("timeseries" , long_options[long_index].name) == 0) flags->timeseries = true;
                 if(strcmp("threads",     long_options[long_index].name) == 0) flags->threads    = atoi(optarg);
                 if(strcmp("rundir",      long_options[long_index].name) == 0) strcpy(flags->runDir,optarg);
                 if(strcmp("phase",       long_options[long_index].name) == 0) sprintf(data->format,"phase");
@@ -1804,10 +1806,6 @@ void parse_data_args(int argc, char **argv, struct Data *data, struct Orbit *orb
                     checkfile(optarg);
                     flags->strainData = 1;
                     sprintf(data->fileName,"%s",optarg);
-                }
-                if(strcmp("timeseries", long_options[long_index].name) == 0)
-                {
-                    flags->timeseries = true;
                 }
                 if(strcmp("h5-data", long_options[long_index].name) == 0)
                 {
