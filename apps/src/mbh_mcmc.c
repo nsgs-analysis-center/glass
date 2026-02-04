@@ -88,6 +88,9 @@ int main(int argc, char *argv[])
     int DMAX = flags->DMAX;
     int mcmc_start = -flags->NBURN;
     
+    /* Try reducing burnin time for MBH sampler by 10x (we're starting the sampler on triggers) */
+    mcmc_start /= 10;
+    
     /* Setup output directories for chain and data structures */
     sprintf(data->dataDir,"%s/data",flags->runDir);
     sprintf(chain->chainDir,"%s/chains",flags->runDir);
@@ -192,12 +195,17 @@ int main(int argc, char *argv[])
             struct Model *trial_ptr = trial[chain->index[ic]];
             copy_model(model_ptr,trial_ptr);
             
-            for(int steps=0; steps < 10*MBH_MODEL_NP; steps++)
+            for(int steps=0; steps < MBH_MODEL_NP; steps++)
                 mbh_mcmc(orbit, data, model_ptr, trial_ptr, chain, flags, prior, proposal, ic);
 
             //update information matrix for each chain
-            for(int n=0; n<model_ptr->Nlive; n++)
-                mbh_fisher(orbit, data, model_ptr->source[n], data->noise);
+            if(mcmc%10==0)
+            {
+                for(int n=0; n<model_ptr->Nlive; n++)
+                {
+                    mbh_fisher(orbit, data, model_ptr->source[n], data->noise);
+                }
+            }
             
         }// end (parallel) loop over chains
         

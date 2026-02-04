@@ -590,6 +590,19 @@ void UCBInjectSimulatedSource(struct Data *data, struct Orbit *orbit, struct Fla
     //print_data(data,flags);
 
     /* compute overlaps between injections */
+    if(!strcmp(data->basis,"fourier"))
+    {
+        printf("\n Match Matrix:\n");
+        for(int i=0; i<n_inj; i++)
+        {
+            for(int j=0; j<n_inj; j++)
+            {
+                if(i==j) printf(" %+.2e",snr(inj_vec[i],data->noise));
+                else printf(" %+.2e",waveform_match(inj_vec[i], inj_vec[j], data->noise));
+            }
+            printf("\n");
+        }
+    }
     if(!strcmp(data->basis,"wavelet"))
     {
         printf("\n Match Matrix:\n");

@@ -85,10 +85,14 @@ void parse_catalog(int argc, char **argv, struct Data *data, struct Orbit *orbit
             
     data->T        = 31457280; /* two "mldc years" at 15s sampling */
     data->t0       = 0.0;
+    data->sqT      = sqrt(data->T);
     data->NFFT     = 512;
     data->N        = data->NFFT*2;
     data->Nchannel = 2; //1=X, 2=AE
-    
+    data->qpad     = 0;
+    data->fmin     = 1e-4; //Hz
+    sprintf(data->basis,"fourier");
+
     data->cseed = 150914;
     data->nseed = 151226;
     data->iseed = 151012;
@@ -362,6 +366,7 @@ int main(int argc, char *argv[])
     struct Catalog *catalog = NULL;
     catalog = malloc(sizeof(struct Catalog));
     catalog->N = 0; //start with 0 sources in catalog
+    catalog->NP = UCB_MODEL_NP;
     catalog->entry = malloc(NMAX*sizeof(struct Entry*));
     
     /* ************************************************************** */

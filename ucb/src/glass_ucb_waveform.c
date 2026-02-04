@@ -92,12 +92,20 @@ double waveform_match(struct Source *a, struct Source *b, struct Noise *noise)
 {
     int N = a->tdi->N;
     int NFFT = 2*N;
+    int Nchannel = noise->Nchannel;
     double match=0;
     
     double *a_A = calloc(NFFT,sizeof(double));
     double *a_E = calloc(NFFT,sizeof(double));
     double *b_A = calloc(NFFT,sizeof(double));
     double *b_E = calloc(NFFT,sizeof(double));
+    
+    double *a_X = calloc(NFFT,sizeof(double));
+    double *a_Y = calloc(NFFT,sizeof(double));
+    double *a_Z = calloc(NFFT,sizeof(double));
+    double *b_X = calloc(NFFT,sizeof(double));
+    double *b_Y = calloc(NFFT,sizeof(double));
+    double *b_Z = calloc(NFFT,sizeof(double));
     
     int qmin = a->qmin - a->imin;
     
@@ -114,10 +122,29 @@ double waveform_match(struct Source *a, struct Source *b, struct Noise *noise)
             int j_re = 2*j;
             int j_im = j_re+1;
             
-            a_A[j_re] = a->tdi->A[i_re];
-            a_A[j_im] = a->tdi->A[i_im];
-            a_E[j_re] = a->tdi->E[i_re];
-            a_E[j_im] = a->tdi->E[i_im];
+            switch(Nchannel)
+            {
+                case 1:
+                    a_X[j_re] = a->tdi->X[i_re];
+                    a_X[j_im] = a->tdi->X[i_im];
+                    break;
+                case 2:
+                    a_A[j_re] = a->tdi->A[i_re];
+                    a_A[j_im] = a->tdi->A[i_im];
+                    a_E[j_re] = a->tdi->E[i_re];
+                    a_E[j_im] = a->tdi->E[i_im];
+                    break;
+                case 3:
+                    a_X[j_re] = a->tdi->X[i_re];
+                    a_X[j_im] = a->tdi->X[i_im];
+                    a_Y[j_re] = a->tdi->Y[i_re];
+                    a_Y[j_im] = a->tdi->Y[i_im];
+                    a_Z[j_re] = a->tdi->Z[i_re];
+                    a_Z[j_im] = a->tdi->Z[i_im];
+                    break;
+                default:
+                    break;
+            }
         }//check that index is in range
     }//loop over waveform bins
     
@@ -132,18 +159,65 @@ double waveform_match(struct Source *a, struct Source *b, struct Noise *noise)
             int i_im = i_re+1;
             int j_re = 2*j;
             int j_im = j_re+1;
-            
-            b_A[j_re] = b->tdi->A[i_re];
-            b_A[j_im] = b->tdi->A[i_im];
-            b_E[j_re] = b->tdi->E[i_re];
-            b_E[j_im] = b->tdi->E[i_im];
+            switch(Nchannel)
+            {
+                case 1:
+                    b_X[j_re] = b->tdi->X[i_re];
+                    b_X[j_im] = b->tdi->X[i_im];
+                    break;
+                case 2:
+                    b_A[j_re] = b->tdi->A[i_re];
+                    b_A[j_im] = b->tdi->A[i_im];
+                    b_E[j_re] = b->tdi->E[i_re];
+                    b_E[j_im] = b->tdi->E[i_im];
+                    break;
+                case 3:
+                    b_X[j_re] = b->tdi->X[i_re];
+                    b_X[j_im] = b->tdi->X[i_im];
+                    b_Y[j_re] = b->tdi->Y[i_re];
+                    b_Y[j_im] = b->tdi->Y[i_im];
+                    b_Z[j_re] = b->tdi->Z[i_re];
+                    b_Z[j_im] = b->tdi->Z[i_im];
+                    break;
+                default:
+                    break;
+            }
+
         }//check that index is in range
     }//loop over waveform bins
     
+    double aa,bb,ab;
     
-    double aa = fourier_nwip(a_A,a_A,noise->invC[0][0],N) + fourier_nwip(a_E,a_E,noise->invC[1][1],N);
-    double bb = fourier_nwip(b_A,b_A,noise->invC[0][0],N) + fourier_nwip(b_E,b_E,noise->invC[1][1],N);
-    double ab = fourier_nwip(a_A,b_A,noise->invC[0][0],N) + fourier_nwip(a_E,b_E,noise->invC[1][1],N);
+    switch(Nchannel)
+    {
+        case 1:
+            ab = fourier_nwip(a_X, b_X, noise->invC[0][0], N);
+            aa = fourier_nwip(a_X, a_X, noise->invC[0][0], N);
+            bb = fourier_nwip(b_X, b_X, noise->invC[0][0], N);
+            break;
+        case 2:
+            aa = fourier_nwip(a_A,a_A,noise->invC[0][0],N) + fourier_nwip(a_E,a_E,noise->invC[1][1],N);
+            bb = fourier_nwip(b_A,b_A,noise->invC[0][0],N) + fourier_nwip(b_E,b_E,noise->invC[1][1],N);
+            ab = fourier_nwip(a_A,b_A,noise->invC[0][0],N) + fourier_nwip(a_E,b_E,noise->invC[1][1],N);
+            break;
+        case 3:
+            ab = 0.0;
+            ab += fourier_nwip(a_X, b_X, noise->invC[0][0], N);
+            ab += fourier_nwip(a_Y, b_Y, noise->invC[1][1], N);
+            ab += fourier_nwip(a_Z, b_Z, noise->invC[2][2], N);
+            ab += fourier_nwip(a_X, b_Y, noise->invC[0][1], N);
+            ab += fourier_nwip(a_X, b_Z, noise->invC[0][2], N);
+            ab += fourier_nwip(a_Y, b_Z, noise->invC[1][2], N);
+            ab += fourier_nwip(a_Y, b_X, noise->invC[1][0], N);
+            ab += fourier_nwip(a_Z, b_X, noise->invC[2][0], N);
+            ab += fourier_nwip(a_Z, b_Y, noise->invC[2][1], N);
+        
+            aa = pow(snr(a,noise),2);
+            bb = pow(snr(b,noise),2);
+            break;
+        default:
+            break;
+    }
     
     match = ab/sqrt(aa*bb);
     
@@ -152,6 +226,13 @@ double waveform_match(struct Source *a, struct Source *b, struct Noise *noise)
     free(b_A);
     free(b_E);
     
+    free(a_X);
+    free(a_Y);
+    free(a_Z);
+    free(b_X);
+    free(b_Y);
+    free(b_Z);
+
     return match;
 }
 
