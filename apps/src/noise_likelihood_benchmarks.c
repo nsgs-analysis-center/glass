@@ -205,6 +205,29 @@ int main(int argc, char *argv[])
     } else {
         printf("Couldn't open data output file for writing!\n");
     }
+    // Write data
+    double Xtime[data.N];
+    double Ytime[data.N];
+    double Ztime[data.N];
+    for (int i=0; i<data.N; i++) {
+        Xtime[i] = data.tdi->X[i];
+        Ytime[i] = data.tdi->Y[i];
+        Ztime[i] = data.tdi->Z[i];
+    }
+    glass_inverse_real_fft(&Xtime, data.N);
+    glass_inverse_real_fft(&Ytime, data.N);
+    glass_inverse_real_fft(&Ztime, data.N);
+    fptr = fopen("./simulated_data_timeseries.dat", "w");
+    if (fptr) {
+        for (int i=0; i<data.N; i++) {
+            double t = i*LISA_CADENCE;
+            //             t   x y z
+            fprintf(fptr, "%lg %lg %lg %lg\n", t, Xtime[i], Ytime[i], Ztime[i]);
+        }
+        fclose(fptr);
+    } else {
+        printf("Couldn't open data output file for writing!\n");
+    }
      
     // TODO: GetNoiseModel has C[i][j][k] /= 4. Currently skipping it __entirely__
     // AddNoise has (correct) variance PSD/2
