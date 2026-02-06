@@ -345,7 +345,7 @@ void wavelet_transform(struct Wavelets *wdm, double *data)
     free_double_matrix(wave,wdm->NT);
 }
 
-void wavelet_tansform_inverse_fourier(struct Wavelets *wdm, double *data)
+void wavelet_transform_inverse_fourier(struct Wavelets *wdm, double *data)
 {
     int k;
     int N = wdm->NT*wdm->NF;
@@ -541,7 +541,7 @@ void wavelet_transform_inverse_time(struct Wavelets *wdm, double *data)
     int N = wdm->NT*wdm->NF;
     
     //transform data from WDM to frequency domain
-    wavelet_tansform_inverse_fourier(wdm,data);
+    wavelet_transform_inverse_fourier(wdm,data);
     
     //transform to time domain data
     glass_inverse_real_fft(data,N);

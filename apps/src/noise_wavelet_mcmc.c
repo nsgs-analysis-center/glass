@@ -136,6 +136,23 @@ int main(int argc, char *argv[])
     /* print various data products for plotting */
     print_data(data, flags);
 
+    // DEBUG
+    // compare the FFT to the WDM
+    int fullN = data->wdm->NF*data->wdm->NT;
+    double fft_data[fullN];
+    for (int i=0; i<fullN; i++) {
+        fft_data[i] = data->dwt->X[i];
+    }
+    wavelet_transform_inverse_fourier(data->wdm, &fft_data);
+
+    FILE* dbgf = NULL;
+    dbgf = fopen("./dbg_fft_comparison.dat", "w");
+    for (int i=0; i<data->NFFT; i++) {
+        fprintf(dbgf, "%17.17lf %17.17lf %17.17lf %17.17lf\n", data->dft->X[2*i], data->dft->X[2*i+1], fft_data[2*i], fft_data[2*i+1]); 
+    }
+    fclose(dbgf);
+
+
     // okay, for now we're in the very weird situation of not trying to fit the foreground or instrument params, **only** the SGWB params
     //
 
