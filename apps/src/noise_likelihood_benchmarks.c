@@ -26,7 +26,7 @@
 
 #define NTOT 10
 #define NBINS 20
-#define NFFT_TEST 1000
+#define NFFT_TEST (1536*7)
 
 // TODO this wavelet logic is only actually different in the loop. must be a way to combine them?
 void whitening_test_wavelet(const struct Data* data)
@@ -128,6 +128,46 @@ void whitening_test(const double* fft_data, const double* psd, int N)//, double 
 
 }
 
+int write_wdm_data(struct Wavelets* wdm, double* data, char* fname) {
+    FILE *fptr = NULL;
+    fptr = fopen(fname,"w");
+    if (!fptr) {
+        fprintf(stderr, "Couldn't open %s for writing!\n", fname);
+        return 1;
+    }
+    int k;
+    for (int i=0; i<wdm->NT; i++) {
+        double t = i*wdm->dt;
+        for (int j=0; j<wdm->NF; j++) {
+            double f = j*wdm->df;
+            wavelet_pixel_to_index(wdm,i,j,&k);
+            k-=wdm->kmin;
+            fprintf(fptr,"%lg ",t);
+            fprintf(fptr,"%lg ",f);
+            fprintf(fptr,"%lg",data[k]);
+            fprintf(fptr,"\n");
+        }
+    }
+    return 0;
+}
+
+int write_fft_data(double df, int NFFT, double* data, char* fname) {
+    FILE *fptr = NULL;
+    fptr = fopen(fname,"w");
+    if (!fptr) {
+        fprintf(stderr, "Couldn't open %s for writing!\n", fname);
+        return 1;
+    }
+    for (int i=0; i<NFFT; i++) {
+            double f = i*df;
+            fprintf(fptr,"%lg ",f);
+            fprintf(fptr,"%lg ",data[2*i]);
+            fprintf(fptr,"%lg" ,data[2*i+1]);
+            fprintf(fptr,"\n");
+    }
+    return 0;
+}
+
 int main(int argc, char *argv[])
 {
 
@@ -137,12 +177,14 @@ int main(int argc, char *argv[])
     fprintf(stdout, "\n================= CONVENTION CHECKS ================\n");
     // test what FFT coeffs are
     double test_data[NFFT_TEST] = {0};
+    double test_data_copy[NFFT_TEST] = {0};
     test_data[0] = 1.0;
     glass_forward_real_fft(&test_data, NFFT_TEST);
     printf("FFT of impulse:\n");
     double real_val = test_data[0];
     double imag_val = test_data[1];
     for (int i=0; i<NFFT_TEST/2; i++) {
+        test_data_copy[i] = test_data[i];
         if ((fabs(test_data[2*i] - real_val) > 1e-10) || (fabs(test_data[2*i+1] - imag_val) > 1e-10)) {
             printf("\tNot all FFT coeffs equal!");
             break;
@@ -153,13 +195,52 @@ int main(int argc, char *argv[])
     printf("\t%g + j*%g\n", 1.0, 0.0);
 
     printf("IFFT of FFT(impulse):\n");
+    bool perfect=true;
+    double atol=1e-10;
     glass_inverse_real_fft(&test_data, NFFT_TEST);
-    if (fabs(test_data[0] - 1.0) > 1e-10)
+    if (fabs(test_data[0] - 1.0) > atol) {
         printf("\tMismatch, impulse should be 1.0, got %lf\n", test_data[0]);
-    for (int i=1; i<NFFT_TEST/2; i++) {
-        if ((abs(test_data[i]) > 1e-10))
-            printf("\tNon-impulse result at index %d : %lf\n", i, test_data[i]);
+        perfect=false;
     }
+    for (int i=1; i<NFFT_TEST/2; i++) {
+        if ((abs(test_data[i]) > atol)) {
+            printf("\tFirst non-impulse result at index %d : %lf\n", i, test_data[i]);
+            perfect=false;
+            break;
+        }
+    }
+    if (perfect)
+        printf("\tMatches within atol=%g\n", atol);
+
+    // timeseries
+    memset(test_data, 0, NFFT_TEST*sizeof(double));
+    test_data[0] = 1.0;
+    struct Wavelets wdm = {0};
+    // NFFT_TEST == NF*NT
+    // T == NFFT_TEST*LISA_CADENCE
+    double T = NFFT_TEST*LISA_CADENCE;
+    initialize_wavelet(&wdm, T);
+    wavelet_transform(&wdm, &test_data);
+    write_wdm_data(&wdm, &test_data, "./dbg_wdm_impulse.dat");
+    wavelet_transform_inverse_fourier(&wdm, &test_data);
+    write_fft_data(1./T, NFFT_TEST/2, &test_data, "./dbg_wdmfft_impulse.dat");
+    write_fft_data(1./T, NFFT_TEST/2, &test_data_copy, "./dbg_fft_impulse.dat");
+
+    perfect = true;
+    printf("WDM(impulse)->FFT vs FFT(impulse):\n");
+    for (int i=0; i<NFFT_TEST; i++) {
+        if (fabs(test_data[i] - test_data_copy[i]) > atol) {
+            printf("\tFirst mismatch at index %d\n", i);
+            printf("\t\tExpected: %g\n",test_data_copy[i]);
+            printf("\t\tGot:      %g\n",test_data[i]);
+            perfect = false;
+            break;
+        }
+    }
+    if (perfect)
+        printf("\tMatches within atol=%g\n", atol);
+    
+    
 
 
     /*

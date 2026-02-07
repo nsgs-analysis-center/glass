@@ -309,8 +309,7 @@ void wavelet_transform(struct Wavelets *wdm, double *data)
         for(int j=0; j<wdm->N; j++)
         {
             int n = i*wdm->NF - wdm->N/2 + j;
-            if(n < 0)   n += ND;  // periodically wrap the data
-            if(n >= ND) n -= ND;  // periodically wrap the data
+            n = (n%ND + ND)%ND; // periodically wrap the data
             wdata[j] = data[n] * wdm->window[j];  // apply the window
         }
                 

@@ -148,7 +148,7 @@ int main(int argc, char *argv[])
     FILE* dbgf = NULL;
     dbgf = fopen("./dbg_fft_comparison.dat", "w");
     for (int i=0; i<data->NFFT; i++) {
-        fprintf(dbgf, "%17.17lf %17.17lf %17.17lf %17.17lf\n", data->dft->X[2*i], data->dft->X[2*i+1], fft_data[2*i], fft_data[2*i+1]); 
+        fprintf(dbgf, "%17.17lg %17.17lg %17.17lg %17.17lg\n", data->dft->X[2*i], data->dft->X[2*i+1], fft_data[2*i], fft_data[2*i+1]); 
     }
     fclose(dbgf);
 
