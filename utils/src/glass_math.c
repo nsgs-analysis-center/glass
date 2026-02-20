@@ -714,8 +714,8 @@ void glass_inverse_complex_fft(double *data, int N)
     
     for(int i=0; i<N; i++)
     {
-        data[2*i]   = timedata[i].r;
-        data[2*i+1] = timedata[i].i;
+        data[2*i]   = timedata[i].r/N;
+        data[2*i+1] = timedata[i].i/N;
     }
     
     // Clean up and free memory
@@ -751,6 +751,31 @@ void glass_forward_real_fft(double *data, int N)
 
 void glass_inverse_real_fft(double *data, int N)
 {
+    // TODO: with creative pointer casting we can probably avoid any allocs here
+    kiss_fftr_cfg cfg = kiss_fftr_alloc(N, 1, NULL, NULL); // 0 indicates forward FFT;
+    kiss_fft_scalar *timedata = malloc(N*sizeof(kiss_fft_scalar));
+    kiss_fft_cpx    *freqdata = malloc((N/2+1)*sizeof(kiss_fft_cpx));
+
+    for(int i=0; i<N/2; i++)
+    {
+        freqdata[i].r = data[2*i];
+        freqdata[i].i = data[2*i+1];
+    }
+    
+    // Perform the inverse rFFT
+    kiss_fftri(cfg, freqdata, timedata);
+    
+    for(int i=0; i<N; i++)  data[i] = timedata[i]/N;
+    
+    // Clean up and free memory
+    kiss_fftr_free(cfg);
+    free(timedata);
+    free(freqdata);
+}
+
+/*
+void glass_inverse_real_fft(double *data, int N)
+{
     kiss_fftr_cfg cfg = kiss_fftr_alloc(N, 1, NULL, NULL); // 0 indicates forward FFT;
     kiss_fft_scalar *timedata = malloc(N*sizeof(kiss_fft_scalar));
     kiss_fft_cpx    *freqdata = malloc((N/2+1)*sizeof(kiss_fft_cpx));
@@ -771,6 +796,7 @@ void glass_inverse_real_fft(double *data, int N)
     free(timedata);
     free(freqdata);
 }
+*/
 
 void CubicSplineGLASS(int N, double *x, double *y, int Nint, double *xint, double *yint)
 {

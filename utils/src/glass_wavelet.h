@@ -78,7 +78,7 @@ void wavelet_pixel_to_index(struct Wavelets *wdm, int i, int j, int *k);
 
 void wavelet_transform(struct Wavelets *wdm, double *data);
 void wavelet_transform_inverse_time(struct Wavelets *wdm, double *data);
-void wavelet_tansform_inverse_fourier(struct Wavelets *wdm, double *data);
+void wavelet_transform_inverse_fourier(struct Wavelets *wdm, double *data);
 void wavelet_transform_by_layers(struct Wavelets *wdm, int jmin, int Nlayers, double *window, double *data);
 void wavelet_transform_segment(struct Wavelets *wdm, int N, int layer, double *data);
 void wavelet_transform_from_table(struct Wavelets *wdm, double *phase, double *freq, double *freqd, double *amp, int *jmin, int *jmax, double *wave, int *list, int *rlist, int Nmax);
