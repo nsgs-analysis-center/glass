@@ -213,6 +213,7 @@ void glass_forward_complex_fft(double *data, int N);
 void glass_inverse_complex_fft(double *data, int N);
 void glass_forward_real_fft(double *data, int N);
 void glass_inverse_real_fft(double *data, int N);
+void glass_inverse_real_fft_outplace(double *freqdata, double* timedata, int N);
 
 /**
 \brief Compute power of complex amplitude in single element of data

@@ -85,13 +85,34 @@ int write_time_data(double dt, int N, double* data, char* fname) {
     return 0;
 }
 
+struct UnitTestBlockInfo {
+    int test_counter;
+    int fail_counter;
+    double atol;
+    double rtol;
+    char* block_name;
+};
 
-bool test_array_equality(double* ta, double* tb, int N, double atol, double rtol, int* fail_counter, int* test_counter, char* test_name) {
-    printf("Test %d: %s\n", ++(*test_counter), test_name);
+void print_test_block_stats(struct UnitTestBlockInfo* testinfo) {
+    printf("\n\n%s finished. Failed %d/%d\n\n", testinfo->block_name, testinfo->fail_counter, testinfo->test_counter);
+}
+
+void print_test_blocks_summary_stats(struct UnitTestBlockInfo** testinfos, int N) {
+    int total_tests = 0;
+    int total_fails = 0;
     for (int i=0; i<N; i++) {
-        if (fabs(ta[i] - tb[i]) > atol + rtol*fabs(tb[i])) {
+        total_tests += testinfos[i]->test_counter;
+        total_fails += testinfos[i]->fail_counter;
+    }
+    printf("\n\nAll tests finished. Failed %d/%d\n\n", total_fails, total_tests);
+}
+
+bool test_array_equality(double* ta, double* tb, int N, struct UnitTestBlockInfo* testinfo, char* test_name) {
+    printf("Test %d: %s\n", ++(testinfo->test_counter), test_name);
+    for (int i=0; i<N; i++) {
+        if (fabs(ta[i] - tb[i]) > testinfo->atol + testinfo->rtol*fabs(tb[i])) {
             printf("\tarrays unequal within tolerance at index %d, got %lg != %lg\n", i, ta[i], tb[i]);
-            *fail_counter++;
+            (testinfo->fail_counter)++;
             return false;
         }
     }
@@ -109,72 +130,69 @@ int main(int argc, char *argv[])
     print_LISA_ASCII_art(stdout);
     print_version(stdout);
     // start test block
-    int test_counter_block = 0;
-    int test_counter_total = 0;
-    int num_failed_block = 0;
-    int num_failed_total= 0;
-    double atol = 1e-10;
-    double rtol = 0.0;
-
+    struct UnitTestBlockInfo total_tests = {0};
+    struct UnitTestBlockInfo fft_tests = {0};
+    struct UnitTestBlockInfo wdm_tests = {0};
+    total_tests.block_name = "All tests";
+    fft_tests.block_name = "FFT tests";
+    wdm_tests.block_name = "WDM tests";
+    fft_tests.atol = 1e-10;
+    fft_tests.rtol = 0.0;
+    wdm_tests.atol = 1e-10;
+    wdm_tests.rtol = 0.0;
 
     fprintf(stdout, "\n================= FFT CONVENTION CHECKS ================\n");
 
     // test what FFT coeffs are
     double test_data[NFFT_TEST] = {0};
+    double test_fft_data[NFFT_TEST] = {0};
     double ref_data[NFFT_TEST] = {0};
     double ref_fft_data[NFFT_TEST] = {0};
     double test_data_copy[NFFT_TEST] = {0};
     test_data[0] = 1.0;
     // these copies are just for reference, won't be touched
     ref_data[0]  = 1.0;
-    for (int i=0; i<NFFT_TEST; i++) ref_fft_data[i] = 1.0;
+    for (int i=0; i<NFFT_TEST/2; i++) ref_fft_data[2*i] = 1.0; // real part is 1, imag is 0
 
     bool ok = false;
     glass_forward_real_fft(test_data, NFFT_TEST);
     ok = test_array_equality(test_data,
             ref_fft_data,
             NFFT_TEST,
-            atol,
-            rtol,
-            &num_failed_block,
-            &test_counter_block,
+            &fft_tests,
             "Real FFT of impulse matches analytic");
 
+    glass_inverse_real_fft_outplace(ref_fft_data, test_data, NFFT_TEST);
+    ok = test_array_equality(test_data,
+            ref_data,
+            NFFT_TEST,
+            &fft_tests,
+            "Outplace IFFTR of FFTR(impulse)");
+    for (int i=0; i<NFFT_TEST; i++)
+        test_data[i] = ref_fft_data[i];
     glass_inverse_real_fft(test_data, NFFT_TEST);
     ok = test_array_equality(test_data,
             ref_data,
             NFFT_TEST,
-            atol,
-            rtol,
-            &num_failed_block,
-            &test_counter_block,
+            &fft_tests,
             "IFFTR of FFTR(impulse)");
 
     // reset timeseries
     memset(&test_data, 0, NFFT_TEST*sizeof(double));
     test_data[0] = 1.0;
-    printf("Test %d: complex IFFT of complex FFT(impulse)\n", ++test_counter_block);
-    failed = false;
+
     glass_forward_complex_fft(test_data, NFFT_TEST/2-1);
     // TODO: check cx fft coefficients match reference here
     glass_inverse_complex_fft(test_data, NFFT_TEST/2-1);
     ok = test_array_equality(test_data,
             ref_data,
             NFFT_TEST,
-            atol,
-            rtol,
-            &num_failed_block,
-            &test_counter_block,
+            &fft_tests,
             "complex IFFT of complex FFT(impulse)");
 
-    printf("\n\nTest block finished. Failed %d/%d\n\n", num_failed_block, test_counter_block);
-    test_counter_total += test_counter_block;
-    num_failed_total   += num_failed_block;
+    print_test_block_stats(&fft_tests);
 
     fprintf(stdout, "\n================= WDM CONVENTION CHECKS ================\n");
-    // reset test counters for new block
-    num_failed_block = 0;
-    test_counter_block = 0;
 
     // timeseries, impulse again
     memset(&test_data, 0, NFFT_TEST*sizeof(double));
@@ -201,6 +219,11 @@ int main(int argc, char *argv[])
     glass_inverse_real_fft(test_data, NFFT_TEST);
     if (CREATE_DEBUG_FILES)
         write_time_data(T/NFFT_TEST, NFFT_TEST, test_data, "./dbg_invwdm_impulse.dat");
+    ok = test_array_equality(test_data,
+            ref_data,
+            NFFT_TEST,
+            &wdm_tests,
+            "IWDM of WDM(impulse)");
     // try to fourier directly
     memset(test_data, 0, NFFT_TEST*sizeof(double));
     test_data[0] = 1.0;
@@ -227,11 +250,12 @@ int main(int argc, char *argv[])
     if (perfect)
         printf("\tMatches within atol=%g\n", atol);
     */
-    printf("\n\nTest block finished. Failed %d/%d\n\n", num_failed_block, test_counter_block);
-    test_counter_total += test_counter_block;
-    num_failed_total   += num_failed_block;
+    print_test_block_stats(&wdm_tests);
 
-    printf("\n\nAll tests finished! Failed %d/%d\n\n", num_failed_total, test_counter_total);
+    struct UnitTestBlockInfo* all_test_blocks[] = {&fft_tests, &wdm_tests};
+    int num_blocks = sizeof(all_test_blocks)/sizeof(all_test_blocks[0]);
+    print_test_blocks_summary_stats(all_test_blocks, num_blocks);
+
     return 0;
 }
 

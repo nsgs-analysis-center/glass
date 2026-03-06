@@ -749,6 +749,20 @@ void glass_forward_real_fft(double *data, int N)
     free(timedata);
 }
 
+#define static_assert_types_equal(T1, T2) \
+    _Static_assert(_Generic((T1){0}, T2: 1, default: 0), \
+                   #T1 " != " #T2)
+void glass_inverse_real_fft_outplace(double *freqdata, double *timedata, int N)
+{
+    static_assert_types_equal(double, kiss_fft_scalar);
+    // here N is length of time data!
+    kiss_fftr_cfg cfg = kiss_fftr_alloc(N, 1, NULL, NULL); // 0 indicates forward FFT;
+    kiss_fftri(cfg, (kiss_fft_cpx*)freqdata, (kiss_fft_scalar*)timedata); 
+    // fix normalization
+    for(int i=0; i<N; i++)  timedata[i] /= N;
+    kiss_fftr_free(cfg);
+}
+
 void glass_inverse_real_fft(double *data, int N)
 {
     // TODO: with creative pointer casting we can probably avoid any allocs here
