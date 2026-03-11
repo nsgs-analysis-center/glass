@@ -85,4 +85,11 @@ void wavelet_transform_from_table(struct Wavelets *wdm, double *phase, double *f
 
 void active_wavelet_list(struct Wavelets *wdm, double *freqX, double *freqY, double *freqZ, double *fdotX, double *fdotY, double *fdotZ, int *wavelet_list, int *reverse_list, int *Nwavelet, int *jmin, int *jmax);
 
+// new transform funcs from Robbie (March 2026)
+// these are mostly translations / simplifications of WDMWaveletTransforms
+// from Matt Digman
+void wavelet_transform_timefreq(struct Wavelets *wdm, double *timedata);
+void wavelet_transform_freq(struct Wavelets *wdm, double *freqdata, double *wdmdata);
+void build_filter(struct Wavelets* wdm, double* phif, bool forward);
+
 #endif /* glass_wavelet_h */

@@ -202,11 +202,28 @@ int main(int argc, char *argv[])
     // T == NFFT_TEST*LISA_CADENCE
     double T = NFFT_TEST*LISA_CADENCE;
     initialize_wavelet(&wdm, T);
-    wavelet_transform(&wdm, test_data);
-    // TODO: test window definitions
+    wavelet_transform_timefreq(&wdm, test_data);
+
+    // Could test window definitions
     // Limits on WD windows are only from Necula et. al eq (7)
-    // TODO: test WDM coeffs comparison to reference
-    // TODO: test WDM inversion to be correct
+    // skip for now, seems hard
+
+    // WDM comparison with olitas
+    double olitas_wdm[NFFT_TEST] = {0};
+    FILE* f = fopen("./olitas_wdm_impulse.dat","r");
+    if (!f) {
+        printf("No Olitas.jl output to compare against, skipping WDM code comparison...");
+    } else {
+        for (int j=0; j < wdm.NT; j++)
+            for (int i=0; i< wdm.NF; i++)
+                fscanf(f, "%lf ", &olitas_wdm[j*wdm.NT+i]);
+        ok = test_array_equality(test_data,
+                olitas_wdm,
+                NFFT_TEST,
+                &wdm_tests,
+                "Olitas.jl WDM vs our WDM(impulse)");
+    }
+    fclose(f);
 
     if (CREATE_DEBUG_FILES)
         write_wdm_data(&wdm, test_data, "./dbg_wdm_impulse.dat");
