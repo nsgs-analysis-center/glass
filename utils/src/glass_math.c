@@ -772,6 +772,8 @@ void glass_forward_real_fft(double *data, int N)
     free(timedata);
 }
 
+// note that this version doesn't allocate the arrays.
+// Freq data needs room for N+2 doubles (N/2+1 complexes)
 void glass_forward_real_fft_outplace(double* timedata, double *freqdata, int N)
 {
     static_assert_types_equal(double, kiss_fft_scalar);

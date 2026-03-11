@@ -215,8 +215,7 @@ int main(int argc, char *argv[])
     } else {
         for (int j=0; j < wdm.NT; j++)
             for (int i=0; i< wdm.NF; i++)
-                fscanf(f, "%lf ", &olitas_wdm[i*wdm.NT+j]);
-        // need to transpose this array
+                fscanf(f, "%lf ", &olitas_wdm[i*wdm.NT+j]); // note transpose during read
         ok = test_array_equality(test_data,
                 olitas_wdm,
                 NFFT_TEST,

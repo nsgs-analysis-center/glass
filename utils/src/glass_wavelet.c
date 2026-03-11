@@ -171,7 +171,7 @@ static void wavelet_lookup_table(struct Wavelets *wdm)
     // The odd wavelets coefficienst can be obtained from the even.
     // odd cosine = -even sine, odd sine = even cosine
     // each wavelet covers a frequency band of width DW
-    // execept for the first and last wasvelets
+// execept for the first and last wasvelets
     // there is some overlap. The wavelet pixels are of width
     // DOM/PI, except for the first and last which have width
     // half that
@@ -292,14 +292,36 @@ void wavelet_transform_timefreq(struct Wavelets *wdm, double *timedata) {
     wavelet_transform_freq(wdm, freqdata, timedata);
 }
 
+static inline double my_phitilde(double omega, double DeltaOmega, double A)
+{
+    double B = DeltaOmega - 2*A;
+    double insDOM = 1.0/sqrtf(DeltaOmega);
+    
+    double x, y, z;
+    
+    z = 0.0;
+    
+    if(fabs(omega) >= A && fabs(omega) < A+B)
+    {
+        x = (fabs(omega)-A)/B;
+        y = incomplete_beta_function(WAVELET_FILTER_CONSTANT, WAVELET_FILTER_CONSTANT, x);
+        z = insDOM*cos(y*M_PI_2);
+    }
+    
+    if(fabs(omega) < A) z = insDOM;
+    
+    return(z);
+    
+}
+
 void build_filter(struct Wavelets* wdm, double* phif, bool forward) {
     // this function puts the Meyer window into phif properly normalized
     int Nf = wdm->NF;
     int Nt = wdm->NT;
     double DeltaOmega = M_PI / Nf;
     double domega = 2*DeltaOmega / (double)Nt;
-    for (int i = 0; i< Nt/2 + 1; i++) {
-        phif[i] = phitilde(wdm, domega*i);
+    for (int i = 0; i < Nt/2 + 1; i++) {
+        phif[i] = my_phitilde(domega*i, DeltaOmega, wdm->A);
     }
     // normalize the window
     double norm = 0.0;
@@ -317,8 +339,61 @@ void build_filter(struct Wavelets* wdm, double* phif, bool forward) {
         phif[i] /= norm;
     }
 }
+void wavelet_inverse_transform_freq(struct Wavelets *wdm, double *wdmdata, double *freqdata) {
+    int Nf = wdm->NF;
+    int Nt = wdm->NT;
+    int ND = Nf*Nt;
+    memset(freqdata, 0, (ND+2)*sizeof(double));
+    
+    double prefactors[2*Nt];
+    double phif[Nt/2 + 1];
+    build_filter(wdm, phif, false); // fill normalized Meyer window into phif
+    double fft_result[2*Nt];
+    for (int m=0; m < Nf+1; m++) {
+        int center = m*Nt/2;
+        memset(prefactors, 0, Nt*sizeof(double));
+        if (m==0) {
+            // DC layer, in even rows of column 0
+            for (int n=0; n < Nt; n++)
+                prefactors[2*n] = wdmdata[(2*n)%Nt] * M_SQRT1_2; // undo normalization
+        }
+        else if (m==Nf) {
+            for (int n=0; n < Nt; n++)
+                prefactors[2*n] = wdmdata[(2*n)%Nt + 1] * M_SQRT1_2; // undo normalization
+        }
+        else {
+            for (int n = 0; n < Nt; n++) {
+                if ((n+m)%2==0) {
+                    prefactors[2*n] = wdmdata[n + Nt*m]; 
+                }
+                else {
+                    prefactors[2*n + 1] = -wdmdata[n + Nt*m]; 
+                }
+            } //end for n
+        }
+        glass_forward_complex_fft_outplace(prefactors, fft_result, Nt);
+
+        imin = max(center - Nt/2, 0);
+        imax = min(center + Nt/2, ND/2 + 1);
+        for (int i = imin; i < imax; i++) {
+            int iind = abs(i-center);
+            if (iind > Nt/2)
+                continue;
+            if (m==0 || m==Nf) {
+                freqdata[2*i]     += fft_result[2*((2*i)%Nt)] * phif[iind];
+                freqdata[2*i + 1] += fft_result[2*((2*i)%Nt) + 1] * phif[iind];
+            }
+            else {
+                freqdata[2*i]     += fft_result[2*(i%Nt)] * phif[iind];
+                freqdata[2*i+ 1]  += fft_result[2*(i%Nt) + 1] * phif[iind];
+            }
+        }
+
+    } // end for m
+}
 
 // NOTE: this implementation is pretty much just translated from WDMWaveletTransforms by Matt Digman
+// We assume freqdata has ND+2 elements
 void wavelet_transform_freq(struct Wavelets *wdm, double *freqdata, double *wdmdata) {
 
     int Nf = wdm->NF;
@@ -330,8 +405,8 @@ void wavelet_transform_freq(struct Wavelets *wdm, double *freqdata, double *wdmd
     build_filter(wdm, phif, true); // fill normalized Meyer window into phif
 
     for (int m=0; m <= Nf; m++) {
-        //memset(DX, 0, 2*Nt*sizeof(double));
         int center = m*Nt / 2; // note integer division
+        memset(DX, 0, 2*Nt*sizeof(double));
         for (int j=-Nt/2 + 1; j < Nt/2; j++) {
             int idx = center + j;
             // various edge checks:
@@ -351,12 +426,12 @@ void wavelet_transform_freq(struct Wavelets *wdm, double *freqdata, double *wdmd
         if (m==0) {
             // DC layer, even rows of col 0
             for (int n = 0; n < Nt; n+=2)
-                wdmdata[n] = DX[2*n] * M_SQRT2;
+                wdmdata[n] = DX_t[2*n] * M_SQRT2;
         }
         else if (m==Nf) {
             // Nyquist layer, odd rows of col 0
             for (int n = 0; n < Nt; n+=2)
-                wdmdata[n+1] = DX[2*n] * M_SQRT2;
+                wdmdata[n+1] = DX_t[2*n] * M_SQRT2;
         }
         else {
             // General layer
@@ -364,9 +439,9 @@ void wavelet_transform_freq(struct Wavelets *wdm, double *freqdata, double *wdmd
             for (int n = 0; n < Nt; n++) {
                 // TODO check indexing
                 if ((n+m)%2==0)
-                    wdmdata[n+Nt*m] = DX[2*n];
+                    wdmdata[n+Nt*m] = DX_t[2*n];
                 else
-                    wdmdata[n+Nt*m] = imag_sign * DX[2*n+1];
+                    wdmdata[n+Nt*m] = imag_sign * DX_t[2*n+1];
             }
         }
     }
