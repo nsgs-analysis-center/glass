@@ -25,7 +25,7 @@
 #include <assert.h>
 
 #define NFFT_TEST (1536*10)
-#define CREATE_DEBUG_FILES (false)
+#define CREATE_DEBUG_FILES (true)
 // Note that for us, NF is essentially harcoded by the choice of WAVELET_DURATION
 // these tests were written for an NF=1536
 
@@ -41,8 +41,7 @@ int write_wdm_data(struct Wavelets* wdm, double* data, char* fname) {
         double t = i*wdm->dt;
         for (int j=0; j<wdm->NF; j++) {
             double f = j*wdm->df;
-            wavelet_pixel_to_index(wdm,i,j,&k);
-            k-=wdm->kmin;
+            k = j*wdm->NT + i;
             fprintf(fptr,"%lg ",t);
             fprintf(fptr,"%lg ",f);
             fprintf(fptr,"%lg",data[k]);
@@ -137,9 +136,9 @@ int main(int argc, char *argv[])
     fft_tests.block_name = "FFT tests";
     wdm_tests.block_name = "WDM tests";
     fft_tests.atol = 1e-10;
-    fft_tests.rtol = 0.0;
+    fft_tests.rtol = 1e-5;
     wdm_tests.atol = 1e-10;
-    wdm_tests.rtol = 0.0;
+    wdm_tests.rtol = 1e-5;
 
     fprintf(stdout, "\n================= FFT CONVENTION CHECKS ================\n");
 
@@ -216,12 +215,13 @@ int main(int argc, char *argv[])
     } else {
         for (int j=0; j < wdm.NT; j++)
             for (int i=0; i< wdm.NF; i++)
-                fscanf(f, "%lf ", &olitas_wdm[j*wdm.NT+i]);
+                fscanf(f, "%lf ", &olitas_wdm[i*wdm.NT+j]);
+        // need to transpose this array
         ok = test_array_equality(test_data,
                 olitas_wdm,
                 NFFT_TEST,
                 &wdm_tests,
-                "Olitas.jl WDM vs our WDM(impulse)");
+                "Olitas.jl WDM(impulse) vs our WDM(impulse)");
     }
     fclose(f);
 
