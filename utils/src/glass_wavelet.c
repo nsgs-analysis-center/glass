@@ -395,7 +395,8 @@ void wavelet_inverse_transform_freq(struct Wavelets *wdm, double *wdmdata, doubl
     } // end for m
 }
 
-// NOTE: this implementation is pretty much just translated from WDMWaveletTransforms by Matt Digman
+// NOTE: this implementation matches WDMWaveletTransforms by Matt Digman
+// as well as Olitas.jl
 // We assume freqdata has ND+2 elements
 void wavelet_transform_freq(struct Wavelets *wdm, double *freqdata, double *wdmdata) {
 
@@ -440,7 +441,6 @@ void wavelet_transform_freq(struct Wavelets *wdm, double *freqdata, double *wdmd
             // General layer
             int imag_sign = m%2 == 0 ? 1 : -1;
             for (int n = 0; n < Nt; n++) {
-                // TODO check indexing
                 if ((n+m)%2==0)
                     wdmdata[n+Nt*m] = DX_t[2*n];
                 else

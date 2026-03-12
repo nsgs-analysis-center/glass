@@ -274,6 +274,11 @@ int main(int argc, char *argv[])
 
     //wavelet_transform_inverse_fourier(&wdm, test_data);
     wavelet_inverse_transform_freq(&wdm, test_data, test_fft_data);
+    ok = test_array_equality(test_fft_data,
+            ref_fft_data,
+            NFFT_TEST+2,
+            &wdm_tests,
+            "WDM(impulse) to FFT vs reference FFT");
     if (CREATE_DEBUG_FILES) {
         write_fft_data(1./T, NFFT_TEST/2+1, test_fft_data, "./dbg_wdmfft_impulse.dat");
     }
