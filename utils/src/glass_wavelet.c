@@ -16,6 +16,7 @@
 
 
 #include "glass_utils.h"
+#include "glass_math.h"
 
 struct TimeFrequencyTrack * malloc_time_frequency_track(struct Wavelets *wdm)
 {
@@ -351,7 +352,7 @@ void wavelet_inverse_transform_freq(struct Wavelets *wdm, double *wdmdata, doubl
     double fft_result[2*Nt];
     for (int m=0; m < Nf+1; m++) {
         int center = m*Nt/2;
-        memset(prefactors, 0, Nt*sizeof(double));
+        memset(prefactors, 0, 2*Nt*sizeof(double));
         if (m==0) {
             // DC layer, in even rows of column 0
             for (int n=0; n < Nt; n++)
@@ -373,8 +374,10 @@ void wavelet_inverse_transform_freq(struct Wavelets *wdm, double *wdmdata, doubl
         }
         glass_forward_complex_fft_outplace(prefactors, fft_result, Nt);
 
-        imin = max(center - Nt/2, 0);
-        imax = min(center + Nt/2, ND/2 + 1);
+        int imin = center - Nt/2;
+        if (imin < 0) imin = 0;
+        int imax = center + Nt/2;
+        if (imax > ND/2 +1) imax = ND/2+1;
         for (int i = imin; i < imax; i++) {
             int iind = abs(i-center);
             if (iind > Nt/2)

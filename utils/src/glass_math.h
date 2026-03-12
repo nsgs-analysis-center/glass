@@ -210,9 +210,9 @@ void unpack_fft_output(double *x, double *x_packed, int N);
  @param N[in] size of arrays
  */
 void glass_forward_complex_fft(double *data, int N);
-void glass_inverse_complex_fft_outplace(double *freqdata, double* timedata, int N);
+void glass_forward_complex_fft_outplace(double *timedata, double* freqdata, int N);
 void glass_inverse_complex_fft(double *data, int N);
-void glass_inverse_complex_fft_outplace(double *timedata, double* freqdata, int N);
+void glass_inverse_complex_fft_outplace(double *freqdata, double* timedata, int N);
 void glass_forward_real_fft(double *data, int N);
 void glass_forward_real_fft_outplace(double *timedata, double* freqdata, int N);
 void glass_inverse_real_fft(double *data, int N);

@@ -131,28 +131,39 @@ int main(int argc, char *argv[])
     // start test block
     struct UnitTestBlockInfo total_tests = {0};
     struct UnitTestBlockInfo fft_tests = {0};
+    struct UnitTestBlockInfo fft_outplace_tests = {0};
     struct UnitTestBlockInfo wdm_tests = {0};
     total_tests.block_name = "All tests";
-    fft_tests.block_name = "FFT tests";
+    fft_tests.block_name = "FFT inplace tests";
+    fft_outplace_tests.block_name = "FFT outplace tests";
     wdm_tests.block_name = "WDM tests";
     fft_tests.atol = 1e-10;
     fft_tests.rtol = 1e-5;
+    fft_outplace_tests.atol = 1e-10;
+    fft_outplace_tests.rtol = 1e-5;
     wdm_tests.atol = 1e-10;
     wdm_tests.rtol = 1e-5;
 
-    fprintf(stdout, "\n================= FFT CONVENTION CHECKS ================\n");
 
     // test what FFT coeffs are
     double test_data[NFFT_TEST] = {0};
-    double test_fft_data[NFFT_TEST] = {0};
+    double test_data_cx[2*NFFT_TEST] = {0};
+    test_data[0]    = 1.0;
+    test_data_cx[0] = 1.0;
+    double test_fft_data[NFFT_TEST+2] = {0};
+    double test_cx_fft_data[2*NFFT_TEST] = {0};
     double ref_data[NFFT_TEST] = {0};
-    double ref_fft_data[NFFT_TEST] = {0};
+    double ref_data_cx[2*NFFT_TEST] = {0};
+    double ref_fft_data[NFFT_TEST+2] = {0};
+    double ref_cx_fft_data[2*NFFT_TEST] = {0};
     double test_data_copy[NFFT_TEST] = {0};
-    test_data[0] = 1.0;
     // these copies are just for reference, won't be touched
     ref_data[0]  = 1.0;
-    for (int i=0; i<NFFT_TEST/2; i++) ref_fft_data[2*i] = 1.0; // real part is 1, imag is 0
+    ref_data_cx[0]  = 1.0;
+    for (int i=0; i<NFFT_TEST/2+1; i++) ref_fft_data[2*i] = 1.0; // real part is 1, imag is 0
+    for (int i=0; i<NFFT_TEST; i++) ref_cx_fft_data[2*i] = 1.0; // real part is 1, imag is 0
 
+    fprintf(stdout, "\n================= FFT CONVENTION CHECKS - INPLACE ================\n");
     bool ok = false;
     glass_forward_real_fft(test_data, NFFT_TEST);
     ok = test_array_equality(test_data,
@@ -161,14 +172,6 @@ int main(int argc, char *argv[])
             &fft_tests,
             "Real FFT of impulse matches analytic");
 
-    glass_inverse_real_fft_outplace(ref_fft_data, test_data, NFFT_TEST);
-    ok = test_array_equality(test_data,
-            ref_data,
-            NFFT_TEST,
-            &fft_tests,
-            "Outplace IFFTR of FFTR(impulse)");
-    for (int i=0; i<NFFT_TEST; i++)
-        test_data[i] = ref_fft_data[i];
     glass_inverse_real_fft(test_data, NFFT_TEST);
     ok = test_array_equality(test_data,
             ref_data,
@@ -180,17 +183,59 @@ int main(int argc, char *argv[])
     memset(&test_data, 0, NFFT_TEST*sizeof(double));
     test_data[0] = 1.0;
 
-    glass_forward_complex_fft(test_data, NFFT_TEST/2-1);
-    // TODO: check cx fft coefficients match reference here
-    glass_inverse_complex_fft(test_data, NFFT_TEST/2-1);
-    ok = test_array_equality(test_data,
-            ref_data,
-            NFFT_TEST,
+    glass_forward_complex_fft(test_data_cx, NFFT_TEST);
+    // check cx fft coefficients match reference here
+    ok = test_array_equality(test_data_cx,
+            ref_cx_fft_data,
+            2*NFFT_TEST,
+            &fft_tests,
+            "complex FFT(impulse) matches analytic");
+    glass_inverse_complex_fft(test_data_cx, NFFT_TEST);
+    ok = test_array_equality(test_data_cx,
+            ref_data_cx,
+            2*NFFT_TEST,
             &fft_tests,
             "complex IFFT of complex FFT(impulse)");
 
     print_test_block_stats(&fft_tests);
 
+    fprintf(stdout, "\n================= FFT CONVENTION CHECKS - OUTPLACE ================\n");
+    // reset timeseries
+    memset(&test_data, 0, NFFT_TEST*sizeof(double));
+    test_data[0] = 1.0;
+    glass_forward_real_fft_outplace(test_data, test_fft_data, NFFT_TEST);
+    ok = test_array_equality(test_fft_data,
+            ref_fft_data,
+            NFFT_TEST+2,
+            &fft_outplace_tests,
+            "Outplace real FFT of impulse matches analytic");
+
+    glass_inverse_real_fft_outplace(test_fft_data, test_data, NFFT_TEST);
+    ok = test_array_equality(test_data,
+            ref_data,
+            NFFT_TEST,
+            &fft_outplace_tests,
+            "Outplace IFFTR of FFTR(impulse)");
+
+    // reset timeseries
+    memset(&test_data, 0, NFFT_TEST*sizeof(double));
+    test_data[0] = 1.0;
+
+    glass_forward_complex_fft_outplace(test_data_cx, test_cx_fft_data, NFFT_TEST);
+    // check cx fft coefficients match reference here
+    ok = test_array_equality(test_cx_fft_data,
+            ref_cx_fft_data,
+            2*NFFT_TEST,
+            &fft_outplace_tests,
+            "Outplace complex FFT(impulse) matches analytic");
+    glass_inverse_complex_fft_outplace(test_cx_fft_data, test_data_cx, NFFT_TEST);
+    ok = test_array_equality(test_data_cx,
+            ref_data_cx,
+            2*NFFT_TEST,
+            &fft_outplace_tests,
+            "Outplace complex IFFT of complex FFT(impulse)");
+
+    print_test_block_stats(&fft_outplace_tests);
     fprintf(stdout, "\n================= WDM CONVENTION CHECKS ================\n");
 
     // timeseries, impulse again
@@ -227,12 +272,12 @@ int main(int argc, char *argv[])
     if (CREATE_DEBUG_FILES)
         write_wdm_data(&wdm, test_data, "./dbg_wdm_impulse.dat");
 
-    wavelet_transform_inverse_fourier(&wdm, test_data);
+    //wavelet_transform_inverse_fourier(&wdm, test_data);
+    wavelet_inverse_transform_freq(&wdm, test_data, test_fft_data);
     if (CREATE_DEBUG_FILES) {
-        write_fft_data(1./T, NFFT_TEST/2, test_data, "./dbg_wdmfft_impulse.dat");
-        write_fft_data(1./T, NFFT_TEST/2, test_data_copy, "./dbg_fft_impulse.dat");
+        write_fft_data(1./T, NFFT_TEST/2+1, test_fft_data, "./dbg_wdmfft_impulse.dat");
     }
-    glass_inverse_real_fft(test_data, NFFT_TEST);
+    glass_inverse_real_fft_outplace(test_fft_data, test_data, NFFT_TEST);
     if (CREATE_DEBUG_FILES)
         write_time_data(T/NFFT_TEST, NFFT_TEST, test_data, "./dbg_invwdm_impulse.dat");
     ok = test_array_equality(test_data,

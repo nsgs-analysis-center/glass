@@ -91,5 +91,6 @@ void active_wavelet_list(struct Wavelets *wdm, double *freqX, double *freqY, dou
 void wavelet_transform_timefreq(struct Wavelets *wdm, double *timedata);
 void wavelet_transform_freq(struct Wavelets *wdm, double *freqdata, double *wdmdata);
 void build_filter(struct Wavelets* wdm, double* phif, bool forward);
+void wavelet_inverse_transform_freq(struct Wavelets *wdm, double *wdmdata, double *freqdata);
 
 #endif /* glass_wavelet_h */

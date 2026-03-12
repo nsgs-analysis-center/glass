@@ -759,6 +759,7 @@ void glass_forward_real_fft(double *data, int N)
     kiss_fftr(cfg, timedata, freqdata);
     
     
+    // NOTE: strictly speaking, this is lacking the Nyquist bin!
     for(int i=0; i<N/2; i++)
     {
         data[2*i]   = freqdata[i].r;
@@ -803,7 +804,7 @@ void glass_inverse_real_fft(double *data, int N)
     kiss_fft_scalar *timedata = malloc(N*sizeof(kiss_fft_scalar));
     kiss_fft_cpx    *freqdata = malloc((N/2+1)*sizeof(kiss_fft_cpx));
 
-    for(int i=0; i<N/2; i++)
+    for(int i=0; i<N/2+1; i++)
     {
         freqdata[i].r = data[2*i];
         freqdata[i].i = data[2*i+1];
