@@ -440,7 +440,7 @@ void generate_instrument_noise_model_wavelet(struct Wavelets *wdm, struct Orbit 
     for(int i=0; i<model->psd->N; i++)
         for(int n=0; n<3; n++)
             for(int m=n; m<3; m++)
-                C[n][m][i]/=8.;
+                C[n][m][i]/=4.;
 
     free_instrument_model(grid);
 

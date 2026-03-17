@@ -9,22 +9,22 @@ set(MBH_SRC
     glass_mbh_model.h glass_mbh_model.c
     glass_mbh_waveform.h glass_mbh_waveform.c
     glass_mbh_IMRPhenom.h
-    glass_mbh_IMRPhenom_dummy.c
+    glass_mbh_IMRPhenom.c
     glass_mbh.h
 )
 
-#set(LAL_SRC
-#    IMRPhenomD_internals.c
-#    IMRPhenomD_internals.h
-#    IMRPhenomD.c
-#    IMRPhenomD.h
-#    IMRPhenomT.c
-#    IMRPhenomT.h
-#)
+set(LAL_SRC
+    IMRPhenomD_internals.c
+    IMRPhenomD_internals.h
+    IMRPhenomD.c
+    IMRPhenomD.h
+    IMRPhenomT.c
+    IMRPhenomT.h
+)
 
 add_library(glass_mbh STATIC
     ${MBH_SRC}
-    #${LAL_SRC}
+    ${LAL_SRC}
 )
 
 include_directories ("${PROJECT_SOURCE_DIR}/external/")

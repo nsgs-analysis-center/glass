@@ -186,7 +186,9 @@ double waveform_match(struct Source *a, struct Source *b, struct Noise *noise)
         }//check that index is in range
     }//loop over waveform bins
     
-    double aa,bb,ab;
+    double aa=0;
+    double bb=0;
+    double ab=0;
     
     switch(Nchannel)
     {
@@ -523,6 +525,7 @@ void ucb_fisher_wavelet(struct Orbit *orbit, struct Data *data, struct Source *s
 {
     //TODO:  ucb_fisher should compute joint Fisher
     int i,j,n;
+    int i_wdm, j_wdm;
         
     double epsilon    = 1.0e-6;
     double invepsilon2= 1./(epsilon);
@@ -543,6 +546,9 @@ void ucb_fisher_wavelet(struct Orbit *orbit, struct Data *data, struct Source *s
         alloc_tdi(dhdx[n], data->N, data->Nchannel);
     }
     
+    int *list = int_vector(data->N);
+    for(n=0; n<data->N; n++) list[n] = n;
+
     /* assumes all the parameters are log or angle */
     for(i=0; i<UCB_MODEL_NP; i++)
     {
@@ -573,8 +579,6 @@ void ucb_fisher_wavelet(struct Orbit *orbit, struct Data *data, struct Source *s
             wave_p->tdi->X[j]=0.0;
             wave_p->tdi->Y[j]=0.0;
             wave_p->tdi->Z[j]=0.0;
-            wave_p->tdi->A[j]=0.0;
-            wave_p->tdi->E[j]=0.0;
         }
         
         
@@ -585,35 +589,38 @@ void ucb_fisher_wavelet(struct Orbit *orbit, struct Data *data, struct Source *s
         for(n=0; n<wave_p->Nlist; n++)
         {
             int k = wave_p->list[n];
-            dhdx[i]->X[k] = (wave_p->tdi->X[k] - source->tdi->X[k])*invstep;
-            dhdx[i]->Y[k] = (wave_p->tdi->Y[k] - source->tdi->Y[k])*invstep;
-            dhdx[i]->Z[k] = (wave_p->tdi->Z[k] - source->tdi->Z[k])*invstep;
+            wavelet_index_to_pixel(data->wdm, &i_wdm, &j_wdm, k+data->wdm->kmin);
+            if(i_wdm>data->wdm->imin && i_wdm<data->wdm->imax && k>=0 && k<data->N)
+            {
+                dhdx[i]->X[k] = (wave_p->tdi->X[k] - source->tdi->X[k])*invstep;
+                dhdx[i]->Y[k] = (wave_p->tdi->Y[k] - source->tdi->Y[k])*invstep;
+                dhdx[i]->Z[k] = (wave_p->tdi->Z[k] - source->tdi->Z[k])*invstep;
+            }
         }
-
     }
-    
+        
     // Calculate fisher matrix
     for(i=0; i<UCB_MODEL_NP; i++)
     {
         for(j=i; j<UCB_MODEL_NP; j++)
         {
-            source->fisher_matrix[i][j]  = wavelet_nwip(dhdx[i]->X, dhdx[j]->X, noise->invC[0][0], wave_p->list, wave_p->Nlist);
-            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->Y, dhdx[j]->Y, noise->invC[1][1], wave_p->list, wave_p->Nlist);
-            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->Z, dhdx[j]->Z, noise->invC[2][2], wave_p->list, wave_p->Nlist);
-            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->X, dhdx[j]->Y, noise->invC[0][1], wave_p->list, wave_p->Nlist);
-            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->X, dhdx[j]->Z, noise->invC[0][2], wave_p->list, wave_p->Nlist);
-            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->Y, dhdx[j]->Z, noise->invC[1][2], wave_p->list, wave_p->Nlist);
-            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->Y, dhdx[j]->X, noise->invC[1][0], wave_p->list, wave_p->Nlist);
-            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->Z, dhdx[j]->X, noise->invC[2][0], wave_p->list, wave_p->Nlist);
-            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->Z, dhdx[j]->Y, noise->invC[2][1], wave_p->list, wave_p->Nlist);
+            source->fisher_matrix[i][j]  = wavelet_nwip(dhdx[i]->X, dhdx[j]->X, noise->invC[0][0], list, data->N);
+            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->Y, dhdx[j]->Y, noise->invC[1][1], list, data->N);
+            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->Z, dhdx[j]->Z, noise->invC[2][2], list, data->N);
+            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->X, dhdx[j]->Y, noise->invC[0][1], list, data->N);
+            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->X, dhdx[j]->Z, noise->invC[0][2], list, data->N);
+            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->Y, dhdx[j]->Z, noise->invC[1][2], list, data->N);
+            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->Y, dhdx[j]->X, noise->invC[1][0], list, data->N);
+            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->Z, dhdx[j]->X, noise->invC[2][0], list, data->N);
+            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->Z, dhdx[j]->Y, noise->invC[2][1], list, data->N);
 
             if(source->fisher_matrix[i][j]!=source->fisher_matrix[i][j])
             {
-                fprintf(stderr,"WARNING: nan matrix element (line %d of file %s)\n",__LINE__,__FILE__);
-                fprintf(stderr, "fisher_matrix[%i][%i], Snf=[%g,%g]\n",i,j,noise->C[0][0][data->N/2],noise->C[1][1][data->N/2]);
+                fprintf(stderr, "WARNING: nan matrix element (line %d of file %s)\n",__LINE__,__FILE__);
+                fprintf(stderr, "WARNING: fisher_matrix[%i][%i], Snf=[%g,%g]\n",i,j,noise->C[0][0][data->N/2],noise->C[1][1][data->N/2]);
                 for(int k=0; k<UCB_MODEL_NP; k++)
                 {
-                    fprintf(stderr,"source->params[%i]=%g\n",k,source->params[k]);
+                    fprintf(stderr,"WARNING: source->params[%i]=%g\n",k,source->params[k]);
                 }
                 source->fisher_matrix[i][j] = 10.0;
             }
@@ -624,6 +631,53 @@ void ucb_fisher_wavelet(struct Orbit *orbit, struct Data *data, struct Source *s
     // Calculate eigenvalues and eigenvectors of fisher matrix
     matrix_eigenstuff(source->fisher_matrix, source->fisher_evectr, source->fisher_evalue, UCB_MODEL_NP);
     
+    int regflag = 0;
+    for(i=0; i<UCB_MODEL_NP; i++)
+    {
+        if(source->fisher_evalue[i]<=0 || source->fisher_evalue[i]!=source->fisher_evalue[i])
+        {
+            fprintf(stderr,"WARNING: bad eigenvalue (line %d of file %s)\n",__LINE__,__FILE__);
+            fprintf(stderr, "WARNING: fisher_evalue[%i] = %lg, Snf=[%g,%g]\n",i,source->fisher_evalue[i], noise->C[0][0][data->N/2],noise->C[1][1][data->N/2]);
+            for(int k=0; k<UCB_MODEL_NP; k++)
+            {
+                fprintf(stderr,"WARNING: source->params[%i]=%g fisher->matrix[%i][%i]=%lg\n",k,source->params[k],k,k,source->fisher_matrix[k][k]);
+                fprintf(stderr,"WARNING:    XX = %lg\n",wavelet_nwip(dhdx[k]->X, dhdx[k]->X, noise->invC[0][0], list, data->N));
+                fprintf(stderr,"WARNING:    YY = %lg\n",wavelet_nwip(dhdx[k]->Y, dhdx[k]->Y, noise->invC[1][1], list, data->N));
+                fprintf(stderr,"WARNING:    ZZ = %lg\n",wavelet_nwip(dhdx[k]->Z, dhdx[k]->Z, noise->invC[2][2], list, data->N));
+                fprintf(stderr,"WARNING:    XY = %lg\n",wavelet_nwip(dhdx[k]->X, dhdx[k]->Y, noise->invC[0][1], list, data->N));
+                fprintf(stderr,"WARNING:    XZ = %lg\n",wavelet_nwip(dhdx[k]->X, dhdx[k]->Z, noise->invC[0][2], list, data->N));
+                fprintf(stderr,"WARNING:    YZ = %lg\n",wavelet_nwip(dhdx[k]->Y, dhdx[k]->Z, noise->invC[1][2], list, data->N));
+                fprintf(stderr,"WARNING:    YX = %lg\n",wavelet_nwip(dhdx[k]->Y, dhdx[k]->X, noise->invC[1][0], list, data->N));
+                fprintf(stderr,"WARNING:    ZX = %lg\n",wavelet_nwip(dhdx[k]->Z, dhdx[k]->X, noise->invC[2][0], list, data->N));
+                fprintf(stderr,"WARNING:    ZY = %lg\n",wavelet_nwip(dhdx[k]->Z, dhdx[k]->Y, noise->invC[2][1], list, data->N));
+
+            }
+            fprintf(stderr, "WARNING: try regularization FIM and re-inverting\n");
+            regflag=1;
+            
+            
+        }
+    }
+    if(regflag)
+    {
+        for(i=0; i<UCB_MODEL_NP; i++)source->fisher_matrix[i][i] += 1.0e-1;
+        matrix_eigenstuff(source->fisher_matrix, source->fisher_evectr, source->fisher_evalue, UCB_MODEL_NP);
+        for(i=0; i<UCB_MODEL_NP; i++)
+        {
+            if(source->fisher_evalue[i]<=0 || source->fisher_evalue[i]!=source->fisher_evalue[i])
+            {
+                fprintf(stderr,"ERROR: bad eigenvalue (line %d of file %s)\n",__LINE__,__FILE__);
+                fprintf(stderr, "ERROR: fisher_evalue[%i] = %lg, Snf=[%g,%g]\n",i,source->fisher_evalue[i], noise->C[0][0][data->N/2],noise->C[1][1][data->N/2]);
+                for(int k=0; k<UCB_MODEL_NP; k++)
+                {
+                    fprintf(stderr,"ERROR: source->params[%i]=%g\n",k,source->params[k]);
+                }
+                exit(1);
+            }
+        }
+    }
+     
+    free_int_vector(list);
     free_double_vector(params_p);
     free_source(wave_p);
     
@@ -1192,19 +1246,8 @@ void ucb_waveform_wavelet_tab(struct Orbit *orbit, struct Wavelets *wdm, double 
     double *amp_ssb   = malloc(sizeof(double)*Nspline);
     double *phase_ssb = malloc(sizeof(double)*Nspline);
     
-    // convert parameters
-    params[0] = params[0]/Tobs;
-    params[3] = exp(params[3]);
-    params[7] = params[7]/(Tobs*Tobs);
-    //params[8] = params[8]/(Tobs*Tobs*Tobs);
-    
+    //get ucb waveform on orbit grid
     ucb_barycenter_waveform(params, Nspline, orbit->t, phase_ssb, amp_ssb, Tobs);
-    
-    // convert back
-    params[0] = params[0]*Tobs;
-    params[3] = log(params[3]);
-    params[7] = params[7]*(Tobs*Tobs);
-    //params[8] = params[8]*(Tobs*Tobs*Tobs);
     
     /*
     Get spline interpolant for SSB phase and amplitude

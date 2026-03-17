@@ -184,7 +184,7 @@ static void wavelet_lookup_table(struct Wavelets *wdm)
         int NT = wdm->n_table[j];
         
         
-        for(int n=0; n<NT; n++)  // loop of frequency slices
+        for(int n=0; n<NT; n++)  // loop over time slices
         {
             double f = f0 + ((double)(n-NT/2)+0.5)*wdm->deltaf;
             
@@ -212,7 +212,12 @@ void initialize_wavelet(struct Wavelets *wdm, double T)
     wdm->NF = WAVELET_DURATION/LISA_CADENCE;
     wdm->df = WAVELET_BANDWIDTH;
     wdm->dt = WAVELET_DURATION;
-
+    
+    //TODO: this needs to be fixed instead of fudged
+    //avoid edge effects at start and stop times of segment.
+    wdm->imin = WAVELET_EDGE_BUFFER;
+    wdm->imax = wdm->NT - WAVELET_EDGE_BUFFER;
+    
     setup_wdm_basis(wdm, wdm->NF);
 
     wdm->frequency_steps = 400;
@@ -229,7 +234,7 @@ void initialize_wavelet(struct Wavelets *wdm, double T)
 
     wdm->fdot = malloc(wdm->fdot_steps*sizeof(double));
 
-    /* Only needed when using the lookup table waveform generator
+    /* Only needed when using the lookup table waveform generator */
     wdm->table   = malloc(wdm->fdot_steps*sizeof(double *));
     wdm->n_table = malloc(wdm->fdot_steps*sizeof(int));
 
@@ -243,13 +248,12 @@ void initialize_wavelet(struct Wavelets *wdm, double T)
         wdm->n_table[n] = N;
         wdm->table[n] = double_vector(2*N);
     }
-        
-    //stores lookup table of wavelet basis functions
-    wavelet_lookup_table(wdm);
-    */
-    
+
     //stores window function and normalization
     wavelet_window_time(wdm);
+
+    //stores lookup table of wavelet basis functions
+    //wavelet_lookup_table(wdm);
 
     //set defaults for min and maximum pixels
     wavelet_pixel_to_index(wdm,0,1,&wdm->kmin);         //first pixel of second layer

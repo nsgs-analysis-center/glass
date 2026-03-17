@@ -56,6 +56,9 @@ struct Wavelets
     int kmin; //!<minimum wavelet index
     int kmax; //!<maximum wavelet index
     
+    int imin; //!<minimum time layer
+    int imax; //!<maximum time layer
+    
     int *n_table; //!< number of terms in the lookup table at each frequency
     double **table; //!< lookup table of wavelet coefficients
 };
