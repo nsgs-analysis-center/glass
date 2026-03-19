@@ -173,7 +173,9 @@ static double * mbh_time_frequency_grid(double *params, int *N, int *Nc)
         if(fabs(remainder(omega[Nwork],omega_star)/omega[Nwork] ) < 5.0e-2) //close enough to transfer frequency to take small steps
             dt = dPhase_fstar/omega[Nwork];
         else
-            dt = dPhase/omega[Nwork];        if(dt > dt_max) dt = dt_max;
+            dt = dPhase/omega[Nwork];
+
+        if(dt > dt_max) dt = dt_max;
         if(dt < dt_min) dt = dt_min;
         if(dt < dt_min) dt = dt_min;
 

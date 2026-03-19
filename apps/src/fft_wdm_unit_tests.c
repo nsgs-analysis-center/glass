@@ -304,22 +304,37 @@ int main(int argc, char *argv[])
         // is only used in MBH waveform
         // for now force length Nt
     // take one freq layer of olitas wdm, turn it into FFT
-    double test_wdm[wdm.NT];
-    //double test_small_fft[wdm.Nt];
+    double test_wdm_full[NFFT_TEST] = {0};
+    double test_wdm_layer[wdm.NT];
     int test_layer = 5;
     for (int i=0; i<wdm.NT; i++) {
         int k = test_layer*wdm.NT + i;
-        test_wdm[i] = olitas_wdm[k];
+        test_wdm_full[k] = olitas_wdm[k];
+        test_wdm_layer[i] = olitas_wdm[k];
     }
-    wavelet_inverse_transform_freq(&wdm, test_wdm, test_fft_data);
+    wavelet_inverse_transform_freq(&wdm, test_wdm_full, test_fft_data);
     if (CREATE_DEBUG_FILES) {
         write_fft_data(1./T, NFFT_TEST/2+1, test_fft_data, "./dbg_wdmfft_onelayer.dat");
     }
+    // extract a short FFT segment centered on the layer
+    int center = test_layer * wdm.NT / 2;
+    int Nseg = wdm.NT; // segment length in complex bins
+    double short_fft[2*Nseg];
+    for (int i = 0; i < Nseg; i++) {
+        int full_idx = center - Nseg/2 + i;
+        if (full_idx >= 0 && full_idx <= NFFT_TEST/2) {
+            short_fft[2*i]     = test_fft_data[2*full_idx];
+            short_fft[2*i + 1] = test_fft_data[2*full_idx + 1];
+        } else {
+            short_fft[2*i]     = 0.0;
+            short_fft[2*i + 1] = 0.0;
+        }
+    }
     // now forward it with wavelet_transform_segment
-    my_wavelet_transform_segment(&wdm, wdm.NT, test_layer, test_fft_data);
+    my_wavelet_transform_segment(&wdm, Nseg, test_layer, short_fft);
 
-    ok = test_array_equality(test_fft_data,
-            test_wdm,
+    ok = test_array_equality(short_fft,
+            test_wdm_layer,
             wdm.NT,
             &wdm_tests,
             "wavelet_transform_segment (layer 5) vs WDM(impulse) (layer 5)");
@@ -333,8 +348,7 @@ int main(int argc, char *argv[])
     memset(&test_data, 0, NFFT_TEST*sizeof(double));
     test_data[0] = 1.0;
     wavelet_transform_timefreq_by_layers(&wdm, test_data, test_layer, test_Nlayer);
-    if (CREATE_DEBUG_FILES)
-        write_wdm_data(&wdm, test_data, "./dbg_wdm_impulse_by_layers.dat");
+    // output is now the first test_Nlayer*NT elements of test_data
     double wdm_crop[test_Nlayer*wdm.NT];
     for (int i=0; i < test_Nlayer*wdm.NT; i++)
         wdm_crop[i] = olitas_wdm[test_layer*wdm.NT + i];
@@ -342,22 +356,55 @@ int main(int argc, char *argv[])
             wdm_crop,
             test_Nlayer*wdm.NT,
             &wdm_tests,
-            "wavelet_transform_timefreq_by_layers (5-8) vs WDM(impulse) (5-8)");
+            "wavelet_transform_timefreq_by_layers (5-7) vs WDM(impulse) (5-7)");
 
 
-    // REMOVE:
-    // fourier_to_wavelet_transform_of_layer
-        //  note: is static, is only called in wavelet_transform_segment
-        //  this one appears to perform wdm on fft data
-        //  assumes it fits in one layer only
-        //  rewrote to wavelet_transform_freq_one_layer
-    // wavelet_transform
-    // wavelet_transform_inverse_fourier
-    // wavelet_transform_inverse_time
-    /*
-    memset(test_data, 0, NFFT_TEST*sizeof(double));
+    // Build full scalogram by calling my_wavelet_transform_segment on every layer
+    // and compare against the full wavelet_transform_freq result
+    memset(&test_data, 0, NFFT_TEST*sizeof(double));
     test_data[0] = 1.0;
-    */
+    // get reference full WDM
+    double ref_wdm[NFFT_TEST];
+    memcpy(ref_wdm, test_data, NFFT_TEST*sizeof(double));
+    wavelet_transform_timefreq(&wdm, ref_wdm);
+    // get full FFT for extracting segments
+    double full_fft[NFFT_TEST+2];
+    glass_forward_real_fft_outplace(test_data, full_fft, NFFT_TEST);
+    // assemble scalogram layer by layer
+    double assembled_wdm[NFFT_TEST];
+    memset(assembled_wdm, 0, NFFT_TEST*sizeof(double));
+    for (int m = 0; m <= wdm.NF; m++) {
+        int seg_center = m * wdm.NT / 2;
+        int Nseg = wdm.NT;
+        double seg_fft[2*Nseg];
+        for (int i = 0; i < Nseg; i++) {
+            int full_idx = seg_center - Nseg/2 + i;
+            if (full_idx >= 0 && full_idx <= NFFT_TEST/2) {
+                seg_fft[2*i]     = full_fft[2*full_idx];
+                seg_fft[2*i + 1] = full_fft[2*full_idx + 1];
+            } else {
+                seg_fft[2*i]     = 0.0;
+                seg_fft[2*i + 1] = 0.0;
+            }
+        }
+        my_wavelet_transform_segment(&wdm, Nseg, m, seg_fft);
+        // DC and Nyquist layers both map into column 0
+        if (m == 0) {
+            for (int n = 0; n < wdm.NT; n += 2)
+                assembled_wdm[n] = seg_fft[n];
+        } else if (m == wdm.NF) {
+            for (int n = 0; n < wdm.NT; n += 2)
+                assembled_wdm[n + 1] = seg_fft[n + 1];
+        } else {
+            for (int n = 0; n < wdm.NT; n++)
+                assembled_wdm[m*wdm.NT + n] = seg_fft[n];
+        }
+    }
+    ok = test_array_equality(assembled_wdm,
+            ref_wdm,
+            NFFT_TEST,
+            &wdm_tests,
+            "layer-by-layer assembly vs full wavelet_transform_freq");
 
 
     print_test_block_stats(&wdm_tests);
