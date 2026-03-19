@@ -87,10 +87,11 @@ void active_wavelet_list(struct Wavelets *wdm, double *freqX, double *freqY, dou
 
 // new transform funcs from Robbie (March 2026)
 // these are mostly translations / simplifications of WDMWaveletTransforms
-// from Matt Digman
 void wavelet_transform_timefreq(struct Wavelets *wdm, double *timedata);
 void wavelet_transform_freq(struct Wavelets *wdm, double *freqdata, double *wdmdata);
 void build_filter(struct Wavelets* wdm, double* phif, bool forward);
 void wavelet_inverse_transform_freq(struct Wavelets *wdm, double *wdmdata, double *freqdata);
+void my_wavelet_transform_segment(struct Wavelets *wdm, int N, int layer, double *data);
+void wavelet_transform_timefreq_by_layers(struct Wavelets *wdm, double* timedata, int jmin, int Nlayers);
 
 #endif /* glass_wavelet_h */

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-
+#include <assert.h>
 #include "glass_utils.h"
 #include "glass_math.h"
 
@@ -450,6 +450,64 @@ void wavelet_transform_freq(struct Wavelets *wdm, double *freqdata, double *wdmd
     }
 }
 
+void wavelet_transform_freq_one_layer(struct Wavelets *wdm, double *freqdata, double *wdmdata, int layer ) {
+
+    int Nf = wdm->NF;
+    int Nt = wdm->NT;
+
+    double   DX[2*Nt]; // length NT complex array, we will ifft later
+    double DX_t[2*Nt]; // length NT complex array, will be one freq layer
+    double phif[Nt/2 + 1];
+    memset(DX, 0, 2*Nt*sizeof(double));
+    build_filter(wdm, phif, true); // fill normalized Meyer window into phif
+    int m = layer;
+
+    int center = m*Nt / 2; // note integer division
+    for (int j=-Nt/2 + 1; j < Nt/2; j++) {
+        int idx = center + j;
+        // various edge checks:
+        if ((m==0) && (idx < 0))
+            continue; // m==0  is DC bin , no freqs below 
+        if ((m==Nf) && idx > center)
+            continue; // m==Nf is Nyquist, no freqs above
+        double weight = phif[abs(j)];
+        if ( (j==0) && (m==0 || m==Nf) )
+            weight /= 2.0; // this accounts for less d.o.f. in boundary layers
+        DX[2*(Nt/2 + j)]     = weight * freqdata[2*idx];
+        DX[2*(Nt/2 + j) + 1] = weight * freqdata[2*idx+1];
+        glass_inverse_complex_fft_outplace(DX, DX_t, Nt);
+
+        // now extract wdm coeffs
+        if (m==0) {
+            // DC layer, even rows of col 0
+            for (int n = 0; n < Nt; n+=2)
+                wdmdata[n] = DX_t[2*n] * M_SQRT2;
+        }
+        else if (m==Nf) {
+            // Nyquist layer, odd rows of col 0
+            for (int n = 0; n < Nt; n+=2)
+                wdmdata[n+1] = DX_t[2*n] * M_SQRT2;
+        }
+        else {
+            // General layer
+            int imag_sign = m%2 == 0 ? 1 : -1;
+            for (int n = 0; n < Nt; n++) {
+                /* // normally this would be:
+                if ((n+m)%2==0)
+                    wdmdata[n+Nt*m] = DX_t[2*n];
+                else
+                    wdmdata[n+Nt*m] = imag_sign * DX_t[2*n+1];
+                // but we're only doing one layer
+                */
+                if ((n+m)%2==0)
+                    wdmdata[n] = DX_t[2*n];
+                else
+                    wdmdata[n] = imag_sign * DX_t[2*n+1];
+            }
+        }
+    }
+}
+
 void wavelet_transform(struct Wavelets *wdm, double *data)
 {
     //array index for tf pixel
@@ -631,6 +689,71 @@ static void fourier_to_wavelet_transform_of_layer(struct Wavelets *wdm, double *
     }//end loop over time slices
     
     free_double_vector(wdata);
+}
+
+// Basically the same thing as wavelet_transform_timefreq, but we assume
+// that the output fits into the layers with indices jmin...jmin+Nlayers
+// used only in the UCB waveform
+void wavelet_transform_timefreq_by_layers(struct Wavelets* wdm, double *timedata, int jmin, int Nlayers) {
+    //assert(N % wdm->NT == 0);
+    int ND = wdm->NT*(Nlayers+1);
+    double freqdata[ND + 2]; // extra complex element
+    double wdmdata[ND];
+
+    // window and fft the data
+    double alpha = 8.0/wdm->NT;
+    tukey(timedata, alpha, ND);
+    glass_forward_real_fft_outplace(timedata, freqdata, ND);
+
+    int Nf = wdm->NF;
+    int Nt = wdm->NT;
+
+    double   DX[2*Nt]; // length NT complex array, we will ifft later
+    double DX_t[2*Nt]; // length NT complex array, will be one freq layer
+    double phif[Nt/2 + 1];
+    build_filter(wdm, phif, true); // fill normalized Meyer window into phif
+
+    for (int m=jmin; m <= jmin+Nlayers; m++) {
+        int center = m*Nt / 2; // note integer division
+        memset(DX, 0, 2*Nt*sizeof(double));
+        for (int j=-Nt/2 + 1; j < Nt/2; j++) {
+            int idx = center + j;
+            // various edge checks:
+            if ((m==0) && (idx < 0))
+                continue; // m==0  is DC bin , no freqs below 
+            if ((m==Nf) && idx > center)
+                continue; // m==Nf is Nyquist, no freqs above
+            double weight = phif[abs(j)];
+            if ( (j==0) && (m==0 || m==Nf) )
+                weight /= 2.0; // this accounts for less d.o.f. in boundary layers
+            DX[2*(Nt/2 + j)]     = weight * freqdata[2*idx];
+            DX[2*(Nt/2 + j) + 1] = weight * freqdata[2*idx+1];
+        }
+        glass_inverse_complex_fft_outplace(DX, DX_t, Nt);
+
+        // now extract wdm coeffs
+        if (m==0) {
+            // DC layer, even rows of col 0
+            for (int n = 0; n < Nt; n+=2)
+                wdmdata[n] = DX_t[2*n] * M_SQRT2;
+        }
+        else if (m==Nf) {
+            // Nyquist layer, odd rows of col 0
+            for (int n = 0; n < Nt; n+=2)
+                wdmdata[n+1] = DX_t[2*n] * M_SQRT2;
+        }
+        else {
+            // General layer
+            int imag_sign = m%2 == 0 ? 1 : -1;
+            for (int n = 0; n < Nt; n++) {
+                int k = (m-jmin)*Nlayers + n - 1;
+                if ((n+m)%2==0)
+                    wdmdata[k] = DX_t[2*n];
+                else
+                    wdmdata[k] = imag_sign * DX_t[2*n+1];
+            }
+        }
+    }
 }
 
 void wavelet_transform_by_layers(struct Wavelets *wdm, int jmin, int Nlayers, double *window, double *data)
@@ -948,6 +1071,19 @@ void wavelet_window_frequency(struct Wavelets *wdm, double *window, int Nlayers)
     
     free(wdm_temp);
     
+}
+
+// This is a utility function mostly used in the MBHB waveform
+// Here we assume that the freqdata only has frequency content in one layer
+// N is number of time data points, freqdata is length N/2+1
+void my_wavelet_transform_segment(struct Wavelets *wdm, int N, int layer, double *freqdata)
+{
+    // N is number of 
+    double wdmdata[wdm->NT]; // basically just time content of one freq layer!
+    assert(N == wdm->NT); // TODO need right assert here
+    wavelet_transform_freq_one_layer(wdm, freqdata,  wdmdata, layer);
+    for (int i=0; i<N; i++)
+        freqdata[i] = wdmdata[i];
 }
 
 void wavelet_transform_segment(struct Wavelets *wdm, int N, int layer, double *data)

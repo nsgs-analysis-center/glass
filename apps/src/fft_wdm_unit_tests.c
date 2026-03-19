@@ -290,32 +290,76 @@ int main(int argc, char *argv[])
             NFFT_TEST,
             &wdm_tests,
             "IWDM of WDM(impulse)");
-    // try to fourier directly
+
+
+    // Need to test
+    // wavelet_transform_from_table
+    // active_wavelet_list
+    // wavelet_window_frequency -- probably remove
+
+    // wavelet_transform_segment
+        // this one takes a short freq segment and transforms to wdm
+        // assumes it contains only one freq layer
+        // is length N. what is N? WDM transform wants length Nt...
+        // is only used in MBH waveform
+        // for now force length Nt
+    // take one freq layer of olitas wdm, turn it into FFT
+    double test_wdm[wdm.NT];
+    //double test_small_fft[wdm.Nt];
+    int test_layer = 5;
+    for (int i=0; i<wdm.NT; i++) {
+        int k = test_layer*wdm.NT + i;
+        test_wdm[i] = olitas_wdm[k];
+    }
+    wavelet_inverse_transform_freq(&wdm, test_wdm, test_fft_data);
+    if (CREATE_DEBUG_FILES) {
+        write_fft_data(1./T, NFFT_TEST/2+1, test_fft_data, "./dbg_wdmfft_onelayer.dat");
+    }
+    // now forward it with wavelet_transform_segment
+    my_wavelet_transform_segment(&wdm, wdm.NT, test_layer, test_fft_data);
+
+    ok = test_array_equality(test_fft_data,
+            test_wdm,
+            wdm.NT,
+            &wdm_tests,
+            "wavelet_transform_segment (layer 5) vs WDM(impulse) (layer 5)");
+    // wavelet_transform_by_layers
+        // this one appears to take time data, tukey window
+        // perform wdm essentially assuming content only goes from j=jmin to Nlayers+jmin
+        // used in UCB waveform
+    test_layer = 5;
+    int test_Nlayer = 3;
+    // timeseries, impulse again
+    memset(&test_data, 0, NFFT_TEST*sizeof(double));
+    test_data[0] = 1.0;
+    wavelet_transform_timefreq_by_layers(&wdm, test_data, test_layer, test_Nlayer);
+    if (CREATE_DEBUG_FILES)
+        write_wdm_data(&wdm, test_data, "./dbg_wdm_impulse_by_layers.dat");
+    double wdm_crop[test_Nlayer*wdm.NT];
+    for (int i=0; i < test_Nlayer*wdm.NT; i++)
+        wdm_crop[i] = olitas_wdm[test_layer*wdm.NT + i];
+    ok = test_array_equality(test_data,
+            wdm_crop,
+            test_Nlayer*wdm.NT,
+            &wdm_tests,
+            "wavelet_transform_timefreq_by_layers (5-8) vs WDM(impulse) (5-8)");
+
+
+    // REMOVE:
+    // fourier_to_wavelet_transform_of_layer
+        //  note: is static, is only called in wavelet_transform_segment
+        //  this one appears to perform wdm on fft data
+        //  assumes it fits in one layer only
+        //  rewrote to wavelet_transform_freq_one_layer
+    // wavelet_transform
+    // wavelet_transform_inverse_fourier
+    // wavelet_transform_inverse_time
+    /*
     memset(test_data, 0, NFFT_TEST*sizeof(double));
     test_data[0] = 1.0;
-    // could window here, but let's not for reversibility
-    /*
-    glass_forward_real_fft(test_data, NFFT_TEST);
-    wavelet_transform_fourier(&wdm, test_data);
-    write_wdm_data(&wdm, test_data, "./dbg_fftwdm_impulse.dat");
-    wavelet_transform_inverse_fourier(&wdm, test_data);
-    write_fft_data(1./T, NFFT_TEST/2, test_data, "./dbg_invfftwdm_impulse.dat");
     */
-    /*
-    perfect = true;
-    printf("WDM(impulse)->FFT vs FFT(impulse):\n");
-    for (int i=0; i<NFFT_TEST; i++) {
-        if (fabs(test_data[i] - test_data_copy[i]) > atol) {
-            printf("\tFirst mismatch at index %d\n", i);
-            printf("\t\tExpected: %g\n",test_data_copy[i]);
-            printf("\t\tGot:      %g\n",test_data[i]);
-            perfect = false;
-            break;
-        }
-    }
-    if (perfect)
-        printf("\tMatches within atol=%g\n", atol);
-    */
+
+
     print_test_block_stats(&wdm_tests);
 
     struct UnitTestBlockInfo* all_test_blocks[] = {&fft_tests, &wdm_tests};
