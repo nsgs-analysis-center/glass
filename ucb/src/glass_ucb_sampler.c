@@ -166,10 +166,8 @@ void ucb_mcmc(struct Orbit *orbit, struct Data *data, struct Model *model, struc
         
         if(isfinite(logH) && logH > loga)
         {
-
             proposal[nprop]->accept[ic]++;
-            copy_model_lite(model_y,model_x);
-
+            copy_model(model_y,model_x);
         }
     }
 }
@@ -555,7 +553,8 @@ void ucb_rjmcmc(struct Orbit *orbit, struct Data *data, struct Model *model, str
             //only compute FIM for sources that need it
             if(model_y->source[n]->fisher_update_flag)
             {
-                ucb_fisher(orbit, data, model_y->source[n], data->noise);
+                if(!strcmp("fourier",data->basis)) ucb_fisher(orbit, data, model_y->source[n], data->noise);
+                if(!strcmp("wavelet",data->basis)) ucb_fisher_wavelet(orbit, data, model_y->source[n], data->noise);
 
                 //reset flag indicating FIM is up-to-date
                 model_y->source[n]->fisher_update_flag = 0;

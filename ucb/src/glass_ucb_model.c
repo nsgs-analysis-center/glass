@@ -113,6 +113,7 @@ void generate_ucb_model_wavelet(struct Orbit *orbit, struct Data *data, struct M
         model->tdi->Z[n]=0.0;
         model->tdi->A[n]=0.0;
         model->tdi->E[n]=0.0;
+        model->list[n]=0;
     }
     
     //Loop over signals in model

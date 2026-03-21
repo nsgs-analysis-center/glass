@@ -973,17 +973,17 @@ void mbh_fisher(struct Orbit *orbit, struct Data *data, struct Source *source, s
     double *epsilon = double_vector(MBH_MODEL_NP);
     // [0] ln(Mass1)  [1] ln(Mass2)  [2] Spin1 [3] Spin2 [4] phic [5] tc [6] ln(distance)
     // [7] cosEclipticCoLatitude, [8] EclipticLongitude  [9] polarization, [10] inclination
-    epsilon[0] = 1.0e-6;
-    epsilon[1] = 1.0e-6;
-    epsilon[2] = 1.0e-4;
-    epsilon[3] = 1.0e-4;
-    epsilon[4] = 1.0e-5;
-    epsilon[5] = 1.0e-3;
-    epsilon[6] = 1.0e-5;
-    epsilon[7] = 1.0e-5;
-    epsilon[8] = 1.0e-5;
-    epsilon[9] = 1.0e-5;
-    epsilon[10] = 1.0e-5;
+    epsilon[0] = 1.0e-7;
+    epsilon[1] = 1.0e-7;
+    epsilon[2] = 1.0e-7;
+    epsilon[3] = 1.0e-7;
+    epsilon[4] = 1.0e-7;
+    epsilon[5] = 1.0e-7;
+    epsilon[6] = 1.0e-7;
+    epsilon[7] = 1.0e-7;
+    epsilon[8] = 1.0e-7;
+    epsilon[9] = 1.0e-7;
+    epsilon[10] = 1.0e-7;
 
     double *params_p = double_vector(MBH_MODEL_NP);
     double *params_m = double_vector(MBH_MODEL_NP);
@@ -1061,7 +1061,7 @@ void mbh_fisher(struct Orbit *orbit, struct Data *data, struct Source *source, s
     // Calculate fisher matrix
     for(i=0; i<MBH_MODEL_NP; i++)
     {
-        for(j=i; j<MBH_MODEL_NP; j++)
+        for(j=0; j<MBH_MODEL_NP; j++)
         {
             source->fisher_matrix[i][j]  = wavelet_nwip(dhdx[i]->X, dhdx[j]->X, noise->invC[0][0], wave_p->list, wave_p->Nlist);
             source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->Y, dhdx[j]->Y, noise->invC[1][1], wave_p->list, wave_p->Nlist);
@@ -1075,17 +1075,17 @@ void mbh_fisher(struct Orbit *orbit, struct Data *data, struct Source *source, s
 
             
             
-            if(!isfinite(source->fisher_matrix[i][j]))
-            {
-                fprintf(stderr,"WARNING: nan matrix element (line %d of file %s)\n",__LINE__,__FILE__);
-                fprintf(stderr, "fisher_matrix[%i][%i], Snf=[%g,%g]\n",i,j,noise->C[0][0][data->N/2],noise->C[1][1][data->N/2]);
-                for(int k=0; k<MBH_MODEL_NP; k++)
-                {
-                    fprintf(stderr,"source->params[%i]=%g\n",k,source->params[k]);
-                }
-                source->fisher_matrix[i][j] = 10.0;
-            }
-            source->fisher_matrix[j][i] = source->fisher_matrix[i][j];
+//            if(!isfinite(source->fisher_matrix[i][j]))
+//            {
+//                fprintf(stderr,"WARNING: nan matrix element (line %d of file %s)\n",__LINE__,__FILE__);
+//                fprintf(stderr, "fisher_matrix[%i][%i], Snf=[%g,%g]\n",i,j,noise->C[0][0][data->N/2],noise->C[1][1][data->N/2]);
+//                for(int k=0; k<MBH_MODEL_NP; k++)
+//                {
+//                    fprintf(stderr,"source->params[%i]=%g\n",k,source->params[k]);
+//                }
+//                source->fisher_matrix[i][j] = 10.0;
+//            }
+//            source->fisher_matrix[j][i] = source->fisher_matrix[i][j];
         }
     }
     
@@ -1102,4 +1102,163 @@ void mbh_fisher(struct Orbit *orbit, struct Data *data, struct Source *source, s
     free_double_vector(epsilon);
     free_double_vector(params_p);
     free_double_vector(params_m);
+}
+
+double mbh_Fstat_logL(struct Orbit *orbit, struct Data *data, double *params)
+{
+
+    /* compute filters A_i */
+    
+    int Nfilter = 4;
+    
+    struct Source **A = malloc(Nfilter*(sizeof(struct Source *)));
+    for(int i=0; i<Nfilter; i++)
+    {
+        A[i] = malloc(sizeof(struct Source));
+        alloc_source(A[i],data->N,MBH_MODEL_NP,data->Nchannel);
+    }
+    
+    //set parameters for each filter
+    for(int i=0; i<Nfilter; i++)
+    {
+        // blindly copy all source parameters into work space
+        for(int n=0; n<MBH_MODEL_NP; n++)
+            A[i]->params[n] = params[n];
+        
+        // set inclination for filter calculation
+        A[i]->params[10] = 0.0; //cosi
+        
+        switch(i)
+        {
+            case 0:
+                A[i]->params[9] = 0;      //polarization
+                A[i]->params[4] = 0;      //reference phase
+                break;
+            case 1:
+                A[i]->params[9] = M_PI_4; //polarization
+                A[i]->params[4] = M_PI;   //reference phase
+                break;
+            case 2:
+                A[i]->params[9] = 0;       //polarization
+                A[i]->params[4] = 3*M_PI_2;//reference phase
+                break;
+            case 3:
+                A[i]->params[9] = M_PI_4;  //polarization
+                A[i]->params[4] = M_PI_2;  //reference phase
+                break;
+            default:
+                break;
+        }
+
+        map_array_to_mbh_params(A[i], A[i]->params);
+        mbh_fd_waveform(orbit,data->wdm,data->T, data->t0, A[i]->params, A[i]->list, &A[i]->Nlist, A[i]->tdi->X, A[i]->tdi->Y, A[i]->tdi->Z);
+
+        //catch waveforms that are out of band
+        if(A[i]->Nlist==0) return 1.0;
+        
+    }
+    
+    /* compute vectors N_i = (s|A_i) */
+    double *N = double_vector(Nfilter);
+
+    for(int i=0; i<Nfilter; i++)
+    {
+        N[i] += wavelet_nwip(data->tdi->X, A[i]->tdi->X, data->noise->invC[0][0], A[i]->list, A[i]->Nlist);
+        N[i] += wavelet_nwip(data->tdi->Y, A[i]->tdi->Y, data->noise->invC[1][1], A[i]->list, A[i]->Nlist);
+        N[i] += wavelet_nwip(data->tdi->Z, A[i]->tdi->Z, data->noise->invC[2][2], A[i]->list, A[i]->Nlist);
+        N[i] += wavelet_nwip(data->tdi->X, A[i]->tdi->Y, data->noise->invC[0][1], A[i]->list, A[i]->Nlist);
+        N[i] += wavelet_nwip(data->tdi->X, A[i]->tdi->Z, data->noise->invC[0][2], A[i]->list, A[i]->Nlist);
+        N[i] += wavelet_nwip(data->tdi->Y, A[i]->tdi->Z, data->noise->invC[1][2], A[i]->list, A[i]->Nlist);
+        N[i] += wavelet_nwip(data->tdi->Y, A[i]->tdi->X, data->noise->invC[1][0], A[i]->list, A[i]->Nlist);
+        N[i] += wavelet_nwip(data->tdi->Z, A[i]->tdi->X, data->noise->invC[2][0], A[i]->list, A[i]->Nlist);
+        N[i] += wavelet_nwip(data->tdi->Z, A[i]->tdi->Y, data->noise->invC[2][1], A[i]->list, A[i]->Nlist);
+    }
+
+    /* compute matrix M_ij = (A_i|A_j) */
+    double **M = double_matrix(Nfilter,Nfilter);
+    for(int i=0; i<Nfilter; i++)
+    {
+        for(int j=0; j<Nfilter; j++) //Mij symmetric so this could be faster
+        {
+            int *list = int_vector(data->N);
+            int Nlist;
+            list_union(A[i]->list, A[j]->list, A[i]->Nlist, A[j]->Nlist, list, &Nlist);
+
+            M[i][j] += wavelet_nwip(A[i]->tdi->X, A[j]->tdi->X, data->noise->invC[0][0], list, Nlist);
+            M[i][j] += wavelet_nwip(A[i]->tdi->Y, A[j]->tdi->Y, data->noise->invC[1][1], list, Nlist);
+            M[i][j] += wavelet_nwip(A[i]->tdi->Z, A[j]->tdi->Z, data->noise->invC[2][2], list, Nlist);
+            M[i][j] += wavelet_nwip(A[i]->tdi->X, A[j]->tdi->Y, data->noise->invC[0][1], list, Nlist);
+            M[i][j] += wavelet_nwip(A[i]->tdi->X, A[j]->tdi->Z, data->noise->invC[0][2], list, Nlist);
+            M[i][j] += wavelet_nwip(A[i]->tdi->Y, A[j]->tdi->Z, data->noise->invC[1][2], list, Nlist);
+            M[i][j] += wavelet_nwip(A[i]->tdi->Y, A[j]->tdi->X, data->noise->invC[1][0], list, Nlist);
+            M[i][j] += wavelet_nwip(A[i]->tdi->Z, A[j]->tdi->X, data->noise->invC[2][0], list, Nlist);
+            M[i][j] += wavelet_nwip(A[i]->tdi->Z, A[j]->tdi->Y, data->noise->invC[2][1], list, Nlist);
+
+            free(list);
+        }
+    }
+    
+    //invert M-matrix
+    invert_matrix(M,Nfilter);
+
+    /*
+     get logL = N * M^-1 * N
+     and a_{i}'s associated with filters to get the F-stat ML parameters
+     */
+    double *a = double_vector(Nfilter);
+
+    double logL = 0.0;
+    for(int i=0; i<Nfilter; i++)
+    {
+        for(int j=0; j<Nfilter; j++)
+        {
+            logL += N[i]*M[i][j]*N[j]; //also ignoring symmetry
+            a[i] += M[i][j]*N[j];
+        }
+    }
+    
+    /* Get maximized parameters */
+    
+    //some helper variables
+    double x = (a[0]+a[3]);
+    double y = (a[1]-a[2]);
+    double u = (a[0]-a[3]);
+    double v = (a[1]+a[2]);
+    double x2 = x*x;
+    double y2 = y*y;
+    double u2 = u*u;
+    double v2 = v*v;
+    
+    double Aplus  = sqrt(x2+y2)+sqrt(u2+v2);
+    double Across = sqrt(x2+y2)-sqrt(u2+v2);
+    double Atotal = Aplus + sqrt(Aplus*Aplus-Across*Across);
+
+    double cosi = Across/Atotal;
+    double scale = 4.0/Atotal;
+
+    double phi_x = atan2(y,x);
+    double phi_y = atan2(-v,u);
+    double psi = 0.25*(phi_y-phi_x);
+    while(psi < 0.0)  psi += M_PI;
+    while(psi > M_PI) psi -= M_PI;
+    
+    double phase = 0.25*(phi_x+phi_y);
+    while(phase < 0.0)  phase += M_PI;
+    while(phase > M_PI) phase -= M_PI;
+    
+    // replace input parameters w/ maximized values
+    params[10] = cosi;       //cos inclination
+    params[9]  = psi;        //polarization
+    params[6] += log(scale); //logD
+    params[4]  = phase;      //reference phase
+    
+    
+    for(int i=0; i<Nfilter; i++) free_source(A[i]);
+    free(A);
+
+    free_double_vector(N);
+    free_double_vector(a);
+    free_double_matrix(M,Nfilter);
+
+    return logL;
 }

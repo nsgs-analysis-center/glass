@@ -63,6 +63,24 @@ void mbh_mcmc(struct Orbit *orbit, struct Data *data, struct Model *model, struc
     logPx = (*prior->density)(flags, data, model_x, prior, source_x->params);
     logPy = (*prior->density)(flags, data, model_y, prior, source_y->params);
 
+//    if(ic==0)
+//    {
+//        if(!strcmp(proposal[nprop]->name,"de jump"))
+//        {
+//            FILE *temp=fopen("de_trials.dat","a");
+//            print_mbh_source_params(data,source_y,temp);
+//            fprintf(temp,"\n");
+//            fclose(temp);
+//        }
+//        if(!strcmp(proposal[nprop]->name,"fisher"))
+//        {
+//            FILE *temp=fopen("im_trials.dat","a");
+//            print_mbh_source_params(data,source_y,temp);
+//            fprintf(temp,"\n");
+//            fclose(temp);
+//        }
+//    }
+
     if(logPy > -INFINITY)
     {
         if(!flags->prior)

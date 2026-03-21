@@ -28,7 +28,7 @@ find_package(BLAS REQUIRED)
 find_package(OpenMP REQUIRED)
 find_package(HDF5 REQUIRED)
 find_package(MPI REQUIRED)
-#find_package(GSL REQUIRED)
+find_package(GSL REQUIRED)
 
 # set cflags
 if(APPLE)

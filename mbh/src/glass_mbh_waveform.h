@@ -108,4 +108,6 @@ void mbh_td_waveform(struct Orbit *orbit, struct Wavelets *wdm, double Tobs, dou
 
 void mbh_fisher(struct Orbit *orbit, struct Data *data, struct Source *source, struct Noise *noise);
 
+double mbh_Fstat_logL(struct Orbit *orbit, struct Data *data, double *params);
+
 #endif /* glass_mbh_waveform_h */

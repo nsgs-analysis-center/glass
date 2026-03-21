@@ -1411,6 +1411,7 @@ void print_glass_usage()
     fprintf(stdout,"       --duration    : duration of epoch (31457280)        \n");
     fprintf(stdout,"       --sim-noise   : data w/out noise realization        \n");
     fprintf(stdout,"       --conf-noise  : include model for confusion noise   \n");
+    fprintf(stdout,"       --stationary  : use stationary noise model in logL  \n");
     fprintf(stdout,"       --noiseseed   : seed for noise RNG                  \n");
     fprintf(stdout,"\n");
     
