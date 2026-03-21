@@ -890,9 +890,9 @@ void mbh_fd_waveform(struct Orbit *orbit, struct Wavelets *wdm, double Tobs, dou
         build_interpolated_waveform(track, layer, Tobs, tc, amp_ssb_spline, amp_tdi_spline_Y, phase_tdi_spline_Y, wave->Y);
         build_interpolated_waveform(track, layer, Tobs, tc, amp_ssb_spline, amp_tdi_spline_Z, phase_tdi_spline_Z, wave->Z);
         
-        wavelet_transform_segment(wdm, Nsegment, layer, wave->X);
-        wavelet_transform_segment(wdm, Nsegment, layer, wave->Y);
-        wavelet_transform_segment(wdm, Nsegment, layer, wave->Z);
+        wavelet_transform_freq_segment(wdm, Nsegment, layer, wave->X);
+        wavelet_transform_freq_segment(wdm, Nsegment, layer, wave->Y);
+        wavelet_transform_freq_segment(wdm, Nsegment, layer, wave->Z);
         
         //map to full tf grid
         for(int n=0; n<Nsegment; n++)

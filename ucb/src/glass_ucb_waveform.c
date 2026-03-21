@@ -1024,16 +1024,16 @@ void ucb_waveform_wavelet(struct Orbit *orbit, struct Wavelets *wdm, double Tobs
 
     // get freqeuncy wavelet window function for downsampled data
     double *window = double_vector((wdm->NT/2+1));
-    wavelet_window_frequency(wdm, window, Nlayers);
+    build_wdm_filter_freq(window, Nlayers, wdm->NT, wdm->A, true);
         
     // wavelet transform on heterodyned data using downsampled windows.
     build_interpolated_waveform(amp_interpolant_X, phase_interpolant_X, time_ds, phase_ds, phase_het, N_ds, wave->X);
     build_interpolated_waveform(amp_interpolant_Y, phase_interpolant_Y, time_ds, phase_ds, phase_het, N_ds, wave->Y);
     build_interpolated_waveform(amp_interpolant_Z, phase_interpolant_Z, time_ds, phase_ds, phase_het, N_ds, wave->Z);
 
-    wavelet_transform_by_layers(wdm, min_layer, Nlayers, window, wave->X);
-    wavelet_transform_by_layers(wdm, min_layer, Nlayers, window, wave->Y);
-    wavelet_transform_by_layers(wdm, min_layer, Nlayers, window, wave->Z);
+    wavelet_transform_timefreq_by_layers(wdm, min_layer, Nlayers, window, wave->X);
+    wavelet_transform_timefreq_by_layers(wdm, min_layer, Nlayers, window, wave->Y);
+    wavelet_transform_timefreq_by_layers(wdm, min_layer, Nlayers, window, wave->Z);
     
     /*
      Properly re-index to undo the heterodyning
@@ -1241,10 +1241,13 @@ void ucb_waveform_wavelet_tab(struct Orbit *orbit, struct Wavelets *wdm, double 
     double *Ytemp = double_vector(*Nwavelet);
     double *Ztemp = double_vector(*Nwavelet);
 
+    fprintf(stderr, "Table wavelet transform not currently implemented!");
+    exit(2);
+    /*
     wavelet_transform_from_table(wdm, phase->X, freq->X, fdot->X, amp->X, min_layer, max_layer, Xtemp, wavelet_list, reverse_list, *Nwavelet);
     wavelet_transform_from_table(wdm, phase->Y, freq->Y, fdot->Y, amp->Y, min_layer, max_layer, Ytemp, wavelet_list, reverse_list, *Nwavelet);
     wavelet_transform_from_table(wdm, phase->Z, freq->Z, fdot->Z, amp->Z, min_layer, max_layer, Ztemp, wavelet_list, reverse_list, *Nwavelet);
-
+    */
 
     //insert non-zero wavelet pixels into correct indicies
     for(int n=0; n<*Nwavelet; n++)

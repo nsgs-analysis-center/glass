@@ -272,8 +272,8 @@ int main(int argc, char *argv[])
     if (CREATE_DEBUG_FILES)
         write_wdm_data(&wdm, test_data, "./dbg_wdm_impulse.dat");
 
-    //wavelet_transform_inverse_fourier(&wdm, test_data);
-    wavelet_inverse_transform_freq(&wdm, test_data, test_fft_data);
+    wavelet_transform_inverse_freq(&wdm, test_data, test_fft_data);
+    
     ok = test_array_equality(test_fft_data,
             ref_fft_data,
             NFFT_TEST+2,
@@ -312,7 +312,7 @@ int main(int argc, char *argv[])
         test_wdm_full[k] = olitas_wdm[k];
         test_wdm_layer[i] = olitas_wdm[k];
     }
-    wavelet_inverse_transform_freq(&wdm, test_wdm_full, test_fft_data);
+    wavelet_transform_inverse_freq(&wdm, test_wdm_full, test_fft_data);
     if (CREATE_DEBUG_FILES) {
         write_fft_data(1./T, NFFT_TEST/2+1, test_fft_data, "./dbg_wdmfft_onelayer.dat");
     }
@@ -331,7 +331,7 @@ int main(int argc, char *argv[])
         }
     }
     // now forward it with wavelet_transform_segment
-    my_wavelet_transform_segment(&wdm, Nseg, test_layer, short_fft);
+    wavelet_transform_freq_segment(&wdm, Nseg, test_layer, short_fft);
 
     ok = test_array_equality(short_fft,
             test_wdm_layer,
@@ -347,7 +347,9 @@ int main(int argc, char *argv[])
     // timeseries, impulse again
     memset(&test_data, 0, NFFT_TEST*sizeof(double));
     test_data[0] = 1.0;
-    wavelet_transform_timefreq_by_layers(&wdm, test_data, test_layer, test_Nlayer);
+    double window[wdm.NT/2 + 1];
+    build_wdm_filter_freq(window, wdm.NF, wdm.NT, wdm.A, true);
+    wavelet_transform_timefreq_by_layers(&wdm, test_layer, test_Nlayer, window, test_data);
     // output is now the first test_Nlayer*NT elements of test_data
     double wdm_crop[test_Nlayer*wdm.NT];
     for (int i=0; i < test_Nlayer*wdm.NT; i++)
@@ -387,7 +389,7 @@ int main(int argc, char *argv[])
                 seg_fft[2*i + 1] = 0.0;
             }
         }
-        my_wavelet_transform_segment(&wdm, Nseg, m, seg_fft);
+        wavelet_transform_freq_segment(&wdm, Nseg, m, seg_fft);
         // DC and Nyquist layers both map into column 0
         if (m == 0) {
             for (int n = 0; n < wdm.NT; n += 2)
