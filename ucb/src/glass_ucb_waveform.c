@@ -1022,9 +1022,10 @@ void ucb_waveform_wavelet(struct Orbit *orbit, struct Wavelets *wdm, double Tobs
     initialize_cubic_spline(phase_interpolant_Y, time_ssb, tdi_phase->Y,SPLINE_BINARY_SEARCH);
     initialize_cubic_spline(phase_interpolant_Z, time_ssb, tdi_phase->Z,SPLINE_BINARY_SEARCH);
 
-    // get freqeuncy wavelet window function for downsampled data
+    // get frequency wavelet window function for downsampled data
+    // TODO this used to be Nlayers, but that seems wrong? Different WDM basis? (RJR)
     double *window = double_vector((wdm->NT/2+1));
-    build_wdm_filter_freq(window, Nlayers, wdm->NT, wdm->A, true);
+    build_wdm_filter_freq(window, wdm->NF, wdm->NT, wdm->A, true);
         
     // wavelet transform on heterodyned data using downsampled windows.
     build_interpolated_waveform(amp_interpolant_X, phase_interpolant_X, time_ds, phase_ds, phase_het, N_ds, wave->X);
