@@ -28,7 +28,6 @@
 #define glass_ucb_h
 
 #include "glass_ucb_model.h"
-#include "glass_ucb_catalog.h"
 #include "glass_ucb_io.h"
 #include "glass_ucb_data.h"
 #include "glass_ucb_fstatistic.h"

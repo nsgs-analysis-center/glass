@@ -29,19 +29,6 @@
 #ifndef ucb_sampler_h
 #define ucb_sampler_h
 
-/** \brief Parallel tempering exchange
- 
- Cycles through all chains and proposes swaps between adjacent pairs.
- */
-void ptmcmc(struct Model **model, struct Chain *chain, struct Flags *flags);
-
-/**
- \brief Adaptive temperature spacing
- 
- Adjusts temperature spacing between tempered chains according with the goal of having an even acceptance rate between all pairs. The sensitivity of the adjustment asymptotically goes to zero as the sampler approaches the end of the burn-in phase.
- */
-void adapt_temperature_ladder(struct Chain *chain, int mcmc);
-
 /**
  \brief Fixed dimension galactic binary MCMC
  
@@ -75,5 +62,12 @@ void noise_model_mcmc(struct Orbit *orbit, struct Data *data, struct Model *mode
  Get all UCB structures into their initial state.
  */
 void initialize_ucb_state(struct Data *data, struct Orbit *orbit, struct Flags *flags, struct Chain *chain, struct Proposal **proposal, struct Model **model, struct Model **trial, struct Source **inj_vec);
+
+/**
+ \brief Setup VGB sampler
+ 
+ Get all VGB structures into their initial state.
+ */
+void initialize_vgb_state(struct Data *data, struct Orbit *orbit, struct Flags *flags, struct Chain *chain, struct Proposal **proposal, struct Model **model, struct Model **trial, struct Source *inj);
 
 #endif /* ucb_sampler_h */

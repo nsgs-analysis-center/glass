@@ -22,9 +22,22 @@
 #ifndef math_h
 #define math_h
 
-
+typedef enum {
+    SPLINE_BINARY_SEARCH,
+    SPLINE_EVEN_SAMPLED,
+    SPLINE_INTERPOLATION_COUNT // leave this here, counts length of enum
+} spline_interpolation_t;
+// note that if this array ever becomes extremely large, maybe swap to extern
+static const char* SPLINE_INTERPOLATION_NAMES[] = {"binary search", "even sampling"};
+_Static_assert(sizeof(SPLINE_INTERPOLATION_NAMES)/sizeof(SPLINE_INTERPOLATION_NAMES[0]) == SPLINE_INTERPOLATION_COUNT,
+        "Did you add a spline type but not its name?");
 struct CubicSpline
 {
+    /**
+     \brief How to lookup nearest sample in interpolated arrays
+     */
+    int (*index_lookup)(double*,int,int,double);
+    spline_interpolation_t interp_type; //!<Type of interpolation
     int N;       //!<Number of grid points to be interpolated
     int nmin;    //!<Stored lower index of last call to interpolation
     int nmax;    //!<Stored upper index of last call to interpolation
@@ -35,16 +48,10 @@ struct CubicSpline
     double *y1;   //!<1st order coefficient
     double *y2;   //!<2nd order coefficient
     double *y3;   //!<3rd order coefficient
-};
-
-struct CubicSplineEvenSampling
-{
-    struct CubicSpline *cspline; //!<Internal cubic spline, same methods can be used on it
-    double ds; //!<Spacing between x-axis samples. E.g., dt for time samples, df for frequency, etc
+    double ds;    //!<Spacing between x-axis samples, when known. E.g., dt for time samples, df for frequency, etc. Not used in all interpolation functions
 };
 
 struct CubicSpline* alloc_cubic_spline(int N);
-struct CubicSplineEvenSampling* alloc_cubic_spline_even_sampling(int N);
 
 /**
  \brief Computes cubic spline coefficients for input data {x,y}
@@ -53,19 +60,9 @@ struct CubicSplineEvenSampling* alloc_cubic_spline_even_sampling(int N);
  @param[in] x independent variable of interpolant
  @param[in] y dependent variable of interpolant
 */
-void initialize_cubic_spline(struct CubicSpline *spline, double *x, double *y);
-/**
- \brief Computes cubic spline coefficients for input data {x,y}
- 
- @param[in,out] spline cubic spline structure
- @param[in] x independent variable of interpolant
- @param[in] y dependent variable of interpolant
- @param[in] ds spacing in units of x between samples
-*/
-void initialize_cubic_spline_even_sampling(struct CubicSplineEvenSampling *spline, double *x, double *y, double ds);
+void initialize_cubic_spline(struct CubicSpline *spline, double *x, double *y, spline_interpolation_t interpolation_scheme);
 
 void free_cubic_spline(struct CubicSpline *spline);
-void free_cubic_spline_even_sampling(struct CubicSplineEvenSampling *spline);
 
 /**
 \brief GLASS implementation of solving for cubic spline interpolation coefficients
@@ -97,13 +94,9 @@ void spline_coefficients(struct CubicSpline *spline);
 
  */
 double spline_interpolation(struct CubicSpline *spline, double x);
-double spline_interpolation_even_sampling(struct CubicSplineEvenSampling *spline, double x);
 double spline_interpolation_deriv(struct CubicSpline *spline, double x);
 double spline_interpolation_deriv2(struct CubicSpline *spline, double x);
 double spline_integration(struct CubicSpline *spline, double xi, double xf);
-double spline_interpolation_deriv_even_sampling(struct CubicSplineEvenSampling *spline, double x);
-double spline_interpolation_deriv2_even_sampling(struct CubicSplineEvenSampling *spline, double x);
-double spline_integration_even_sampling(struct CubicSplineEvenSampling *spline, double xi, double xf);
 
 /**
  \brief Analytic in-place inversion of noise covariance matrix
@@ -217,9 +210,13 @@ void unpack_fft_output(double *x, double *x_packed, int N);
  @param N[in] size of arrays
  */
 void glass_forward_complex_fft(double *data, int N);
+void glass_forward_complex_fft_outplace(double *timedata, double* freqdata, int N);
 void glass_inverse_complex_fft(double *data, int N);
+void glass_inverse_complex_fft_outplace(double *freqdata, double* timedata, int N);
 void glass_forward_real_fft(double *data, int N);
+void glass_forward_real_fft_outplace(double *timedata, double* freqdata, int N);
 void glass_inverse_real_fft(double *data, int N);
+void glass_inverse_real_fft_outplace(double *freqdata, double* timedata, int N);
 
 /**
 \brief Compute power of complex amplitude in single element of data
@@ -245,6 +242,23 @@ double fourier_nwip(const double *a, const double *b, const double *invC, int N)
 double wavelet_nwip(const double *a, const double *b, const double *invC, const int *list, int N);
 
 /**
+\brief Signal to noise ratio in frequency domain
+  
+ Calls nwip() to compute inner product of waveform with itself summed over all frequencies and data channels `I`. If 4-link data, use single TDI channel `I` = `X`. If 6-link, use `I` = {`A`, `E`}
+ 
+ @param source structure containing source parameters and waveform \f$h\f$
+ @param noise structure containing noise model \f$S_n\f$
+ @return \f$\rho =  \sqrt{\sum_I (h_I|h_I)} \f$
+ */
+double snr(struct Source *source, struct Noise *noise);
+
+/**
+ \brief Signal to noise ratio in wavelet domain
+ @see snr()
+ */
+double snr_wavelet(struct Source *source, struct Noise *noise);
+
+/**
 \brief Our implementation of the recursive binary search algorithm
    
  @param array list of values to search over
@@ -255,6 +269,7 @@ double wavelet_nwip(const double *a, const double *b, const double *invC, const 
  */
 int binary_search(double *array, int nmin, int nmax, double x);
 
+int even_sampled_search(double *array, int nmin, int nmax, double x);
 /**
 \brief Computes eigenvectors and eigenvalues of matrix
    

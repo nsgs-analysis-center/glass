@@ -16,14 +16,7 @@
 
 #include <glass_utils.h>
 
-#include "glass_ucb_catalog.h"
-#include "glass_ucb_model.h"
-#include "glass_ucb_prior.h"
-#include "glass_ucb_io.h"
-#include "glass_ucb_waveform.h"
-#include "glass_ucb_fstatistic.h"
-#include "glass_ucb_proposal.h"
-
+#include "glass_ucb.h"
 
 #define FIXME 0
 #define SNRCAP 100.0 /* SNR cap on logL */
@@ -162,21 +155,6 @@ void setup_frequency_proposal(struct Data *data, struct Flags *flags)
     
 }
 
-void print_acceptance_rates(struct Proposal **proposal, int NProp, int ic, FILE *fptr)
-{
-    fprintf(fptr,"Acceptance rates for chain %i:\n", ic);
-    fprintf(fptr," MCMC\n");
-    for(int n=0; n<NProp; n++)
-    {
-        if(proposal[n]->weight > 0) fprintf(fptr,"   %.1e  [%s]\n", (double)proposal[n]->accept[ic]/(double)proposal[n]->trial[ic],proposal[n]->name);
-    }
-    fprintf(fptr," RJMCMC\n");
-    for(int n=0; n<NProp; n++)
-    {
-        if(proposal[n]->rjweight > 0) fprintf(fptr,"   %.1e  [%s]\n", (double)proposal[n]->accept[ic]/(double)proposal[n]->trial[ic],proposal[n]->name);
-    }
-}
-
 double draw_from_spectrum(struct Data *data, struct Model *model, struct Source *source, UNUSED struct Proposal *proposal, double *params, unsigned int *seed)
 {
     //TODO: Work in amplitude
@@ -247,16 +225,16 @@ double draw_from_gmm_prior(struct Data *data, struct Model *model, struct Source
     }
     
     //map to parameters
-    source->f0 = x[0];
+    source->f0       = x[0];
     source->costheta = x[1];
-    source->phi = x[2];
-    source->amp = exp(x[3]);
-    source->cosi = x[4];
-    source->psi = x[5];
-    source->phi0 = x[6];
+    source->phi      = x[2];
+    source->amp      = exp(x[3]);
+    source->cosi     = x[4];
+    source->psi      = x[5];
+    source->phiref   = x[6];
     if(UCB_MODEL_NP>7) source->dfdt = x[7];
     if(UCB_MODEL_NP>8) source->d2fdt2 = x[8];
-    map_params_to_array(source, params, data->T);
+    map_ucb_params_to_array(source, params, data->T);
     
     return gmm_prior_density(data, model, source, proposal, params);
 }
@@ -273,118 +251,6 @@ double gmm_prior_density(struct Data *data, struct Model *model, struct Source *
         
     return log(p/(double)proposal->Ngmm);
 }
-
-double draw_from_uniform_prior(UNUSED struct Data *data, struct Model *model, UNUSED struct Source *source, UNUSED struct Proposal *proposal, double *params, unsigned int *seed)
-{
-    
-    double logQ = 0.0;
-    int n;
-    
-    //frequency
-    n = 0;
-    params[n] = model->prior[n][0] + rand_r_U_0_1(seed)*(model->prior[n][1]-model->prior[n][0]);
-    logQ -= model->logPriorVolume[n];
-    
-    //sky location
-    n = 1;
-    params[n] = model->prior[n][0] + rand_r_U_0_1(seed)*(model->prior[n][1]-model->prior[n][0]);
-    logQ -= model->logPriorVolume[n];
-    
-    n = 2;
-    params[n] = model->prior[n][0] + rand_r_U_0_1(seed)*(model->prior[n][1]-model->prior[n][0]);
-    logQ -= model->logPriorVolume[n];
-    
-    //amplitude
-    n = 3;
-    params[n] = model->prior[n][0] + rand_r_U_0_1(seed)*(model->prior[n][1]-model->prior[n][0]);
-    logQ -= model->logPriorVolume[n];
-
-    //inclination
-    n = 4;
-    params[n] = model->prior[n][0] + rand_r_U_0_1(seed)*(model->prior[n][1]-model->prior[n][0]);
-    logQ -= model->logPriorVolume[n];
-    
-    //polarization
-    n = 5;
-    params[n] = model->prior[n][0] + rand_r_U_0_1(seed)*(model->prior[n][1]-model->prior[n][0]);
-    logQ -= model->logPriorVolume[n];
-    
-    //phase
-    n = 6;
-    params[n] = model->prior[n][0] + rand_r_U_0_1(seed)*(model->prior[n][1]-model->prior[n][0]);
-    logQ -= model->logPriorVolume[n];
-    
-    //fdot
-    if(UCB_MODEL_NP>7)
-    {
-        n = 7;
-        params[n] = model->prior[n][0] + rand_r_U_0_1(seed)*(model->prior[n][1]-model->prior[n][0]);
-        logQ -= model->logPriorVolume[n];
-    }
-    
-    //f-double-dot
-    if(UCB_MODEL_NP>8)
-    {
-        n = 8;
-        params[n] = model->prior[n][0] + rand_r_U_0_1(seed)*(model->prior[n][1]-model->prior[n][0]);
-        logQ -= model->logPriorVolume[n];
-    }
-    
-    
-    return logQ;
-}
-
-double uniform_prior_density(struct Data *data, struct Model *model, UNUSED struct Source *source, UNUSED struct Proposal *proposal, double *params)
-{
-    
-    double logQ = 0.0;
-    int n;
-    
-    //frequency
-    n = 0;
-    logQ -= model->logPriorVolume[n];
-    
-    //sky location
-    n = 1;
-    logQ -= model->logPriorVolume[n];
-    
-    n = 2;
-    logQ -= model->logPriorVolume[n];
-    
-    //amplitude
-    n = 3;
-    logQ -= model->logPriorVolume[n];
-    
-    //inclination
-    n = 4;
-    logQ -= model->logPriorVolume[n];
-    
-    //polarization
-    n = 5;
-    logQ -= model->logPriorVolume[n];
-    
-    //phase
-    n = 6;
-    logQ -= model->logPriorVolume[n];
-    
-    //fdot
-    if(UCB_MODEL_NP>7)
-    {
-        n = 7;
-        logQ -= model->logPriorVolume[n];
-    }
-    
-    //f-double-dot
-    if(UCB_MODEL_NP>8)
-    {
-        n = 8;
-        logQ -= model->logPriorVolume[n];
-    }
-    
-    
-    return logQ;
-}
-
 
 double draw_from_extrinsic_prior(UNUSED struct Data *data, struct Model *model, UNUSED struct Source *source, UNUSED struct Proposal *proposal, double *params, unsigned int *seed)
 {
@@ -720,10 +586,6 @@ double fm_shift(struct Data *data, struct Model *model, struct Source *source, s
     
     params[0] += scale*fm;
     params[2] = params[2] + -0.2 + rand_r_U_0_1(seed)*0.4;
-    params[7] -= 2.*scale*fm*fm;
-    
-    //perturb all parameters by Fisher Matrix (in liu of Jacaboian)
-    draw_from_fisher(data, model, source, proposal, params, seed);
     
     //fm shift is symmetric
     return 0.0;
@@ -750,7 +612,7 @@ double psi_phi_jump(UNUSED struct Data *data, UNUSED struct Model *model, struct
     
 }
 
-void initialize_proposal(struct Orbit *orbit, struct Data *data, struct Prior *prior, struct Chain *chain, struct Flags *flags, struct Catalog *catalog, struct Proposal **proposal, int NMAX)
+void initialize_ucb_proposal(struct Orbit *orbit, struct Data *data, struct Prior *prior, struct Chain *chain, struct Flags *flags, struct Catalog *catalog, struct Proposal **proposal, int NMAX)
 {
     int NC = chain->NC;
     double check  =0.0;
@@ -910,7 +772,7 @@ void initialize_proposal(struct Orbit *orbit, struct Data *data, struct Prior *p
     }
 }
 
-void initialize_vb_proposal(struct Orbit *orbit, struct Data *data, struct Prior *prior, struct Chain *chain, struct Flags *flags, struct Proposal **proposal, int NMAX)
+void initialize_vgb_proposal(struct Orbit *orbit, struct Data *data, struct Prior *prior, struct Chain *chain, struct Flags *flags, struct Proposal **proposal, int NMAX)
 {
     int NC = chain->NC;
     double check  =0.0;
@@ -1064,7 +926,7 @@ void setup_fstatistic_proposal(struct Orbit *orbit, struct Data *data, struct Fl
     
 
     //grid sizes
-    int n_f     = data->N/2;
+    int n_f     = (int)((data->fmax - data->fmin)*data->T);// data->N/2;
     int n_theta = 20;
     int n_phi   = 20;
     
@@ -1075,7 +937,7 @@ void setup_fstatistic_proposal(struct Orbit *orbit, struct Data *data, struct Fl
         n_phi/=3;
     }
     
-    double d_f = (double)data->NFFT/(double)n_f/data->T;
+    double d_f = (int)((data->fmax - data->fmin)*data->T)/(double)n_f/data->T;
 
     double d_theta = 2./(double)n_theta;
     double d_phi   = PI2/(double)n_phi;
@@ -1441,7 +1303,7 @@ void setup_cdf_proposal(struct Data *data, struct Flags *flags, struct Proposal 
     for(int j=0; j<UCB_MODEL_NP; j++) proposal->matrix[j] = calloc(proposal->size , sizeof(double));
     
     struct Model *temp = malloc(sizeof(struct Model));
-    alloc_model(data,temp,NMAX);
+    alloc_model(data,temp,UCB_MODEL_NP,NMAX);
     
     for(int n=0; n<proposal->size; n++)
     {
@@ -1525,7 +1387,7 @@ void test_covariance_proposal(struct Data *data, struct Flags *flags, struct Mod
                 }
                 
                 
-                logP = evaluate_prior(flags, data, model, prior, model->source[0]->params);
+                logP = evaluate_ucb_prior(flags, data, model, prior, model->source[0]->params);
                 if(logP>-INFINITY) gamma+=1.;
             }
             
@@ -1841,10 +1703,5 @@ double prior_density(struct Data *data, struct Model *model, UNUSED struct Sourc
     
     return logP;
     
-}
-
-double symmetric_density(UNUSED struct Data *data, UNUSED struct Model *model, UNUSED struct Source *source, UNUSED struct Proposal *proposal, UNUSED double *params)
-{
-    return 0.0;
 }
 

@@ -17,19 +17,20 @@ endforeach()
 
 # Set compiler
 #set(CMAKE_C_COMPILER mpicc)
-set(CMAKE_C_COMPILER /opt/homebrew/Cellar/llvm/21.1.8/bin/clang)
+set(CMAKE_C_COMPILER /opt/homebrew/Cellar/llvm/22.1.1/bin/clang)
 
 project(glass VERSION 2.0.0 LANGUAGES C)
 
 # External packages
 find_package(LAPACK REQUIRED)
+<<<<<<< HEAD
 #set(LAPACK_LIBRARIES lapacke gfortran ${LAPACK_LIBRARIES})
 #find_package(OpenBLAS REQUIRED)
 find_package(BLAS REQUIRED)
 find_package(OpenMP REQUIRED)
 find_package(HDF5 REQUIRED)
 find_package(MPI REQUIRED)
-#find_package(GSL REQUIRED)
+find_package(GSL REQUIRED)
 
 # set cflags
 #set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -I/opt/homebrew/Cellar/libomp/21.1.8/include")
@@ -47,10 +48,9 @@ set_target_properties(OpenMP::OpenMP_C PROPERTIES
 )
 endif()
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -std=gnu99 -glldb -O0 -march=native")
-#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fopenmp -Wall -std=gnu99 -ggdb -O0 -march=native -lgfortran")
-#link_directories("/usr/lib/x86_64-linux-gnu/")
-#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fopenmp -Wall -std=gnu99 -O3 -march=native -ffast-math")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fopenmp -Wall -std=gnu99 -march=native -glldb -O0")
+SET(CMAKE_C_FLAGS_DEBUG "-glldb -O0")
+SET(CMAKE_C_FLAGS_RELEASE "-O3")
 
 # Set git version header file
 message(STATUS "Resolving GIT Version")

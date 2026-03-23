@@ -31,6 +31,19 @@ static void print_usage()
     exit(0);
 }
 
+static void set_noise_defaults(struct Data *data)
+{
+    data->T        = 31457280; /* one "mldc years" at 15s sampling */
+    data->t0       = 0.0; /* start time of data segment in seconds */
+    data->sqT      = sqrt(data->T);
+    data->NFFT     = (int)floor(data->T/LISA_CADENCE);   /* full data set */
+    data->Nlayer   = (int)floor(1/2.0/LISA_CADENCE/WAVELET_BANDWIDTH); /* up to Nyquist */
+    data->Nchannel = 3; //1=X, 2=AE, 3=XYZ
+    data->qpad     = 0;
+    data->fmin     = 1e-4; //Hz
+    sprintf(data->basis,"fourier");
+}
+
 int main(int argc, char *argv[])
 {
     fprintf(stdout, "\n============= NOISE SPLINE MCMC =============\n");
@@ -50,6 +63,7 @@ int main(int argc, char *argv[])
     struct Orbit *orbit = malloc(sizeof(struct Orbit));
     struct Chain *chain = malloc(sizeof(struct Chain));
     
+    set_noise_defaults(data);
     parse_data_args(argc,argv,data,orbit,flags,chain,"fourier");
     if(flags->help)print_usage();
     
@@ -82,6 +96,12 @@ int main(int argc, char *argv[])
     else if (flags->simNoise)
         SimulateData(data, orbit, flags);
     
+    /* Store DFT copy of simulated data */
+    copy_tdi(data->tdi, data->dft);
+    
+    /* print various data products for plotting */
+    print_data(data, flags);
+    
     /*
      * Initialize Spline Model
      */
@@ -103,82 +123,57 @@ int main(int argc, char *argv[])
     //MCMC
     sprintf(filename,"%s/chain_file.dat",chain->chainDir);
     FILE *chainFile = fopen(filename,"w");
-
-    int numThreads;
+    
     int step = 0;
     int NC = chain->NC;
     
-    #pragma omp parallel num_threads(flags->threads)
+    /* The MCMC loop */
+    for(; step<flags->NMCMC;)
     {
-        int threadID;
-        //Save individual thread number
-        threadID = omp_get_thread_num();
         
-        //Only one thread runs this section
-        if(threadID==0)  numThreads = omp_get_num_threads();
-        
-        #pragma omp barrier
-        
-        /* The MCMC loop */
-        for(; step<flags->NMCMC;)
+        // (parallel) loop over chains
+        #pragma omp parallel for num_threads(flags->threads)
+        for(int ic=0; ic<NC; ic++)
         {
-            
-            #pragma omp barrier
-            
-            // (parallel) loop over chains
-            for(int ic=threadID; ic<NC; ic+=numThreads)
+            struct SplineModel *model_ptr = model[chain->index[ic]];
+            for(int mc=0; mc<10; mc++)
             {
-                struct SplineModel *model_ptr = model[chain->index[ic]];
-                for(int mc=0; mc<10; mc++)
-                {
-                    
-                    if(rand_r_U_0_1(&chain->r[ic])<0.9)
-                        noise_spline_model_mcmc(orbit, data, model_ptr, chain, flags, ic);
-                    else
-                        noise_spline_model_rjmcmc(orbit, data, model_ptr, chain, flags, ic);
-                }
-            }// end (parallel) loop over chains
-            
-            //Next section is single threaded. Every thread must get here before continuing
-            
-            #pragma omp barrier
-            
-            if(threadID==0)
-            {
-                spline_ptmcmc(model, chain, flags);
                 
-                if(step%(flags->NMCMC/10)==0)printf("noise_spline_mcmc at step %i\n",step);
-                
-                if(step%(flags->NMCMC/10)==0)
-                {
-                    print_spline_state(model[chain->index[0]], chainFile, step);
-                    
-                    sprintf(filename,"%s/current_interpolated_spline_points.dat",data->dataDir);
-                    print_noise_model(model[chain->index[0]]->psd, filename);
-                    
-                    sprintf(filename,"%s/current_spline_points.dat",data->dataDir);
-                    print_noise_model(model[chain->index[0]]->spline, filename);
-
-
-                }
-                
-                if(step%data->downsample==0 && step/data->downsample < data->Nwave)
-                {
-                    for(int n=0; n<data->N; n++)
-                        for(int i=0; i<data->Nchannel; i++)
-                            data->S_pow[n][i][step/data->downsample] = model[chain->index[0]]->psd->C[i][i][n];
-                }
-
-                step++;
-                
-                
+                if(rand_r_U_0_1(&chain->r[ic])<0.9)
+                    noise_spline_model_mcmc(orbit, data, model_ptr, chain, flags, ic);
+                else
+                    noise_spline_model_rjmcmc(orbit, data, model_ptr, chain, flags, ic);
             }
-            //Can't continue MCMC until single thread is finished
-            #pragma omp barrier
-            
-        }// end of MCMC loop
+        }// end (parallel) loop over chains
         
-    }// End of parallelization
+        //Next section is single threaded. Every thread must get here before continuing
+        
+        spline_ptmcmc(model, chain, flags);
+        
+        if(step%(flags->NMCMC/10)==0)printf("noise_spline_mcmc at step %i\n",step);
+        
+        if(step%(flags->NMCMC/10)==0)
+        {
+            print_spline_state(model[chain->index[0]], chainFile, step);
+            
+            sprintf(filename,"%s/current_interpolated_spline_points.dat",data->dataDir);
+            print_noise_model(model[chain->index[0]]->psd, filename);
+            
+            sprintf(filename,"%s/current_spline_points.dat",data->dataDir);
+            print_noise_model(model[chain->index[0]]->spline, filename);            
+        }
+
+        if(step%data->downsample==0 && step/data->downsample < data->Nwave)
+        {
+            for(int n=0; n<data->NFFT; n++)
+                for(int i=0; i<data->Nchannel; i++)
+                    data->S_pow[n][i][step/data->downsample] = model[chain->index[0]]->psd->C[i][i][n];
+        }
+
+        step++;
+
+    }// end of MCMC loop
+    
     
     fclose(chainFile);
     

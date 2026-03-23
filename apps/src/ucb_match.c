@@ -91,10 +91,10 @@ int main(int argc, char *argv[])
     
     //allocate memory for two sources and noise
     struct Source *src1 = malloc(sizeof(struct Source));
-    alloc_source(src1, data->N, 2);
+    alloc_source(src1, data->N, UCB_MODEL_NP, 2);
     
     struct Source *src2 = malloc(sizeof(struct Source));
-    alloc_source(src2, data->N, 2);
+    alloc_source(src2, data->N, UCB_MODEL_NP, 2);
     
     struct Noise *noise = malloc(sizeof(struct Noise));
     alloc_noise(noise, data->NFFT, 1, 2);

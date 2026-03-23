@@ -26,7 +26,7 @@
 #define FILTER_LENGTH 5e3 //seconds
 #define MAXSTRINGSIZE 1024 //!<maximum number of characters for `path+filename` strings
 
-
+#define WAVELET_EDGE_BUFFER 50 //!<number of time slices to leave out of likelihood to avoid edge effects
 #define WAVELET_DURATION 7680.0
 #define WAVELET_BANDWIDTH (6.51041666666667e-5)
 //#define WAVELET_DURATION 20480.0 //!<duration of wavelet pixels [s]
@@ -179,6 +179,7 @@ struct Flags
     int emPrior;    //!<`[--em-prior=FILENAME]`: use input data file with EM-derived parameters for priors.
     int knownSource;//!<`[--known-source; default=FALSE]`: injection is known binary, will need polarization and phase to be internally generated. Sets Flags::fixSky = `TRUE`.
     int detached;   //!<`[--detached; default=FALSE]`: assume binary is detached, fdot prior becomes \f$U[\dot{f}(\mathcal{M}_c=0.15),\dot{f}(\mathcal{M}_c=1.00)]\f$
+    int triggerTime;//!<`[--trigger; default=Tobs/2]`: trigger for transient analysis. tref prior becomes \f$U[t_{\rm trigger}-\delta_t,t_{\rm trigger}+\delta_t]\f
     int strainData; //!<`[--data=FILENAME; default=FALSE]`: read data from ASCII file instead of simulate internally.
     bool timeseries;//!<`[--data=FILENAME; default=FALSE]`: whether or not given ASCII file is a timeseries. If false, assumed to be frequency domain.
     int hdf5Data;   //!<'[--hdf5Data=FILENAME; default=FALSE]`: read data from LDC HDF5 file (compatible w/ Sangria dataset).
@@ -528,6 +529,7 @@ void SimulateData(struct Data *data, struct Orbit *orbit, struct Flags *flags);
 void print_data(struct Data *data, struct Flags *flags);
 void print_wavelet_fourier_spectra(struct Data *data, struct TDI *tdi, char filename[]);
 ///@}
+
 
 /**
  \brief convert DWT of TDI data to DFT

@@ -495,6 +495,17 @@ void ReadHDF5(struct Data *data, struct TDI *tdi, struct TDI *tdi_dwt, struct Fl
     double Tobs = stop_time - start_time;
     int N = (int)floor(Tobs/dt);
 
+    if(data->N>N)
+    {
+        printf("  Error: Requested amount of data is larger than %s\n",data->fileName);
+        printf("         data->N = %i\n",data->N);
+        printf("         N       = %i\n",N);
+        printf("         data->Tobs = %.12g\n", data->T);
+        printf("         Tobs       = %.12g\n", Tobs);
+        printf("         Reduce requested --duration\n");
+        exit(1);
+    }
+    
     /* work space for selecting and transforming time series */
     double *X = malloc(N*sizeof(double));
     double *Y = malloc(N*sizeof(double));
@@ -703,9 +714,9 @@ void ReadHDF5(struct Data *data, struct TDI *tdi, struct TDI *tdi_dwt, struct Fl
             Z[n] = Ztime[n];
         }
 
-        wavelet_transform(data->wdm, X);
-        wavelet_transform(data->wdm, Y);
-        wavelet_transform(data->wdm, Z);
+        wavelet_transform_timefreq(data->wdm, X);
+        wavelet_transform_timefreq(data->wdm, Y);
+        wavelet_transform_timefreq(data->wdm, Z);
         
         for(int n=0; n<N; n++)
         {
@@ -880,8 +891,10 @@ void ReadASCII_timeseries(struct Data* data, struct TDI* tdi_dft, struct TDI* td
 
 void ReadData(struct Data *data, struct Orbit *orbit, struct Flags *flags)
 {
-    if(!flags->quiet) fprintf(stdout,"\n==== ReadData ====\n");
-    
+    if(!flags->quiet)
+        
+    fprintf(stdout,"\n================== ReadData =================\n");
+
     /* load full dataset */
     struct TDI *tdi_full_dft = malloc(sizeof(struct TDI));
     struct TDI *tdi_full_dwt = malloc(sizeof(struct TDI));
@@ -968,6 +981,8 @@ void ReadData(struct Data *data, struct Orbit *orbit, struct Flags *flags)
     //free memory
     free_tdi(tdi_full_dft);
     free_tdi(tdi_full_dwt);
+    
+    fprintf(stdout,"=============================================\n");
 }
 
 void GetNoiseModel(struct Data *data, struct Orbit *orbit, struct Flags *flags)
@@ -1473,12 +1488,9 @@ void print_wavelet_fourier_spectra(struct Data *data, struct TDI *tdi, char file
     }
 
     //wavelet to frequency
-    memcpy(freqData[0],waveData[0],sizeof(double)*N);
-    memcpy(freqData[1],waveData[1],sizeof(double)*N);
-    memcpy(freqData[2],waveData[2],sizeof(double)*N);
-    wavelet_transform_inverse_fourier(wdm, freqData[0]);
-    wavelet_transform_inverse_fourier(wdm, freqData[1]);
-    wavelet_transform_inverse_fourier(wdm, freqData[2]);
+    wavelet_transform_inverse_freq(wdm, waveData[0], freqData[0]);
+    wavelet_transform_inverse_freq(wdm, waveData[1], freqData[1]);
+    wavelet_transform_inverse_freq(wdm, waveData[2], freqData[2]);
 
     FILE *fptr=fopen(filename,"w");
     for(int n=0; n<N/2; n++) 
@@ -1524,15 +1536,10 @@ void wavelet_layer_to_fourier_transform(struct Data *data)
         }
     }
 
-    /* copy full DWT into full DFT array for in-place transform */
-    memcpy(freqData[0],waveData[0],sizeof(double)*N);
-    memcpy(freqData[1],waveData[1],sizeof(double)*N);
-    memcpy(freqData[2],waveData[2],sizeof(double)*N);
-    
-    /* in place DWT->DFT transform */
-    wavelet_transform_inverse_fourier(wdm, freqData[0]);
-    wavelet_transform_inverse_fourier(wdm, freqData[1]);
-    wavelet_transform_inverse_fourier(wdm, freqData[2]);
+    /* out-place DWT->DFT transform */
+    wavelet_transform_inverse_freq(wdm, waveData[0], freqData[0]);
+    wavelet_transform_inverse_freq(wdm, waveData[1], freqData[1]);
+    wavelet_transform_inverse_freq(wdm, waveData[2], freqData[2]);
 
     /* copy active frequency bins into DFT struct */
     for(int n=0; n<data->NFFT; n++)
@@ -1593,6 +1600,7 @@ void print_glass_usage()
     fprintf(stdout,"       --duration    : duration of epoch (31457280)        \n");
     fprintf(stdout,"       --sim-noise   : data w/out noise realization        \n");
     fprintf(stdout,"       --conf-noise  : include model for confusion noise   \n");
+    fprintf(stdout,"       --stationary  : use stationary noise model in logL  \n");
     fprintf(stdout,"       --noiseseed   : seed for noise RNG                  \n");
     fprintf(stdout,"\n");
     
@@ -1656,7 +1664,7 @@ void parse_data_args(int argc, char **argv, struct Data *data, struct Orbit *orb
     flags->resume      = 0;
     flags->NMCMC       = 1000;
     flags->NBURN       = 1000;
-    flags->threads     = omp_get_max_threads();
+    flags->threads     = 12;
     sprintf(flags->runDir,"./");
     chain->NC          = 12;//number of chains
     int set_fmax_flag  = 0; //flag watching for if fmax is set by CLI
@@ -1674,28 +1682,10 @@ void parse_data_args(int argc, char **argv, struct Data *data, struct Orbit *orb
     sprintf(data->format,"sangria");
     sprintf(data->basis,"%s",basis);
 
-    data->T        = 31457280; /* one "mldc years" at 15s sampling */
-    data->t0       = 0.0; /* start time of data segment in seconds */
-    data->sqT      = sqrt(data->T);
-    data->NFFT     = 512;
-    data->Nlayer   = 1;
-    data->Nchannel = 3; //1=X, 2=AE, 3=XYZ
-    data->qpad     = 0;
-    data->fmin     = 1e-4; //Hz
     
     data->cseed = 150914;
     data->nseed = 151226;
     data->iseed = 151012;
-
-    if(!strcmp(data->basis,"fourier")) data->N = data->NFFT*2;
-    if(!strcmp(data->basis,"wavelet"))
-    {
-        data->T = floor(data->T/WAVELET_DURATION)*WAVELET_DURATION;
-        data->sqT = sqrt(data->T);
-        data->Nlayer = 1;
-        data->N = (int)floor(data->T/WAVELET_DURATION)*data->Nlayer;
-        data->NFFT = data->N/2;
-    }
 
 
     //Specifying the expected options
@@ -1873,6 +1863,8 @@ void parse_data_args(int argc, char **argv, struct Data *data, struct Orbit *orb
         chain->NC += flags->threads - (chain->NC % flags->threads);
     }
     
+    omp_set_num_threads(flags->threads);
+
     //override size of data if fmax was requested
     if(set_fmax_flag)
     {

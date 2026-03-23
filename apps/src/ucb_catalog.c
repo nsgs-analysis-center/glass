@@ -85,10 +85,14 @@ void parse_catalog(int argc, char **argv, struct Data *data, struct Orbit *orbit
             
     data->T        = 31457280; /* two "mldc years" at 15s sampling */
     data->t0       = 0.0;
+    data->sqT      = sqrt(data->T);
     data->NFFT     = 512;
     data->N        = data->NFFT*2;
     data->Nchannel = 2; //1=X, 2=AE
-    
+    data->qpad     = 0;
+    data->fmin     = 1e-4; //Hz
+    sprintf(data->basis,"fourier");
+
     data->cseed = 150914;
     data->nseed = 151226;
     data->iseed = 151012;
@@ -231,7 +235,7 @@ static int safe_scan_source_params(struct Data *data, struct Source *source, FIL
     check+=fscanf(fptr,"%lg",&source->costheta);
     check+=fscanf(fptr,"%lg",&source->cosi);
     check+=fscanf(fptr,"%lg",&source->psi);
-    check+=fscanf(fptr,"%lg",&source->phi0);
+    check+=fscanf(fptr,"%lg",&source->phiref);
     if(UCB_MODEL_NP>8)
         check+=fscanf(fptr,"%lg",&source->d2fdt2);
     
@@ -241,7 +245,7 @@ static int safe_scan_source_params(struct Data *data, struct Source *source, FIL
     }
     
     //map to parameter names (just to make code readable)
-    map_params_to_array(source, source->params, data->T);
+    map_ucb_params_to_array(source, source->params, data->T);
     return 0;
 
 }
@@ -308,7 +312,7 @@ int main(int argc, char *argv[])
     // Get priors
     /* Load priors as used in MCMC */
     struct Model *model = malloc(sizeof(struct Model));
-    alloc_model(data,model,flags->DMAX);
+    alloc_model(data,model,UCB_MODEL_NP,flags->DMAX);
     set_uniform_prior(flags, model, data, 1);
     
     /* Reformat for catalog */
@@ -331,7 +335,7 @@ int main(int argc, char *argv[])
     
     struct Source *sample = NULL;
     sample = malloc(sizeof *sample);
-    alloc_source(sample, data->N, data->Nchannel);
+    alloc_source(sample, data->N, UCB_MODEL_NP, data->Nchannel);
     
     
     //count lines in chain file
@@ -362,6 +366,7 @@ int main(int argc, char *argv[])
     struct Catalog *catalog = NULL;
     catalog = malloc(sizeof(struct Catalog));
     catalog->N = 0; //start with 0 sources in catalog
+    catalog->NP = UCB_MODEL_NP;
     catalog->entry = malloc(NMAX*sizeof(struct Entry*));
     
     /* ************************************************************** */
@@ -511,7 +516,7 @@ int main(int argc, char *argv[])
                         entry->match[entry->Nchain] = Match;
                         entry->distance[entry->Nchain] = Distance;
                         entry->stepFlag[i] = 1;
-                        append_sample_to_entry(entry, sample, IMAX, data->N, data->Nchannel);
+                        append_ucb_sample_to_entry(entry, sample, IMAX, data->N, data->Nchannel);
                         
                         //stop looping over entries in catalog
                         break;
@@ -699,11 +704,11 @@ int main(int argc, char *argv[])
         
         struct Source *old_catalog_entry = NULL;
         old_catalog_entry = malloc(sizeof(struct Source));
-        alloc_source(old_catalog_entry, data->N, data->Nchannel);
+        alloc_source(old_catalog_entry, data->N, UCB_MODEL_NP, data->Nchannel);
         
         struct Source *new_catalog_entry = NULL;
         new_catalog_entry = malloc(sizeof(struct Source));
-        alloc_source(new_catalog_entry, data->N, data->Nchannel);
+        alloc_source(new_catalog_entry, data->N, UCB_MODEL_NP, data->Nchannel);
         
         
         int Nsource = 0;
@@ -930,7 +935,7 @@ int main(int argc, char *argv[])
         double BIC;
         
         counter = 0;
-        while(gaussian_mixture_model_wrapper(model->prior, flags, entry, outdir, NMODE_start, NTHIN, &r, &BIC))
+        while(ucb_gmm_wrapper(model->prior, flags, entry, outdir, NMODE_start, NTHIN, &r, &BIC))
         {
             counter++;
             if(counter>CMAX)

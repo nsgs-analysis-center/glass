@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 
-
+#include <assert.h>
 #include "glass_utils.h"
+#include "glass_math.h"
 
 struct TimeFrequencyTrack * malloc_time_frequency_track(struct Wavelets *wdm)
 {
@@ -41,7 +42,7 @@ static void setup_wdm_basis(struct Wavelets *wdm, int NF)
     wdm->Omega = M_PI/wdm->cadence;
     wdm->dOmega = wdm->Omega/(double)wdm->NF;
     wdm->inv_root_dOmega = 1.0/sqrt(wdm->dOmega);
-    wdm->B = wdm->Omega/(double)(2*wdm->NF);
+    wdm->B = wdm->dOmega;
     wdm->A = (wdm->dOmega-wdm->B)/2.0;
     wdm->BW = (wdm->A+wdm->B)/M_PI;
 }
@@ -171,21 +172,20 @@ static void wavelet_lookup_table(struct Wavelets *wdm)
     // The odd wavelets coefficienst can be obtained from the even.
     // odd cosine = -even sine, odd sine = even cosine
     // each wavelet covers a frequency band of width DW
-    // execept for the first and last wasvelets
+// execept for the first and last wasvelets
     // there is some overlap. The wavelet pixels are of width
     // DOM/PI, except for the first and last which have width
     // half that
     
     double f0 = ref_layer*wdm->df;
     
-    #pragma omp parallel for
     for(int j=0; j<wdm->fdot_steps; j++)  // loop over f-dot slices
     {
 
         int NT = wdm->n_table[j];
         
         
-        for(int n=0; n<NT; n++)  // loop of frequency slices
+        for(int n=0; n<NT; n++)  // loop over time slices
         {
             double f = f0 + ((double)(n-NT/2)+0.5)*wdm->deltaf;
             
@@ -208,19 +208,23 @@ static void wavelet_lookup_table(struct Wavelets *wdm)
 }
 void initialize_wavelet(struct Wavelets *wdm, double T)
 {
-    fprintf(stdout,"\n======= Initialize Wavelet Basis =======\n");
-    
+    fprintf(stdout,"\n========= Initialize Wavelet Basis ==========\n");
     wdm->NT = (int)ceil(T/WAVELET_DURATION);
     wdm->NF = WAVELET_DURATION/LISA_CADENCE;
-    wdm->df = WAVELET_BANDWIDTH;
-    wdm->dt = WAVELET_DURATION;
+    wdm->df = WAVELET_BANDWIDTH; // Pixel spacing in f
+    wdm->dt = WAVELET_DURATION; // Pixel spacing in t
 
+    //TODO: this needs to be fixed instead of fudged
+    //avoid edge effects at start and stop times of segment.
+    wdm->imin = WAVELET_EDGE_BUFFER;
+    wdm->imax = wdm->NT - WAVELET_EDGE_BUFFER;
+    
     setup_wdm_basis(wdm, wdm->NF);
 
     wdm->frequency_steps = 400;
     wdm->fdot_steps = 50;
     wdm->d_fdot = 0.1;
-    wdm->oversample = 16.0;
+    wdm->oversample = 8.0;
 
     wdm->N = wdm->oversample * 2 * wdm->NF;
     wdm->T = wdm->N*wdm->cadence;
@@ -231,7 +235,7 @@ void initialize_wavelet(struct Wavelets *wdm, double T)
 
     wdm->fdot = malloc(wdm->fdot_steps*sizeof(double));
 
-    /* Only needed when using the lookup table waveform generator
+    /* Only needed when using the lookup table waveform generator */
     wdm->table   = malloc(wdm->fdot_steps*sizeof(double *));
     wdm->n_table = malloc(wdm->fdot_steps*sizeof(int));
 
@@ -245,13 +249,14 @@ void initialize_wavelet(struct Wavelets *wdm, double T)
         wdm->n_table[n] = N;
         wdm->table[n] = double_vector(2*N);
     }
-        
-    //stores lookup table of wavelet basis functions
-    wavelet_lookup_table(wdm);
-    */
-    
+
     //stores window function and normalization
     wavelet_window_time(wdm);
+    wdm->window_freq_forward = double_vector((wdm->NT/2 + 1)); // memory leak
+    build_wdm_filter_freq(wdm->window_freq_forward, wdm->NF, wdm->NT, wdm->A, true);
+
+    //stores lookup table of wavelet basis functions
+    //wavelet_lookup_table(wdm);
 
     //set defaults for min and maximum pixels
     wavelet_pixel_to_index(wdm,0,1,&wdm->kmin);         //first pixel of second layer
@@ -261,7 +266,7 @@ void initialize_wavelet(struct Wavelets *wdm, double T)
     fprintf(stdout,"  Duration of time pixels:      %g [hr]\n", wdm->dt/3600);
     fprintf(stdout,"  Number of frequency layers:   %i\n", wdm->NF);
     fprintf(stdout,"  Bandwidth of frequency layer: %g [uHz]\n", wdm->df*1e6);
-    fprintf(stdout,"\n========================================\n");
+    fprintf(stdout,"=============================================\n");
 }
 
 void inline wavelet_index_to_pixel(struct Wavelets *wdm, int *i, int *j, int k)
@@ -282,410 +287,312 @@ void inline wavelet_pixel_to_index(struct Wavelets *wdm, int i, int j, int *k)
     *k = i + j*NT;
 }
 
-void wavelet_transform(struct Wavelets *wdm, double *data)
-{
-    //array index for tf pixel
-    int k;
-    
-    //total data size
+// Note that this is called the timefreq transform in other codes:
+// FFT first, then use the fast algorithm for FFT->WDM
+void wavelet_transform_timefreq(struct Wavelets *wdm, double *timedata) {
     int ND = wdm->NT*wdm->NF;
-    
-    //windowed data packets
-    double *wdata = double_vector(wdm->N);
+    double freqdata[ND + 2]; // extra complex element
 
-    //wavelet wavepacket transform of the signal
-    double **wave = double_matrix(wdm->NT,wdm->NF);
-    
-    //normalization factor
-    double fac = M_SQRT2*sqrt(wdm->cadence)/wdm->norm;
-    
-    //normalization fudge factor
-    fac *= sqrt(wdm->cadence)/2;
-        
-    //do the wavelet transform by convolving data w/ window and FFT
-    for(int i=0; i<wdm->NT; i++)
-    {
-        
-        for(int j=0; j<wdm->N; j++)
-        {
-            int n = i*wdm->NF - wdm->N/2 + j;
-            n = (n%ND + ND)%ND; // periodically wrap the data
-            wdata[j] = data[n] * wdm->window[j];  // apply the window
-        }
-                
-        glass_forward_real_fft(wdata, wdm->N);
+    glass_forward_real_fft_outplace(timedata, freqdata, ND);
 
-        //unpack Fourier transform
-        wave[i][0] = wdata[0];
-        for(int j=1; j<wdm->NF; j++)
-        {
-            int n = j*wdm->oversample;
-            if((i+j)%2 ==0)
-                wave[i][j] = wdata[2*n];
-            else
-                wave[i][j] = -wdata[2*n+1];
-        }
-    }
-    
-    //replace data vector with wavelet transform mapped from pixel to index
-    for(int i=0; i<wdm->NT; i++)
-    {
-        for(int j=0; j<wdm->NF; j++)
-        {
-            //get index number k for tf pixel {i,j}
-            wavelet_pixel_to_index(wdm,i,j,&k);
-            
-            //replace data array
-            data[k] = wave[i][j]*fac;
-        }
-    }
-    
-    free_double_vector(wdata);
-    free_double_matrix(wave,wdm->NT);
+    // note: below will overwrite timedata
+    wavelet_transform_freq(wdm, freqdata, timedata);
 }
 
-/*
-def transform_wavelet_freq(data: NDArray[np.complex128], Nf: int, Nt: int, nx: float = 4.0) -> NDArray[np.float64]:
-    """Do the wavelet transform using the fast wavelet domain transform"""
-    assert len(data.shape) == 1, 'Only 1D Arrays supported currently'
-    phif: NDArray[np.float64] = 2 / Nf * phitilde_vec_norm(Nf, Nt, nx)
-    return transform_wavelet_freq_helper(data, Nf, Nt, phif)
-def transform_wavelet_freq_helper(
-    data: NDArray[np.complex128],
-    Nf: int,
-    Nt: int,
-    phif: NDArray[np.float64],
-) -> NDArray[np.float64]:
-    """Helper to do the wavelet transform using the fast wavelet domain transform"""
-    assert len(data.shape) == 1, 'Only support 1D Arrays currently'
-    assert len(phif.shape) == 1, 'phif must be 1D'
-    wave = np.zeros((Nt, Nf))  # wavelet wavepacket transform of the signal
-
-    DX = np.zeros(Nt, dtype=np.complex128)
-    for m in range(Nf + 1):
-        DX_assign_loop(m, Nt, Nf, DX, data, phif)
-        DX_trans = fft.ifft(DX, Nt)
-        DX_unpack_loop(m, Nt, Nf, DX_trans, wave)
-    return wave
-@njit()
-def DX_assign_loop(
-    m: int,
-    Nt: int,
-    Nf: int,
-    DX: NDArray[np.complex128],
-    data: NDArray[np.complex128],
-    phif: NDArray[np.float64],
-) -> None:
-    """Helper for assigning DX in the main loop"""
-    assert len(DX.shape) == 1, 'Storage array must be 1D'
-    assert len(data.shape) == 1, 'Data must be 1D'
-    assert len(phif.shape) == 1, 'Phi array must be 1D'
-
-    i_base: int = int(Nt // 2)
-    jj_base: int = int(m * Nt // 2)
-
-    if m in (0, Nf):
-        # NOTE this term appears to be needed to recover correct constant (at least for m=0) but was previously missing
-        DX[Nt // 2] = phif[0] * data[int(m * Nt // 2)] / 2.0
-    else:
-        DX[Nt // 2] = phif[0] * data[int(m * Nt // 2)]
-
-    for jj in range(jj_base + 1 - int(Nt // 2), jj_base + int(Nt // 2)):
-        j: int = int(np.abs(jj - jj_base))
-        i: int = i_base - jj_base + jj
-        if (m == Nf and jj > jj_base) or (m == 0 and jj < jj_base):
-            DX[i] = 0.0
-        elif j == 0:
-            continue
-        else:
-            DX[i] = phif[j] * data[jj]
-
-
-@njit()
-def DX_unpack_loop(m: int, Nt: int, Nf: int, DX_trans: NDArray[np.complex128], wave: NDArray[np.float64]) -> None:
-    """Helper for unpacking fftd DX in main loop"""
-    assert len(DX_trans.shape) == 1, 'Data array must be 1D'
-    assert len(wave.shape) == 2, 'Output array must be 2D'
-    if m == 0:
-        # half of lowest and highest frequency bin pixels are redundant
-        # so store them in even and odd components of m=0 respectively
-        for n in range(0, Nt, 2):
-            wave[n, 0] = DX_trans[n].real * np.sqrt(2.0)
-    elif m == Nf:
-        for n in range(0, Nt, 2):
-            wave[n + 1, 0] = DX_trans[n].real * np.sqrt(2.0)
-    else:
-        for n in range(Nt):
-            if m % 2:
-                if (n + m) % 2:
-                    wave[n, m] = -DX_trans[n].imag
-                else:
-                    wave[n, m] = DX_trans[n].real
-            elif (n + m) % 2:
-                wave[n, m] = DX_trans[n].imag
-            else:
-                wave[n, m] = DX_trans[n].real
-*/
-/*
-void wavelet_transform_fourier(struct Wavelets *wdm, double *fftdata, double* wave) {
-    // phif: NDArray[np.float64] = 2 / Nf * phitilde_vec_norm(Nf, Nt, nx)
-    // nx = 4.0
-
-    int k;
-    int nx = WAVELET_FILTER_CONSTANT;
-    // phif: NDArray[np.float64] = 2 / Nf * phitilde_vec_norm(Nf, Nt, nx)
-    // nx = 4.0
-
-    double DX[wdm->NT];
-    for (int m=0; m<wdm->NF+1; m++) {
-        int ibase = wdm->NT/2;
-        int jjbase = (m*wdm->NT)/2; // integer math
-        if (m == 0 or m == wdm->NF) {
-            DX[ibase] = phif[0] * data[jjbase] / 2.0;
-        } else {
-            DX[ibase] = phif[0] * data[jjbase];
-        }
-        for (int jj= jjbase+1-ibase; j<jjbase+ibase; jj++) {
-            int j = abs(jj-jjbase);
-            int i = ibase - jjbase + jj;
-            if ((m == wdm->NF && jj > jjbase) || (m == 0 && jj < jjbase)) {
-                DX[i] = 0.0;
-            }
-            else if (j==0) {
-                continue;
-            } 
-            else {
-                DX[i] = phif[j] * data[jj];
-            }
-        }
-        double DX_trans[wdm->NT];
-        for (int i=0; i<wdm->NT; i++) {
-            DX_trans[i] = DX[i];
-        }
-        glass_inverse_complex_fft(&DX_trans, wdm->NT);
-        if (m == 0)
-            for (int n=0; n<wdm->NT; n+=2)
-                wave[n,0] = DX_trans[n].real*MSQRT_2;
-        else if (m == wdm->NF)
-            for (int n=0; n<wdm->NT; n+=2)
-                wave[n+1,0] = DX_trans[n].real*MSQRT_2;
-        else {
-            for (int n=0; i<wdm->NT; n++) {
-                if (m%2) {
-                    if ((n+m)%2)
-                        wave[n,m] = -DX_trans[n].imag;
-                    else
-                        wave[n,m] = DX_trans[n].real;
-                else if ((n+m)%2)
-                    wave[n,m] = DX_trans[n].imag
-                else
-                    wave[n,m] = DX_trans[n].real
-            }
-        }
-    }
-}
-*/
-
-void wavelet_transform_inverse_fourier(struct Wavelets *wdm, double *data)
+static inline double my_phitilde(double omega, double DeltaOmega, double A)
 {
-    int k;
-    int N = wdm->NT*wdm->NF;
-    double *phit  = double_vector(wdm->NT/2+1);
-    double *row   = double_vector(wdm->NT*2);
-    double *work  = double_vector(N);
-    double Tobs   = N*wdm->cadence;
-    double sign;
-
-
-    for(int i=0; i<=wdm->NT/2; i++)
+    double B = DeltaOmega - 2*A;
+    double insDOM = 1.0/sqrtf(DeltaOmega);
+    
+    double x, y, z;
+    
+    z = 0.0;
+    
+    if(fabs(omega) >= A && fabs(omega) < A+B)
     {
-        phit[i] = phitilde(wdm,i*PI2/Tobs);
-    }
-
-    for(int j=1; j<wdm->NF-1; j++)
-    {
-        if(j%2==0) sign =  1.0;
-        else       sign = -1.0;
-
-        for(int i=0; i<wdm->NT; i++)
-        {
-            REAL(row,i) = 0.0;
-            IMAG(row,i) = 0.0;
-            
-            wavelet_pixel_to_index(wdm,i,j,&k);
-                        
-            if((i+j)%2==0)
-            {
-                REAL(row,i) = data[k];
-            }
-            else
-            {
-                if(j%2==0) IMAG(row,i) = -data[k];
-                else       IMAG(row,i) =  data[k];
-            }
-        }
-        
-        glass_forward_complex_fft(row,wdm->NT);
-
-        int jj = j*(wdm->NT/2);
-        
-        // negative frequencies
-        for(int i=wdm->NT/2-1; i>0; i--)
-        {
-            double x = sign*phit[i];
-            int kk = jj-i;
-            work[kk] += x*REAL(row,wdm->NT-i);
-            work[N-kk] += x*IMAG(row,wdm->NT-i);
-        }
-                
-        // positive frequencies
-        for(int i=0; i<wdm->NT/2; i++)
-        {
-            double x = sign*phit[i];
-            int kk = i+jj;
-            work[kk] += x*REAL(row,i);
-            work[N-kk] += x*IMAG(row,i);
-        }
+        x = (fabs(omega)-A)/B;
+        y = incomplete_beta_function(WAVELET_FILTER_CONSTANT, WAVELET_FILTER_CONSTANT, x);
+        z = insDOM*cos(y*M_PI_2);
     }
     
-    //unpack work vector into real and imaginary parts consistent w/ GLASS conventions
-    unpack_fft_output(data,work,N);
-
-    //normalize -- wtf?
-    double fft_norm = 2.*sqrt(M_PI/Tobs) * sqrt(Tobs) / LISA_CADENCE;
-    for(int n=0; n<N; n++) data[n] *= fft_norm;
-
-
-    free_double_vector(phit);
-    free_double_vector(work);
-    free_double_vector(row);
+    if(fabs(omega) < A) z = insDOM;
+    
+    return(z);
+    
 }
 
-static void fourier_to_wavelet_transform_of_layer(struct Wavelets *wdm, double *window, double *data, int N, int layer)
-{
-    int i,n;
-    double *wdata = double_vector(2*N);
-    
-    // window data
-    for(i=-N/2; i<N/2; i++)
-    {
-        n = i+N/2;
-        
-        REAL(wdata,n) = 0.0;
-        IMAG(wdata,n) = 0.0;
-        
-        if(n > 0 && n < N)
-        {
-            REAL(wdata,n) = data[2*n]   * window[abs(i)];
-            IMAG(wdata,n) = data[2*n+1] * window[abs(i)];
-        }
-    }//end loop over window
-    
-    //get windowed data into time domain
-    //to get FFTed
-    glass_inverse_complex_fft(wdata, N);
-    
-    //normalization to match NJC's breadboard code
-    for(int n=0; n<2*N; n++) wdata[n]/=(double)N;
-
-    //populate layer
-    for(n=0; n<N; n++)
-    {
-        if(layer%2 == 0)
-        {
-            if((n+layer)%2==0) data[n] = REAL(wdata,n);
-            else               data[n] = IMAG(wdata,n);
-        }
+void build_wdm_filter_freq(double* phif, int Nf, int Nt, double A, bool forward) {
+    // this function puts the Meyer window into phif properly normalized
+    double DeltaOmega = M_PI / Nf;
+    double domega = 2*DeltaOmega / (double)Nt;
+    for (int i = 0; i < Nt/2 + 1; i++) {
+        phif[i] = my_phitilde(domega*i, DeltaOmega, A);
+    }
+    // normalize the window
+    double norm = 0.0;
+    for (int i = 0; i<Nt/2+1; i++) {
+        if (i==0)
+            norm += phif[i]*phif[i];
         else
-        {
-            if((n+layer)%2==0) data[n] =  REAL(wdata,n);
-            else               data[n] = -IMAG(wdata,n);
-        }
-    }//end loop over time slices
-    
-    free_double_vector(wdata);
-}
-
-void wavelet_transform_by_layers(struct Wavelets *wdm, int jmin, int Nlayers, double *window, double *data)
-{
-    int i,j,k,m,n;
-    
-    // size of input data
-    int N = (Nlayers+1)*wdm->NT;
-    
-    // transformed data
-    double *data_wdm = double_vector(N);
-    
-    //windowed data
-    double *wdata = double_vector(2*wdm->NT);
-
-    double norm = 1.0/sqrt(0.5*N);
-        
-    double alpha = 8.0/wdm->NT;
-    
-    // FFT incoming data (timeseries)
-    tukey(data, alpha, N);
-    glass_forward_real_fft(data, N);
-    
-    // loop over frequency layers
-    for(j=1; j<Nlayers+1; j++)
-    {
-        m = jmin + j - 1;
-        
-        // window data
-        for(i=-wdm->NT/2; i<wdm->NT/2; i++)
-        {
-            n = i+wdm->NT/2;
-            
-            REAL(wdata,n) = 0.0;
-            IMAG(wdata,n) = 0.0;
-            
-            k = i + j*wdm->NT/2;
-            
-            if(k > 0 && k < N/2)
-            {
-                REAL(wdata,n) = data[2*k]   * window[abs(i)];
-                IMAG(wdata,n) = data[2*k+1] * window[abs(i)];
-            }
-        }//end loop over window
-        
-        glass_inverse_complex_fft(wdata, wdm->NT);
-        
-        // index magic
-        for(i=0; i<wdm->NT; i++)
-        {
-            k = i*Nlayers + j - 1;
-            
-            if(m%2 == 0)
-            {
-                if((i+m)%2==0) data_wdm[k] = norm*REAL(wdata,i);
-                else           data_wdm[k] = norm*IMAG(wdata,i);
-            }
-            else
-            {
-                if((i+m)%2==0) data_wdm[k] =  norm*REAL(wdata,i);
-                else           data_wdm[k] = -norm*IMAG(wdata,i);
-            }
-        }//end loop over time slices
+            norm += 2*phif[i]*phif[i];
     }
+    norm *= domega * M_1_PI;
+    norm = sqrtf(norm);
+    if (forward)
+        norm *= Nf / 2.0;
+    for (int i = 0; i<Nt/2+1; i++) {
+        phif[i] /= norm;
+    }
+}
+// inverse frequency transform, assumes that freqdata has enough room for ND/2+1 complexes
+void wavelet_transform_inverse_freq(struct Wavelets *wdm, double *wdmdata, double *freqdata) {
+    int Nf = wdm->NF;
+    int Nt = wdm->NT;
+    int ND = Nf*Nt;
+    memset(freqdata, 0, (ND+2)*sizeof(double));
     
-    //replace input data w/ WDM'ed data
-    memcpy(data, data_wdm, N*sizeof(double));
-    
-    free_double_vector(data_wdm);
-    free_double_vector(wdata);
+    double prefactors[2*Nt];
+    // use filled normalized Meyer window into phif
+    double *phif = wdm->window_freq_forward;
+    double fft_result[2*Nt];
+    for (int m=0; m < Nf+1; m++) {
+        int center = m*Nt/2;
+        memset(prefactors, 0, 2*Nt*sizeof(double));
+        if (m==0) {
+            // DC layer, in even rows of column 0
+            for (int n=0; n < Nt; n++)
+                prefactors[2*n] = wdmdata[(2*n)%Nt] * M_SQRT1_2; // undo normalization
+        }
+        else if (m==Nf) {
+            for (int n=0; n < Nt; n++)
+                prefactors[2*n] = wdmdata[(2*n)%Nt + 1] * M_SQRT1_2; // undo normalization
+        }
+        else {
+            for (int n = 0; n < Nt; n++) {
+                if ((n+m)%2==0) {
+                    prefactors[2*n] = wdmdata[n + Nt*m]; 
+                }
+                else {
+                    prefactors[2*n + 1] = -wdmdata[n + Nt*m]; 
+                }
+            } //end for n
+        }
+        glass_forward_complex_fft_outplace(prefactors, fft_result, Nt);
+
+        int imin = center - Nt/2;
+        if (imin < 0) imin = 0;
+        int imax = center + Nt/2;
+        if (imax > ND/2 +1) imax = ND/2+1;
+        for (int i = imin; i < imax; i++) {
+            int iind = abs(i-center);
+            if (iind > Nt/2)
+                continue;
+            // note that Nf/2 here to adapt window for inverse!
+            if (m==0 || m==Nf) {
+                freqdata[2*i]     += fft_result[2*((2*i)%Nt)] * phif[iind] * Nf/2;
+                freqdata[2*i + 1] += fft_result[2*((2*i)%Nt) + 1] * phif[iind] * Nf/2;
+            }
+            else {
+                freqdata[2*i]     += fft_result[2*(i%Nt)] * phif[iind] * Nf/2;
+                freqdata[2*i+ 1]  += fft_result[2*(i%Nt) + 1] * phif[iind] * Nf/2;
+            }
+        }
+
+    } // end for m
 }
 
+// NOTE: this implementation matches WDMWaveletTransforms by Matt Digman
+// as well as Olitas.jl
+// We assume freqdata has ND+2 elements
+void wavelet_transform_freq(struct Wavelets *wdm, double *freqdata, double *wdmdata) {
 
-void wavelet_transform_inverse_time(struct Wavelets *wdm, double *data)
-{
-    int N = wdm->NT*wdm->NF;
-    
-    //transform data from WDM to frequency domain
-    wavelet_transform_inverse_fourier(wdm,data);
-    
-    //transform to time domain data
-    glass_inverse_real_fft(data,N);
+    int Nf = wdm->NF;
+    int Nt = wdm->NT;
+
+    double   DX[2*Nt]; // length NT complex array, we will ifft later
+    double DX_t[2*Nt]; // length NT complex array, will be one freq layer
+    // fill normalized Meyer window into phif
+    double *phif = wdm->window_freq_forward;
+
+    for (int m=0; m <= Nf; m++) {
+        int center = m*Nt / 2; // note integer division
+        memset(DX, 0, 2*Nt*sizeof(double));
+        for (int j=-Nt/2 + 1; j < Nt/2; j++) {
+            int idx = center + j;
+            // various edge checks:
+            if ((m==0) && (idx < 0))
+                continue; // m==0  is DC bin , no freqs below 
+            if ((m==Nf) && idx > center)
+                continue; // m==Nf is Nyquist, no freqs above
+            double weight = phif[abs(j)];
+            if ( (j==0) && (m==0 || m==Nf) )
+                weight /= 2.0; // this accounts for less d.o.f. in boundary layers
+            DX[2*(Nt/2 + j)]     = weight * freqdata[2*idx];
+            DX[2*(Nt/2 + j) + 1] = weight * freqdata[2*idx+1];
+        }
+        glass_inverse_complex_fft_outplace(DX, DX_t, Nt);
+
+        // now extract wdm coeffs
+        if (m==0) {
+            // DC layer, even rows of col 0
+            for (int n = 0; n < Nt; n+=2)
+                wdmdata[n] = DX_t[2*n] * M_SQRT2;
+        }
+        else if (m==Nf) {
+            // Nyquist layer, odd rows of col 0
+            for (int n = 0; n < Nt; n+=2)
+                wdmdata[n+1] = DX_t[2*n] * M_SQRT2;
+        }
+        else {
+            // General layer
+            int imag_sign = m%2 == 0 ? 1 : -1;
+            for (int n = 0; n < Nt; n++) {
+                if ((n+m)%2==0)
+                    wdmdata[n+Nt*m] = DX_t[2*n];
+                else
+                    wdmdata[n+Nt*m] = imag_sign * DX_t[2*n+1];
+            }
+        }
+    }
+}
+
+// Transform a short segment of FFT data into one WDM layer.
+// freqdata is N complex entries (2*N doubles), centered on the layer frequency
+// (i.e. the layer's center frequency is at index N/2).
+// wdmdata receives N WDM coefficients for this layer.
+// Each output pixel has the same ΔT and ΔF as the full transform;
+// N > Nt gives more time coverage, N < Nt gives less.
+void wavelet_transform_freq_one_layer(struct Wavelets *wdm, int N, double *freqdata, double *wdmdata, int layer) {
+
+    int Nf = wdm->NF;
+    int Nt = wdm->NT;
+
+    double   DX[2*N]; // length N complex array, we will ifft later
+    double DX_t[2*N]; // length N complex array, result of ifft
+    memset(DX, 0, 2*N*sizeof(double));
+    int m = layer;
+
+    // Evaluate the window at each bin's actual frequency in the short FFT.
+    // Bin spacing: domega = 2*DeltaOmega/N, where DeltaOmega = PI/Nf (sample space).
+    // The window has support over N/2 bins (goes to zero at bin N/2).
+    double DeltaOmega = M_PI / Nf;
+    double domega = 2.0 * DeltaOmega / N;
+
+    // Build and normalize the filter on this grid
+    double phif[N/2 + 1];
+    for (int i = 0; i <= N/2; i++)
+        phif[i] = my_phitilde(domega * i, DeltaOmega, wdm->A);
+    // normalize: same formula as build_wdm_filter_freq
+    double norm = 0.0;
+    for (int i = 0; i <= N/2; i++) {
+        if (i == 0)
+            norm += phif[i] * phif[i];
+        else
+            norm += 2 * phif[i] * phif[i];
+    }
+    norm *= domega * M_1_PI;
+    norm = sqrtf(norm);
+    norm *= Nf / 2.0; // forward transform
+    for (int i = 0; i <= N/2; i++)
+        phif[i] /= norm;
+
+    for (int j = -N/2 + 1; j < N/2; j++) {
+        int local_idx = N/2 + j; // index into the short FFT array
+        // edge checks for boundary layers
+        if ((m == 0) && (j < 0))
+            continue;
+        if ((m == Nf) && (j > 0))
+            continue;
+        if (local_idx < 0 || local_idx >= N)
+            continue;
+        double weight = phif[abs(j)];
+        if ((j == 0) && (m == 0 || m == Nf))
+            weight /= 2.0;
+        DX[2*(N/2 + j)]     = weight * freqdata[2*local_idx];
+        DX[2*(N/2 + j) + 1] = weight * freqdata[2*local_idx + 1];
+    }
+    glass_inverse_complex_fft_outplace(DX, DX_t, N);
+
+    // extract wdm coefficients
+    if (m == 0) {
+        for (int n = 0; n < N; n += 2)
+            wdmdata[n] = DX_t[2*n] * M_SQRT2;
+    }
+    else if (m == Nf) {
+        for (int n = 0; n < N; n += 2)
+            wdmdata[n+1] = DX_t[2*n] * M_SQRT2;
+    }
+    else {
+        int imag_sign = m % 2 == 0 ? 1 : -1;
+        for (int n = 0; n < N; n++) {
+            // normally this lhs index would be m*Nt+n
+            if ((n + m) % 2 == 0)
+                wdmdata[n] = DX_t[2*n];
+            else
+                wdmdata[n] = imag_sign * DX_t[2*n+1];
+        }
+    }
+}
+
+// Basically the same thing as wavelet_transform_timefreq, but we assume
+// that the output fits into the layers with indices jmin...jmin+Nlayers
+// used only in the UCB waveform
+// expects timedata of length wdm->NT*(Nlayers+1)
+void wavelet_transform_timefreq_by_layers(struct Wavelets* wdm, int jmin, int Nlayers, double *window, double* timedata) {
+    int Nf = wdm->NF;
+    int Nt = wdm->NT;
+    int N = Nt * (Nlayers+1); // length of input data
+    double freqdata[N + 2]; // full-length FFT
+
+    // TODO: tukey window was here, removed for invertibility in tests
+    /*
+    double alpha = 8.0/Nt;
+    tukey(timedata, alpha, N);
+    */
+    // FFT the full timeseries
+    glass_forward_real_fft_outplace(timedata, freqdata, N);
+
+    double   DX[2*Nt];
+    double DX_t[2*Nt];
+    double *phif = window; // should be length Nt/2+1
+
+    // output is packed as Nlayers * Nt elements
+    memset(timedata, 0, Nlayers * Nt * sizeof(double));
+
+    for (int m = jmin; m < jmin + Nlayers; m++) {
+        int center = (m - jmin + 1) * Nt / 2;
+        memset(DX, 0, 2*Nt*sizeof(double));
+        for (int j = -Nt/2 + 1; j < Nt/2; j++) {
+            int idx = center + j;
+            if (idx < 0 || idx > N/2)
+                continue;
+            double weight = phif[abs(j)];
+            if ((j == 0) && (m == 0 || m == Nf))
+                weight /= 2.0;
+            DX[2*(Nt/2 + j)]     = weight * freqdata[2*idx];
+            DX[2*(Nt/2 + j) + 1] = weight * freqdata[2*idx+1];
+        }
+        glass_inverse_complex_fft_outplace(DX, DX_t, Nt);
+
+        int layer_offset = (m - jmin) * Nt;
+        if (m == 0) {
+            for (int n = 0; n < Nt; n += 2)
+                timedata[layer_offset + n] = DX_t[2*n] * M_SQRT2;
+        }
+        else if (m == Nf) {
+            for (int n = 0; n < Nt; n += 2)
+                timedata[layer_offset + n + 1] = DX_t[2*n] * M_SQRT2;
+        }
+        else {
+            int imag_sign = m % 2 == 0 ? 1 : -1;
+            for (int n = 0; n < Nt; n++) {
+                if ((n + m) % 2 == 0)
+                    timedata[layer_offset + n] = DX_t[2*n];
+                else
+                    timedata[layer_offset + n] = imag_sign * DX_t[2*n+1];
+            }
+        }
+    }
 }
 
 void wavelet_transform_from_table(struct Wavelets *wdm, double *phase, double *freq, double *freqd, double *amp, int *jmin, int *jmax, double *wave, int *list, int *rlist, int Nmax)
@@ -923,23 +830,15 @@ void wavelet_window_frequency(struct Wavelets *wdm, double *window, int Nlayers)
     
 }
 
-void wavelet_transform_segment(struct Wavelets *wdm, int N, int layer, double *data)
+// This is a utility function mostly used in the MBHB waveform
+// Here we assume that the freqdata only has frequency content in one layer
+// N is number of time data points, freqdata is length N/2+1
+void wavelet_transform_freq_segment(struct Wavelets *wdm, int N, int layer, double *freqdata)
 {
-    //wdm filter
-    double *window = double_vector(N/2+1);
-    
-    //normalization factor
-    double norm = 1./(2.0*wdm->NF*wdm->cadence);
-    
-    //layer-dependent factors
-    double domega = PI2/(N*WAVELET_DURATION);
-    
-    //get filter
-    for(int i=0; i<=N/2; i++)
-        window[i] = norm * phitilde(wdm, i*domega);
-        
-    //wdm transfrom from frequency domain
-    fourier_to_wavelet_transform_of_layer(wdm, window, data, N, layer);
-    
-    free_double_vector(window);
+    double wdmdata[N];
+    memset(wdmdata, 0, N*sizeof(double));
+    wavelet_transform_freq_one_layer(wdm, N, freqdata, wdmdata, layer);
+    for (int i = 0; i < N; i++)
+        freqdata[i] = wdmdata[i];
 }
+

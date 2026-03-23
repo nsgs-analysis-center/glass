@@ -311,7 +311,7 @@ void update_spline_noise_model(struct SplineModel *model, int new_knot, int min_
     for(int n=0; n<model->Nchannel; n++)
     {
         cspline[n] = alloc_cubic_spline(spline->N);
-        initialize_cubic_spline(cspline[n], spline->f, spline->C[n][n]);
+        initialize_cubic_spline(cspline[n], spline->f, spline->C[n][n], SPLINE_BINARY_SEARCH);
     }
     
     int imin = (int)((spline->f[min_knot]-psd->f[0])*T);
@@ -509,7 +509,7 @@ void generate_instrument_noise_model(struct Orbit *orbit, struct InstrumentModel
         //Normalization
         for(int i=0; i<model->psd->Nchannel; i++)
             for(int j=0; j<model->psd->Nchannel; j++)
-                model->psd->C[i][j][n] /= 2.0;
+                model->psd->C[i][j][n] /= 4.0;
     }
 }
 //TODO: is it worth oversampling these very smooth functional forms...?
@@ -581,6 +581,7 @@ void generate_instrument_noise_model_wavelet(struct Wavelets *wdm, struct Orbit 
     for(int i=0; i<model->psd->N; i++)
         for(int n=0; n<3; n++)
             for(int m=n; m<3; m++) {
+                // TODO: normalization check here
                 C[n][m][i]/=8.;
                 C[m][n][i] = C[n][m][i];
             }
@@ -624,6 +625,11 @@ void generate_galactic_foreground_model(struct ForegroundModel *model)
                 model->psd->C[1][0][n] = model->psd->C[2][0][n] = model->psd->C[2][1][n] = -0.5*t*Sgal;
                 break;
         }
+        
+        //Normalization
+        for(int i=0; i<model->psd->Nchannel; i++)
+            for(int j=0; j<model->psd->Nchannel; j++)
+                model->psd->C[i][j][n] /= 4.0;
     }
 }
 
@@ -1139,8 +1145,8 @@ void initialize_instrument_model(struct Orbit *orbit, struct Data *data, struct 
     /*
     for(int i=0; i<model->Nlink; i++)
     {
-        model->soms[i] = 2.25e-22;
-        model->sacc[i] = 9.00e-30;
+        model->soms[i] = 1.28e-22;
+        model->sacc[i] = 5.76e-30;
     }
     */
     for(int i=0; i<model->Nlink; i++)
@@ -1398,8 +1404,8 @@ void GetStationaryNoiseModel(struct Data *data, struct Orbit *orbit, struct Flag
     sprintf(filename,"%s/power_stationary_noise.dat",data->dataDir);
     FILE *fptr=fopen(filename,"w");
     int k;
-    // TODO: need to convince myself that qmin/qmax are correct here
-    for(int j=data->qmin; j<data->qmax; j++)
+    // TODO: check bounds here
+    for(int j=data->lmin; j<data->lmax; j++)
     {
         double f = j*data->wdm->df;
         for(int i=0; i<data->wdm->NT; i++)

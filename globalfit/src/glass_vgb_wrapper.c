@@ -101,7 +101,7 @@ void setup_vgb_data(struct VGBData *vgb_data, struct UCBData *ucb_data, struct T
         alloc_data(data, flags);
         
         /* Initialize source structure to hold EM parameters */
-        alloc_source(vgb, data->N, data->Nchannel);
+        alloc_source(vgb, data->N, UCB_MODEL_NP, data->Nchannel);
         
         /* Get source from verification binary file */
         GetVerificationBinary(data, flags, vgb, vbFile);
@@ -143,7 +143,7 @@ void initialize_vgb_sampler(struct VGBData *vgb_data)
         struct Proposal **proposal = vgb_data->proposal_vec[n];
         struct Model **model = vgb_data->model_vec[n];
         struct Model **trial = vgb_data->trial_vec[n];
-        struct Source *vgb   = vgb_data->vgb_vec[n];
+        struct Source **vgb   = vgb_data->vgb_vec;
         
         /* Initialize parallel chain */
         if(flags->resume)
@@ -152,10 +152,10 @@ void initialize_vgb_sampler(struct VGBData *vgb_data)
             initialize_chain(chain, flags, &data->cseed, "w");
         
         /* Initialize MCMC proposals */
-        initialize_vb_proposal(orbit, data, prior, chain, flags, proposal, flags->DMAX);
+        initialize_vgb_proposal(orbit, data, prior, chain, flags, proposal, flags->DMAX);
         
         /* Initialize data models */
-        initialize_ucb_state(data, orbit, flags, chain, proposal, model, trial,  vgb_data->vgb_vec);
+        initialize_ucb_state(data, orbit, flags, chain, proposal, model, trial, vgb);
         
         /* Store data segment in working directory */
         if(vgb_data->procID==1) print_data(data, flags);

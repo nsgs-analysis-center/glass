@@ -19,13 +19,21 @@
  \brief Libary for MBH module
  
  Including
+ - MBH data model
+ - MBH sampler functions
  - MBH waveform generator
  */
 
 #ifndef glass_mbh_h
 #define glass_mbh_h
 
+#include "glass_mbh_io.h"
+#include "glass_mbh_data.h"
+#include "glass_mbh_model.h"
+#include "glass_mbh_prior.h"
+#include "glass_mbh_proposal.h"
 #include "glass_mbh_waveform.h"
+#include "glass_mbh_sampler.h"
 #include "glass_mbh_IMRPhenom.h"
 
 #endif /* glass_mbh_h */

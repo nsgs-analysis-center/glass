@@ -137,8 +137,8 @@ void initialize_analytic_orbit(struct Orbit *orbit)
 
 void initialize_numeric_orbit(struct Orbit *orbit)
 {
-    fprintf(stdout,"==== Initialize LISA Orbit Structure ====\n\n");
-    
+    fprintf(stdout,"\n====== Initialize LISA Orbit Structure ======\n");
+
     int n,i,check;
     double junk;
     
@@ -199,9 +199,9 @@ void initialize_numeric_orbit(struct Orbit *orbit)
     //calculate derivatives for cubic spline
     for(i=0; i<3; i++)
     {
-        initialize_cubic_spline(orbit->dx[i], t, orbit->x[i]);
-        initialize_cubic_spline(orbit->dy[i], t, orbit->y[i]);
-        initialize_cubic_spline(orbit->dz[i], t, orbit->z[i]);
+        initialize_cubic_spline(orbit->dx[i], t, orbit->x[i], SPLINE_BINARY_SEARCH);
+        initialize_cubic_spline(orbit->dy[i], t, orbit->y[i], SPLINE_BINARY_SEARCH);
+        initialize_cubic_spline(orbit->dz[i], t, orbit->z[i], SPLINE_BINARY_SEARCH);
     }
     
     //calculate average arm length
@@ -264,14 +264,14 @@ void initialize_numeric_orbit(struct Orbit *orbit)
     free_double_matrix(x,3);
     free_double_matrix(y,3);
     free_double_matrix(z,3);
-    fprintf(stdout,"=========================================\n\n");
-    
+    fprintf(stdout,"=============================================\n");
+
 }
 
 void initialize_interpolated_analytic_orbits(struct Orbit *orbit, double Tobs, double t0)
 {
-    fprintf(stdout,"==== Initialize LISA Orbit Structure ====\n\n");
-    
+    fprintf(stdout,"\n====== Initialize LISA Orbit Structure ======\n");
+
     //store armlength & transfer frequency in orbit structure.
     orbit->L     = LARM;
     orbit->fstar = CLIGHT/(2.0*M_PI*LARM);
@@ -317,9 +317,9 @@ void initialize_interpolated_analytic_orbits(struct Orbit *orbit, double Tobs, d
     //calculate derivatives for cubic spline
     for(int i=0; i<3; i++)
     {
-        initialize_cubic_spline(orbit->dx[i],orbit->t,orbit->x[i]);
-        initialize_cubic_spline(orbit->dy[i],orbit->t,orbit->y[i]);
-        initialize_cubic_spline(orbit->dz[i],orbit->t,orbit->z[i]);
+        initialize_cubic_spline(orbit->dx[i],orbit->t,orbit->x[i], SPLINE_BINARY_SEARCH);
+        initialize_cubic_spline(orbit->dy[i],orbit->t,orbit->y[i], SPLINE_BINARY_SEARCH);
+        initialize_cubic_spline(orbit->dz[i],orbit->t,orbit->z[i], SPLINE_BINARY_SEARCH);
     }
     
     //calculate average arm length
@@ -356,18 +356,18 @@ void initialize_interpolated_analytic_orbits(struct Orbit *orbit, double Tobs, d
     L31 /= (double)orbit->Norb;
     L23 /= (double)orbit->Norb;
     
-    printf("Average arm lengths for the constellation:\n");
-    printf("  L12 = %g\n",L12);
-    printf("  L31 = %g\n",L31);
-    printf("  L23 = %g\n",L23);
+    printf("  Average arm lengths for the constellation:\n");
+    printf("   L12 = %g\n",L12);
+    printf("   L31 = %g\n",L31);
+    printf("   L23 = %g\n",L23);
     printf("\n");
     
     //are the armlenghts consistent?
     double L = (L12+L31+L23)/3.;
-    printf("Fractional deviation from average armlength for each side:\n");
-    printf("  L12 = %g\n",fabs(L12-L)/L);
-    printf("  L31 = %g\n",fabs(L31-L)/L);
-    printf("  L23 = %g\n",fabs(L23-L)/L);
+    printf("  Fractional deviation from average armlength for each side:\n");
+    printf("   L12 = %g\n",fabs(L12-L)/L);
+    printf("   L31 = %g\n",fabs(L31-L)/L);
+    printf("   L23 = %g\n",fabs(L23-L)/L);
     printf("\n");
     
     
@@ -375,8 +375,8 @@ void initialize_interpolated_analytic_orbits(struct Orbit *orbit, double Tobs, d
     free(x);
     free(y);
     free(z);
-    fprintf(stdout,"=========================================\n\n");
-    
+    fprintf(stdout,"=============================================\n");
+
 }
 
 void free_orbit(struct Orbit *orbit)
@@ -1044,25 +1044,11 @@ void LISA_spline_response(struct Orbit *orbit, double *tarray, int N, double cos
             Acm[i] = 0.5 * dcross[i] / (1.0 - kdotn[i]);
         }
         
-        // build X, Y, Z responses
-        #pragma omp parallel num_threads(3)
-        {
-            int thread_id = omp_get_thread_num();
-            switch(thread_id)
-            {
-                case 0:
-                    LISA_TDI_spline(X, Xf, 0, 1, 2, tarray, m, amp_spline, freq_spline, phase_spline, Aplus, Across, cos2psi, sin2psi, App, Apm, Acp, Acm, kdotr, L);
-                    break;
-                case 1:
-                    LISA_TDI_spline(Y, Yf, 1, 2, 0, tarray, m, amp_spline, freq_spline, phase_spline, Aplus, Across, cos2psi, sin2psi, App, Apm, Acp, Acm, kdotr, L);
-                    break;
-                case 2:
-                    LISA_TDI_spline(Z, Zf, 2, 0, 1, tarray, m, amp_spline, freq_spline, phase_spline, Aplus, Across, cos2psi, sin2psi, App, Apm, Acp, Acm, kdotr, L);
-                    break;
-                default:
-                    break;
-            }
-        }//end parallel section
+        /* build X, Y, Z responses */
+        LISA_TDI_spline(X, Xf, 0, 1, 2, tarray, m, amp_spline, freq_spline, phase_spline, Aplus, Across, cos2psi, sin2psi, App, Apm, Acp, Acm, kdotr, L);
+        LISA_TDI_spline(Y, Yf, 1, 2, 0, tarray, m, amp_spline, freq_spline, phase_spline, Aplus, Across, cos2psi, sin2psi, App, Apm, Acp, Acm, kdotr, L);
+        LISA_TDI_spline(Z, Zf, 2, 0, 1, tarray, m, amp_spline, freq_spline, phase_spline, Aplus, Across, cos2psi, sin2psi, App, Apm, Acp, Acm, kdotr, L);
+
     }//end loop over samples m
     
     /*
@@ -1070,26 +1056,12 @@ void LISA_spline_response(struct Orbit *orbit, double *tarray, int N, double cos
     */
 
     //extract_amplitude_and_phase() is removing the carrier phase
-    #pragma omp parallel num_threads(3)
-    {
-        switch(omp_get_thread_num())
-        {
-            case 0:
-                extract_amplitude_and_phase(N, tdi_amp->X, tdi_phase->X, R->X, Rf->X, phase_ref);
-                unwrap_phase(N, tdi_phase->X);
-                break;
-            case 1:
-                extract_amplitude_and_phase(N, tdi_amp->Y, tdi_phase->Y, R->Y, Rf->Y, phase_ref);
-                unwrap_phase(N, tdi_phase->Y);
-                break;
-            case 2:
-                extract_amplitude_and_phase(N, tdi_amp->Z, tdi_phase->Z, R->Z, Rf->Z, phase_ref);
-                unwrap_phase(N, tdi_phase->Z);
-                break;
-            default:
-                break;
-        }
-    }
+    extract_amplitude_and_phase(N, tdi_amp->X, tdi_phase->X, R->X, Rf->X, phase_ref);
+    extract_amplitude_and_phase(N, tdi_amp->Y, tdi_phase->Y, R->Y, Rf->Y, phase_ref);
+    extract_amplitude_and_phase(N, tdi_amp->Z, tdi_phase->Z, R->Z, Rf->Z, phase_ref);
+    unwrap_phase(N, tdi_phase->X);
+    unwrap_phase(N, tdi_phase->Y);
+    unwrap_phase(N, tdi_phase->Z);
     
     free(App);
     free(Apm);
@@ -1330,9 +1302,11 @@ void copy_tdi(struct TDI *origin, struct TDI *copy)
     copy->N        = origin->N;
     copy->Nchannel = origin->Nchannel;
     
+    /*
     memcpy(copy->A, origin->A, origin->N*sizeof(double));
     memcpy(copy->E, origin->E, origin->N*sizeof(double));
     memcpy(copy->T, origin->T, origin->N*sizeof(double));
+     */
     memcpy(copy->X, origin->X, origin->N*sizeof(double));
     memcpy(copy->Y, origin->Y, origin->N*sizeof(double));
     memcpy(copy->Z, origin->Z, origin->N*sizeof(double));
@@ -1343,9 +1317,11 @@ void copy_tdi_segment(struct TDI *origin, struct TDI *copy, int index, int N)
     copy->N        = origin->N;
     copy->Nchannel = origin->Nchannel;
     index*=2;
+    /*
     memcpy(copy->A+index, origin->A+index, N*sizeof(double));
     memcpy(copy->E+index, origin->E+index, N*sizeof(double));
     memcpy(copy->T+index, origin->T+index, N*sizeof(double));
+     */
     memcpy(copy->X+index, origin->X+index, N*sizeof(double));
     memcpy(copy->Y+index, origin->Y+index, N*sizeof(double));
     memcpy(copy->Z+index, origin->Z+index, N*sizeof(double));

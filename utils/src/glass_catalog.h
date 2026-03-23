@@ -34,7 +34,8 @@
 */
 struct Catalog
 {
-    int N; //!<number of discrete sources in catalog
+    int N;                //!<number of discrete sources in catalog
+    int NP;               //!<number of source parameters
     struct Entry **entry; //!<discrete catalog entries
 };
 
@@ -50,7 +51,7 @@ struct Entry
     char name[128];         //!<source name
     char parent[128];       //!<source parent name
     char path[1024];        //!<path to catalog entry
-    struct Source **source; //!<source structure contains parameters, defined in ucb.h
+    struct Source **source; //!<source structure contains parameters, defined in glass_model.h
     double *match;          //!<match between sample and ref. source
     double *distance;       //!<metric distance between sample and ref. source
     double evidence;        //!<source evidence
@@ -81,19 +82,10 @@ void create_empty_source(struct Catalog *catalog, int NFFT, int Nchannel);
 void create_new_source(struct Catalog *catalog, struct Source *sample, struct Noise *noise, int i, int IMAX, int NFFT, int Nchannel);
 
 /**
-\brief Adds input `sample` to existing catalog entry and increments counters.
-*/
-void append_sample_to_entry(struct Entry *entry, struct Source *sample, int IMAX, int NFFT, int Nchannel);
-
-/**
  \brief computes correlation matrix of all parameters \f$ \rho_{ij} = \frac{\langle (\theta_i - \bar\theta_i)(\theta_j - \bar\theta_j) \rangle}{\sigma_i \sigma_j} \f$
  */
 void get_correlation_matrix(struct Data *data, struct Catalog *catalog, int *detection_index, int detections, int IMAX, double **corr);
 
-/**
- \brief Wrapper for using functions in GMM_with_EM.c to represent posterior samples of `entry` as a Gaussian Mixture Model.
- */
-int gaussian_mixture_model_wrapper(double **ranges, struct Flags *flags, struct Entry *entry, char *outdir, size_t NMODE, size_t NTHIN, unsigned int *seed, double *BIC);
 
 
 

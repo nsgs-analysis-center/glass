@@ -729,13 +729,12 @@ void galaxy_modulation(struct GalaxyModulation *gm, double *params)
         xz[i] /= av;
     }
     
-    double dt = gm->t[1] - gm->t[0];
-    initialize_cubic_spline_even_sampling(gm->XX_spline, gm->t, xx, dt);
-    initialize_cubic_spline_even_sampling(gm->YY_spline, gm->t, yy, dt);
-    initialize_cubic_spline_even_sampling(gm->ZZ_spline, gm->t, zz, dt);
-    initialize_cubic_spline_even_sampling(gm->XY_spline, gm->t, xy, dt);
-    initialize_cubic_spline_even_sampling(gm->XZ_spline, gm->t, xz, dt);
-    initialize_cubic_spline_even_sampling(gm->YZ_spline, gm->t, yz, dt);
+    initialize_cubic_spline(gm->XX_spline, gm->t, xx, SPLINE_EVEN_SAMPLED);
+    initialize_cubic_spline(gm->YY_spline, gm->t, yy, SPLINE_EVEN_SAMPLED);
+    initialize_cubic_spline(gm->ZZ_spline, gm->t, zz, SPLINE_EVEN_SAMPLED);
+    initialize_cubic_spline(gm->XY_spline, gm->t, xy, SPLINE_EVEN_SAMPLED);
+    initialize_cubic_spline(gm->XZ_spline, gm->t, xz, SPLINE_EVEN_SAMPLED);
+    initialize_cubic_spline(gm->YZ_spline, gm->t, yz, SPLINE_EVEN_SAMPLED);
 
     FILE *out = fopen("modulation.dat", "w");
     for(int i=0; i<gm->N; i++)

@@ -37,6 +37,19 @@ static void print_usage()
     exit(0);
 }
 
+static void set_ucb_defaults(struct Data *data)
+{
+    data->T        = 31457280; /* one "mldc years" at 15s sampling */
+    data->t0       = 0.0; /* start time of data segment in seconds */
+    data->sqT      = sqrt(data->T);
+    data->Nlayer   = 1;
+    data->N        = (int)floor(data->T/WAVELET_DURATION)*data->Nlayer;
+    data->NFFT     = data->N/2;    data->Nchannel = 3; //1=X, 2=AE, 3=XYZ
+    data->qpad     = 0;
+    data->fmin     = 1e-4; //Hz
+    sprintf(data->basis,"wavelet");
+}
+
 /**
  * This is the main function
  *
@@ -48,9 +61,6 @@ int main(int argc, char *argv[])
     time_t start, stop;
     start = time(NULL);
     char filename[MAXSTRINGSIZE];
-
-    /* allow nested parallelization in mcmc loop (for rebuilding fstat proposal) */
-    omp_set_max_active_levels(2);
 
     /* check arguments */
     print_LISA_ASCII_art(stdout);
@@ -64,7 +74,7 @@ int main(int argc, char *argv[])
     struct Data   *data  = malloc(sizeof(struct Data));
     
     /* Parse command line and set defaults/flags */
-    sprintf(data->basis,"wavelet");
+    set_ucb_defaults(data);
     parse_data_args(argc,argv,data,orbit,flags,chain,"wavelet");
     parse_ucb_args(argc,argv,flags);
     if(flags->help) print_usage();
@@ -139,10 +149,11 @@ int main(int argc, char *argv[])
     struct Prior *prior = malloc(sizeof(struct Prior));
     if(flags->galaxyPrior) set_galaxy_prior(flags, prior);
     if(flags->update) set_gmm_prior(flags, data, prior, catalog);
+    prior->density = &evaluate_ucb_prior;
 
     /* Initialize MCMC proposals */
     struct Proposal **proposal = malloc(UCB_PROPOSAL_NPROP*sizeof(struct Proposal*));
-    initialize_proposal(orbit, data, prior, chain, flags, catalog, proposal, DMAX);
+    initialize_ucb_proposal(orbit, data, prior, chain, flags, catalog, proposal, DMAX);
     
     
     /* Initialize data models */
@@ -168,7 +179,7 @@ int main(int argc, char *argv[])
             struct Model *trial_ptr = trial[chain->index[ic]];
             copy_model(model_ptr,trial_ptr);
             
-            for(int steps=0; steps < 500; steps++)
+            for(int steps=0; steps < 10*UCB_MODEL_NP; steps++)
             {
                 //reverse jump birth/death or split/merge moves
                 if(rand_r_U_0_1(&chain->r[ic])<0.1 && flags->rj)
@@ -205,11 +216,13 @@ int main(int argc, char *argv[])
         }
         
         //store reconstructed waveform
+        /* expensive!  FFTs!!
         if(!flags->quiet)
         {
             print_waveform_draw(data, model[chain->index[0]], flags);
             print_psd_draw(data, model[chain->index[0]], flags);
         }
+        */
         
         //update run status
         if(mcmc%data->downsample==0)

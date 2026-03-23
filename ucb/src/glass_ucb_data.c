@@ -17,13 +17,7 @@
 #include <glass_utils.h>
 #include <glass_noise.h>
 
-#include "glass_ucb_model.h"
-#include "glass_ucb_io.h"
-#include "glass_ucb_catalog.h"
-#include "glass_ucb_waveform.h"
-#include "glass_ucb_fstatistic.h"
-#include "glass_ucb_data.h"
-
+#include "glass_ucb.h"
 
 void UCBInjectVerificationSet(struct Data *data, struct Orbit *orbit, struct Flags *flags, struct Source *inj)
 {
@@ -57,12 +51,6 @@ void UCBInjectVerificationSet(struct Data *data, struct Orbit *orbit, struct Fla
         }
     }
 
-    //Get noise spectrum for data segment
-    GetNoiseModel(data,orbit,flags);
-
-    //Add Gaussian noise to injection
-    if(flags->simNoise) AddNoise(data,data->tdi);
-
 }
 
 void UCBInjectVerificationSource(struct Data *data, struct Orbit *orbit, struct Flags *flags, struct Source *inj)
@@ -73,7 +61,7 @@ void UCBInjectVerificationSource(struct Data *data, struct Orbit *orbit, struct 
     FILE *fptr;
     
     /* structure for holding injection source parameters and waveforms */
-    alloc_source(inj, data->N, data->Nchannel);
+    alloc_source(inj, data->N, UCB_MODEL_NP, data->Nchannel);
     
     /* Get injection parameters */
     double f0,dfdt,costheta,phi,m1,m2,D; //read from injection file
@@ -160,9 +148,9 @@ void UCBInjectVerificationSource(struct Data *data, struct Orbit *orbit, struct 
         inj->phi      = phi;
         inj->amp      = amp;
         inj->cosi     = cosi;
-        inj->phi0     = phi0;
+        inj->phiref   = phi0;
         inj->psi      = psi;
-        map_params_to_array(inj, inj->params, data->T);
+        map_ucb_params_to_array(inj, inj->params, data->T);
         
         //save parameters to file
         sprintf(filename,"%s/injection_parameters_%i.dat",flags->runDir,ii);
@@ -306,7 +294,7 @@ void UCBInjectSimulatedSource(struct Data *data, struct Orbit *orbit, struct Fla
         {
             if(n_inj<flags->DMAX)
             {
-                alloc_source(inj_vec[n_inj], data->N, data->Nchannel);
+                alloc_source(inj_vec[n_inj], data->N, UCB_MODEL_NP, data->Nchannel);
                 inj = inj_vec[n_inj];
             }
             else
@@ -353,8 +341,8 @@ void UCBInjectSimulatedSource(struct Data *data, struct Orbit *orbit, struct Fla
                     wavelet_pixel_to_index(data->wdm,0,data->lmax,&data->wdm->kmax);
                     
                     //recompute fmin and fmax so they align with a bin
-                    data->fmin = data->lmin*WAVELET_BANDWIDTH;
-                    data->fmax = data->lmax*WAVELET_BANDWIDTH;
+                    data->fmin = f0-512./data->T;//data->lmin*WAVELET_BANDWIDTH;
+                    data->fmax = f0+512./data->T;//data->lmax*WAVELET_BANDWIDTH;
                     data->qmin = (int)(data->fmin*data->T);
                     data->qmax = data->qmin+data->NFFT;
 
@@ -387,13 +375,13 @@ void UCBInjectSimulatedSource(struct Data *data, struct Orbit *orbit, struct Fla
             inj->phi      = phi;
             inj->amp      = amp;
             inj->cosi     = cos(iota);
-            inj->phi0     = phi0;
+            inj->phiref   = phi0;
             inj->psi      = psi;
             if(UCB_MODEL_NP>8)
                 inj->d2fdt2 = 11.0/3.0*dfdt*dfdt/f0;
             //inj->d2fdt2 = fddot;
             
-            map_params_to_array(inj, inj->params, data->T);
+            map_ucb_params_to_array(inj, inj->params, data->T);
             
             //save parameters to file
             sprintf(filename,"%s/injection_parameters_%i.dat",flags->runDir,ii);
@@ -602,6 +590,19 @@ void UCBInjectSimulatedSource(struct Data *data, struct Orbit *orbit, struct Fla
     //print_data(data,flags);
 
     /* compute overlaps between injections */
+    if(!strcmp(data->basis,"fourier"))
+    {
+        printf("\n Match Matrix:\n");
+        for(int i=0; i<n_inj; i++)
+        {
+            for(int j=0; j<n_inj; j++)
+            {
+                if(i==j) printf(" %+.2e",snr(inj_vec[i],data->noise));
+                else printf(" %+.2e",waveform_match(inj_vec[i], inj_vec[j], data->noise));
+            }
+            printf("\n");
+        }
+    }
     if(!strcmp(data->basis,"wavelet"))
     {
         printf("\n Match Matrix:\n");
@@ -644,12 +645,13 @@ void GetVerificationBinary(struct Data *data, struct Flags *flags, struct Source
     amp = amplitude(Mc, f0, D);
     
     //initialize extrinsic parameters
-    phi0 = 0.0;
-    psi  = 0.0;
-    
+    unsigned int r = data->iseed;
+    phi0 = rand_r_U_0_1(&r)*M_PI*2.;
+    psi  = rand_r_U_0_1(&r)*M_PI/4.;
+
     //set bandwidth of data segment centered on injection
-    data->fmin = f0 - (data->NFFT)/data->T;
-    data->fmax = f0 + (data->NFFT)/data->T;
+    data->fmin = f0 - (data->NFFT/2)/data->T;
+    data->fmax = f0 + (data->NFFT/2)/data->T;
     data->qmin = (int)(data->fmin*data->T);
     data->qmax = data->qmin+data->NFFT;
     
@@ -664,9 +666,9 @@ void GetVerificationBinary(struct Data *data, struct Flags *flags, struct Source
     inj->phi      = phi;
     inj->amp      = amp;
     inj->cosi     = cosi;
-    inj->phi0     = phi0;
+    inj->phiref   = phi0;
     inj->psi      = psi;
-    map_params_to_array(inj, inj->params, data->T);
+    map_ucb_params_to_array(inj, inj->params, data->T);
 }
 
 

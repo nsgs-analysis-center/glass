@@ -68,6 +68,9 @@
 //! Year [s]
 #define YEAR 3.15581497632e7
 
+//! Week [s]
+#define WEEK 604800.0;
+
 //! Day [s]
 #define DAY 86400.0
 

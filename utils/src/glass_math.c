@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Tyson B. Littenberg
+ * Copyright 2023 Tyson B. Littenberg & Robert Rosati
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,10 @@
 
 #include "glass_utils.h"
 
+#define static_assert_types_equal(T1, T2) \
+    _Static_assert(_Generic((T1){0}, T2: 1, default: 0), \
+                   #T1 " != " #T2)
+
 struct CubicSpline* alloc_cubic_spline(int N)
 {
     struct CubicSpline *spline = malloc(sizeof(struct CubicSpline));
@@ -32,16 +36,12 @@ struct CubicSpline* alloc_cubic_spline(int N)
     spline->y2   = double_vector(spline->N);
     spline->y3   = double_vector(spline->N);
 
-    return spline;
-}
-struct CubicSplineEvenSampling* alloc_cubic_spline_even_sampling(int N) {
-    struct CubicSplineEvenSampling *spline = malloc(sizeof(struct CubicSplineEvenSampling));
-    spline->cspline = alloc_cubic_spline(N);
-    spline->ds = NAN; // will set this on initialization
+    spline->ds = NAN;
+
     return spline;
 }
 
-void initialize_cubic_spline(struct CubicSpline *spline, double *x, double *y)
+void initialize_cubic_spline(struct CubicSpline *spline, double *x, double *y, spline_interpolation_t interpolation_scheme )
 {
     
     //pack interpolant data {x,y} into spline structure
@@ -57,14 +57,29 @@ void initialize_cubic_spline(struct CubicSpline *spline, double *x, double *y)
     
     //compute interpolant coefficients
     spline_coefficients(spline);
+
+
+    // set the interpolation scheme
+    spline->interp_type = interpolation_scheme;
+    _Static_assert(SPLINE_INTERPOLATION_COUNT==2, "Did you add a spline interpolation scheme? Edit this switch case, it needs to be exhaustive.");
+    switch (interpolation_scheme) {
+        case SPLINE_EVEN_SAMPLED:
+            spline->ds = x[1] - x[0];
+            spline->index_lookup = &even_sampled_search;
+            // TODO: maybe just put a switch in interpolate instead, I hate this.
+            break;
+        case SPLINE_BINARY_SEARCH:
+            spline->ds = NAN;
+            spline->index_lookup = &binary_search;
+            break;
+        default:
+            fprintf(stderr, "Unknown spline interpolation type: %s\n", SPLINE_INTERPOLATION_NAMES[interpolation_scheme]);
+            exit(-2);
+            break;
+    }
     
 }
 
-void initialize_cubic_spline_even_sampling(struct CubicSplineEvenSampling *spline, double *x, double *y, double ds)
-{
-    spline->ds = ds;
-    initialize_cubic_spline(spline->cspline, x, y);
-}
 
 void free_cubic_spline(struct CubicSpline *spline)
 {
@@ -77,12 +92,6 @@ void free_cubic_spline(struct CubicSpline *spline)
     free_double_vector(spline->y2);
     free_double_vector(spline->y3);
     
-    free(spline);
-}
-
-void free_cubic_spline_even_sampling(struct CubicSplineEvenSampling *spline)
-{
-    free_cubic_spline(spline->cspline);
     free(spline);
 }
 
@@ -192,25 +201,7 @@ double spline_interpolation(struct CubicSpline *spline, double x)
     
     return a*y1 + b*y2 + c*d2y1 + d*d2y2;
     */
-    int n = binary_search(spline->x,0,spline->N,x);
-    double dx = x - spline->x[n];
-    
-    return spline->y0[n] + spline->y1[n]*dx + spline->y2[n]*dx*dx + spline->y3[n]*dx*dx*dx;
-}
-
-double spline_interpolation_even_sampling(struct CubicSplineEvenSampling *splineES, double x)
-{
-    /*
-     * The whole point of this class is are the lines below.
-     * We get fast indexing into the spline because everything is forced to be evenly sampled.
-    */
-    struct CubicSpline * spline = splineES->cspline;
-    double ds = splineES->ds;
-    int n = (int)floor((x-spline->x[0]) / ds);
-    if (n >= spline->N) {
-        fprintf(stderr, "spline extrapolation!");
-        n = spline->N-1;
-    }
+    int n = spline->index_lookup(spline->x,0,spline->N,x);
     double dx = x - spline->x[n];
     
     return spline->y0[n] + spline->y1[n]*dx + spline->y2[n]*dx*dx + spline->y3[n]*dx*dx*dx;
@@ -218,7 +209,7 @@ double spline_interpolation_even_sampling(struct CubicSplineEvenSampling *spline
 
 double spline_interpolation_deriv(struct CubicSpline *spline, double x)
 {
-    int n = binary_search(spline->x,0,spline->N,x);
+    int n = spline->index_lookup(spline->x,0,spline->N,x);
     double dx = x - spline->x[n];
     
     return spline->y1[n] + 2*spline->y2[n]*dx + 3*spline->y3[n]*dx*dx;
@@ -226,27 +217,7 @@ double spline_interpolation_deriv(struct CubicSpline *spline, double x)
 
 double spline_interpolation_deriv2(struct CubicSpline *spline, double x)
 {
-    int n = binary_search(spline->x,0,spline->N,x);
-    double dx = x - spline->x[n];
-    
-    return 2*spline->y2[n] + 6*spline->y3[n]*dx;
-}
-
-double spline_interpolation_deriv_even_sampling(struct CubicSplineEvenSampling *splineES, double x)
-{
-    struct CubicSpline * spline = splineES->cspline;
-    double ds = splineES->ds;
-    int n = (int)floor((x-spline->x[0]) / ds);
-    double dx = x - spline->x[n];
-    
-    return spline->y1[n] + 2*spline->y2[n]*dx + 3*spline->y3[n]*dx*dx;
-}
-
-double spline_interpolation_deriv2_even_sampling(struct CubicSplineEvenSampling *splineES, double x)
-{
-    struct CubicSpline * spline = splineES->cspline;
-    double ds = splineES->ds;
-    int n = (int)floor((x-spline->x[0]) / ds);
+    int n = spline->index_lookup(spline->x,0,spline->N,x);
     double dx = x - spline->x[n];
     
     return 2*spline->y2[n] + 6*spline->y3[n]*dx;
@@ -258,15 +229,6 @@ double spline_integration(struct CubicSpline *spline, double xi, double xf)
     double yi = spline_interpolation(spline, xi);
     double ym = spline_interpolation(spline, xm);
     double yf = spline_interpolation(spline, xf);
-    double dx = xf-xm;
-    return 2.0*simpson_integration_3(yi,ym,yf,dx); //TODO: check this factor of two w.r.t. simpson integration in other places
-}
-double spline_integration_even_sampling(struct CubicSplineEvenSampling *splineES, double xi, double xf)
-{
-    double xm = 0.5*(xf + xi);
-    double yi = spline_interpolation_even_sampling(splineES, xi);
-    double ym = spline_interpolation_even_sampling(splineES, xm);
-    double yf = spline_interpolation_even_sampling(splineES, xf);
     double dx = xf-xm;
     return 2.0*simpson_integration_3(yi,ym,yf,dx); //TODO: check this factor of two w.r.t. simpson integration in other places
 }
@@ -416,16 +378,52 @@ double wavelet_nwip(const double *a, const double *b, const double *invC, const 
     double arg = 0.0;
     for(int n=0; n<N; n++)
     {
-        if(list[n] > 0)
-        {
-            int k = list[n];
-            arg += a[k]*b[k]*invC[k];
-        }
-        
+        int k = list[n];
+        arg += a[k]*b[k]*invC[k];
     }
     return arg;
 }
 
+int even_sampled_search(double *array, int nmin, int nmax, double x) {
+    double dx = array[1] - array[0];
+    return (int)floor(x/dx);
+}
+double snr(struct Source *source, struct Noise *noise)
+{
+    double snr2=0.0;
+    switch(source->tdi->Nchannel)
+    {
+        case 1: //Michelson
+            snr2 += fourier_nwip(source->tdi->X,source->tdi->X,noise->invC[0][0],source->tdi->N/2);
+            break;
+        case 2: //A&E
+            snr2 += fourier_nwip(source->tdi->A,source->tdi->A,noise->invC[0][0],source->tdi->N/2);
+            snr2 += fourier_nwip(source->tdi->E,source->tdi->E,noise->invC[1][1],source->tdi->N/2);
+            break;
+        case 3: //XYZ
+            snr2 += fourier_nwip(source->tdi->X,source->tdi->X,noise->invC[0][0],source->tdi->N/2);
+            snr2 += fourier_nwip(source->tdi->Y,source->tdi->Y,noise->invC[1][1],source->tdi->N/2);
+            snr2 += fourier_nwip(source->tdi->Z,source->tdi->Z,noise->invC[2][2],source->tdi->N/2);
+            snr2 += fourier_nwip(source->tdi->X,source->tdi->Y,noise->invC[0][1],source->tdi->N/2)*2.;
+            snr2 += fourier_nwip(source->tdi->X,source->tdi->Z,noise->invC[0][2],source->tdi->N/2)*2.;
+            snr2 += fourier_nwip(source->tdi->Y,source->tdi->Z,noise->invC[1][2],source->tdi->N/2)*2.;
+            break;
+    }
+    
+    return(sqrt(snr2));
+}
+
+double snr_wavelet(struct Source *source, struct Noise *noise)
+{
+    double snr2 = 0.0;
+    snr2 += wavelet_nwip(source->tdi->X, source->tdi->X, noise->invC[0][0], source->list, source->Nlist);
+    snr2 += wavelet_nwip(source->tdi->Y, source->tdi->Y, noise->invC[1][1], source->list, source->Nlist);
+    snr2 += wavelet_nwip(source->tdi->Z, source->tdi->Z, noise->invC[2][2], source->list, source->Nlist);
+    snr2 += wavelet_nwip(source->tdi->X, source->tdi->Y, noise->invC[0][1], source->list, source->Nlist)*2;
+    snr2 += wavelet_nwip(source->tdi->X, source->tdi->Z, noise->invC[0][2], source->list, source->Nlist)*2;
+    snr2 += wavelet_nwip(source->tdi->Y, source->tdi->Z, noise->invC[1][2], source->list, source->Nlist)*2;
+    return sqrt(snr2);
+}
 
 // Recursive binary search function.
 // Return nearest smaller neighbor of x in array[nmin,nmax] is present,
@@ -610,7 +608,7 @@ void cholesky_decomp(double **A, double **L, int N)
     LAPACKE_dpotrf(LAPACK_ROW_MAJOR,'L',N,matrix,N);
     
     //copy cholesky decomposition into output matrix
-    for(int i=0; i<N; i++) for(int j=0; j<N; j++)  L[i][j] = matrix[N*i+j];
+    for(int i=0; i<N; i++) for(int j=0; j<N; j++)  L[i][j] = matrix[i*N+j];
     
     //zero upper half of matrix (copy of A)
     for(int i=0; i<N; i++) for(int j=i+1; j<N; j++) L[i][j] = 0.0;
@@ -719,6 +717,15 @@ void glass_forward_complex_fft(double *data, int N)
     free(timedata);
 }
 
+void glass_forward_complex_fft_outplace(double *timedata, double*freqdata, int N)
+{
+    static_assert_types_equal(double, kiss_fft_scalar);
+    // here N is length of freq data in complexes (so array is length 2N doubles)
+    kiss_fft_cfg cfg = kiss_fft_alloc(N, 0, NULL, NULL); // 0 indicates forward FFT;
+    kiss_fft(cfg, (kiss_fft_cpx*)timedata, (kiss_fft_cpx*)freqdata); 
+    kiss_fft_free(cfg);
+}
+
 void glass_inverse_complex_fft(double *data, int N)
 {
     kiss_fft_cfg cfg = kiss_fft_alloc(N, 1, NULL, NULL); // 1 indicates backward FFT;
@@ -737,14 +744,24 @@ void glass_inverse_complex_fft(double *data, int N)
     
     for(int i=0; i<N; i++)
     {
-        data[2*i]   = timedata[i].r;
-        data[2*i+1] = timedata[i].i;
+        data[2*i]   = timedata[i].r/N;
+        data[2*i+1] = timedata[i].i/N;
     }
     
     // Clean up and free memory
     kiss_fft_free(cfg);
     free(freqdata);
     free(timedata);
+}
+void glass_inverse_complex_fft_outplace(double *freqdata, double *timedata, int N)
+{
+    static_assert_types_equal(double, kiss_fft_scalar);
+    // here N is length of freq data in complexes (so array is length 2N doubles)
+    kiss_fft_cfg cfg = kiss_fft_alloc(N, 1, NULL, NULL); // 0 indicates forward FFT;
+    kiss_fft(cfg, (kiss_fft_cpx*)freqdata, (kiss_fft_cpx*)timedata); 
+    // fix normalization
+    for(int i=0; i<(2*N); i++)  timedata[i] /= N;
+    kiss_fft_free(cfg);
 }
 
 void glass_forward_real_fft(double *data, int N)
@@ -760,6 +777,7 @@ void glass_forward_real_fft(double *data, int N)
     kiss_fftr(cfg, timedata, freqdata);
     
     
+    // NOTE: strictly speaking, this is lacking the Nyquist bin!
     for(int i=0; i<N/2; i++)
     {
         data[2*i]   = freqdata[i].r;
@@ -773,6 +791,55 @@ void glass_forward_real_fft(double *data, int N)
     free(timedata);
 }
 
+// note that this version doesn't allocate the arrays.
+// Freq data needs room for N+2 doubles (N/2+1 complexes)
+void glass_forward_real_fft_outplace(double* timedata, double *freqdata, int N)
+{
+    static_assert_types_equal(double, kiss_fft_scalar);
+    kiss_fftr_cfg cfg = kiss_fftr_alloc(N, 0, NULL, NULL); // 0 indicates forward FFT;
+    
+    // Perform the rFFT
+    kiss_fftr(cfg, (kiss_fft_scalar*)timedata, (kiss_fft_cpx*)freqdata);
+    
+    // Clean up and free memory
+    kiss_fftr_free(cfg);
+}
+void glass_inverse_real_fft_outplace(double *freqdata, double *timedata, int N)
+{
+    static_assert_types_equal(double, kiss_fft_scalar);
+    // here N is length of time data!
+    kiss_fftr_cfg cfg = kiss_fftr_alloc(N, 1, NULL, NULL); // 0 indicates forward FFT;
+    kiss_fftri(cfg, (kiss_fft_cpx*)freqdata, (kiss_fft_scalar*)timedata); 
+    // fix normalization
+    for(int i=0; i<N; i++)  timedata[i] /= N;
+    kiss_fftr_free(cfg);
+}
+
+void glass_inverse_real_fft(double *data, int N)
+{
+    // TODO: with creative pointer casting we can probably avoid any allocs here
+    kiss_fftr_cfg cfg = kiss_fftr_alloc(N, 1, NULL, NULL); // 0 indicates forward FFT;
+    kiss_fft_scalar *timedata = malloc(N*sizeof(kiss_fft_scalar));
+    kiss_fft_cpx    *freqdata = malloc((N/2+1)*sizeof(kiss_fft_cpx));
+
+    for(int i=0; i<N/2+1; i++)
+    {
+        freqdata[i].r = data[2*i];
+        freqdata[i].i = data[2*i+1];
+    }
+    
+    // Perform the inverse rFFT
+    kiss_fftri(cfg, freqdata, timedata);
+    
+    for(int i=0; i<N; i++)  data[i] = timedata[i]/N;
+    
+    // Clean up and free memory
+    kiss_fftr_free(cfg);
+    free(timedata);
+    free(freqdata);
+}
+
+/*
 void glass_inverse_real_fft(double *data, int N)
 {
     // TODO: with creative pointer casting we can probably avoid any allocs here
@@ -796,6 +863,7 @@ void glass_inverse_real_fft(double *data, int N)
     free(timedata);
     free(freqdata);
 }
+*/
 
 void CubicSplineGLASS(int N, double *x, double *y, int Nint, double *xint, double *yint)
 {
@@ -804,7 +872,7 @@ void CubicSplineGLASS(int N, double *x, double *y, int Nint, double *xint, doubl
     struct CubicSpline *cspline = alloc_cubic_spline(N);
     
     /* get derivatives */
-    initialize_cubic_spline(cspline,x,y);
+    initialize_cubic_spline(cspline,x,y,SPLINE_BINARY_SEARCH);
     
     /* interpolation */
     for(int n=0; n<Nint; n++) yint[n] = spline_interpolation(cspline,xint[n]);

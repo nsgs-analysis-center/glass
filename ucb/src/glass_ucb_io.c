@@ -16,9 +16,7 @@
 
 #include <glass_utils.h>
 
-#include "glass_ucb_model.h"
-#include "glass_ucb_waveform.h"
-#include "glass_ucb_io.h"
+#include "glass_ucb.h"
 
 void print_ucb_usage()
 {
@@ -478,7 +476,7 @@ void restore_chain_state(struct Orbit *orbit, struct Data *data, struct Model **
         }
         
         generate_noise_model(data, model[n]);
-        generate_signal_model(orbit, data, model[n], -1);
+        generate_ucb_model(orbit, data, model[n], -1);
         
         if(!flags->prior)
         {
@@ -577,46 +575,6 @@ void print_chain_files(struct Data *data, struct Model **model, struct Chain *ch
     }//verbose flag
 }
 
-void scan_chain_state(struct Data *data, struct Chain *chain, struct Model *model, struct Flags *flags, FILE *fptr, int *step)
-{
-    int check = 0;
-    check += fscanf(fptr, "%i",step);
-    check += fscanf(fptr, "%i",&model->Nlive);
-    check += fscanf(fptr, "%lg",&model->logL);
-    check += fscanf(fptr, "%lg",&model->logLnorm);
-    check += fscanf(fptr, "%lg",&model->t0);
-    if(!check)
-    {
-        fprintf(stderr,"Error reading checkpoint files\n");
-        exit(1);
-    }
-    if(flags->verbose)
-    {
-        for(int i=0; i<model->Nlive; i++)
-        {
-            scan_source_params(data,model->source[i],fptr);
-        }
-    }
-    
-}
-
-void print_chain_state(struct Data *data, struct Chain *chain, struct Model *model, struct Flags *flags, FILE *fptr, int step)
-{
-    fprintf(fptr, "%i ",step);
-    fprintf(fptr, "%i ",model->Nlive);
-    fprintf(fptr, "%lg ",model->logL);
-    fprintf(fptr, "%lg ",model->logLnorm);
-    fprintf(fptr, "%.12g ",model->t0);
-    if(flags->verbose)
-    {
-        for(int i=0; i<model->Nlive; i++)
-        {
-            print_source_params(data,model->source[i],fptr);
-        }
-    }
-    fprintf(fptr, "\n");
-}
-
 void scan_calibration_state(struct Data *data, struct Model *model, FILE *fptr, int *step)
 {
     int check = fscanf(fptr, "%i %lg %lg",step, &model->logL,&model->logLnorm);
@@ -693,7 +651,7 @@ void print_psd_state(struct Data *data, struct Model *model, FILE *fptr, int ste
 void print_source_params(struct Data *data, struct Source *source, FILE *fptr)
 {
     //map to parameter names (just to make code readable)
-    map_array_to_params(source, source->params, data->T);
+    map_array_to_ucb_params(source, source->params, data->T);
     
     fprintf(fptr,"%.16g ",source->f0);
     fprintf(fptr,"%.12g ",source->dfdt);
@@ -702,7 +660,7 @@ void print_source_params(struct Data *data, struct Source *source, FILE *fptr)
     fprintf(fptr,"%.12g ",source->costheta);
     fprintf(fptr,"%.12g ",source->cosi);
     fprintf(fptr,"%.12g ",source->psi);
-    fprintf(fptr,"%.12g ",source->phi0);
+    fprintf(fptr,"%.12g ",source->phiref);
     if(UCB_MODEL_NP>8)
         fprintf(fptr,"%.12g ",source->d2fdt2);
 }
@@ -717,7 +675,7 @@ void scan_source_params(struct Data *data, struct Source *source, FILE *fptr)
     check+=fscanf(fptr,"%lg",&source->costheta);
     check+=fscanf(fptr,"%lg",&source->cosi);
     check+=fscanf(fptr,"%lg",&source->psi);
-    check+=fscanf(fptr,"%lg",&source->phi0);
+    check+=fscanf(fptr,"%lg",&source->phiref);
     if(UCB_MODEL_NP>8)
         check+=fscanf(fptr,"%lg",&source->d2fdt2);
     
@@ -728,7 +686,7 @@ void scan_source_params(struct Data *data, struct Source *source, FILE *fptr)
     }
     
     //map to parameter names (just to make code readable)
-    map_params_to_array(source, source->params, data->T);
+    map_ucb_params_to_array(source, source->params, data->T);
     
 }
 
@@ -737,7 +695,7 @@ void save_waveforms(struct Data *data, struct Model *model, int mcmc)
     int n_re,n_im;
     double A_re,A_im,E_re,E_im,X_re,X_im,Y_re,Y_im,Z_re,Z_im,R_re,R_im;
     
-    if(!strcmp(data->format,"fourier"))
+    if(!strcmp(data->basis,"fourier"))
     {
         switch(data->Nchannel)
         {
@@ -889,47 +847,7 @@ void save_waveforms(struct Data *data, struct Model *model, int mcmc)
     }
 }
 
-void print_waveform(struct Data *data, struct Model *model, FILE *fptr)
-{
-    for(int n=0; n<data->NFFT; n++)
-    {
-        int re = 2*n;
-        int im = re+1;
-        double f = data->fmin + (double)n/data->T;
 
-        fprintf(fptr,"%.12g ",f);
-        switch(data->Nchannel)
-        {
-            case 2:
-                fprintf(fptr,"%.12g ",data->tdi->A[re]*data->tdi->A[re] + data->tdi->A[im]*data->tdi->A[im]);
-                fprintf(fptr,"%.12g ",data->tdi->E[re]*data->tdi->E[re] + data->tdi->E[im]*data->tdi->E[im]);
-                
-                fprintf(fptr,"%.12g ",model->tdi->A[re]*model->tdi->A[re] + model->tdi->A[im]*model->tdi->A[im]);
-                fprintf(fptr,"%.12g ",model->tdi->E[re]*model->tdi->E[re] + model->tdi->E[im]*model->tdi->E[im]);
-                
-                fprintf(fptr,"%.12g ",(data->tdi->A[re]-model->tdi->A[re])*(data->tdi->A[re]-model->tdi->A[re]) + (data->tdi->A[im]-model->tdi->A[im])*(data->tdi->A[im]-model->tdi->A[im]) );
-                fprintf(fptr,"%.12g ",(data->tdi->E[re]-model->tdi->E[re])*(data->tdi->E[re]-model->tdi->E[re]) + (data->tdi->E[im]-model->tdi->E[im])*(data->tdi->E[im]-model->tdi->E[im]) );
-                
-                break;
-            case 3:
-                fprintf(fptr,"%.12g ",data->tdi->X[re]*data->tdi->X[re] + data->tdi->X[im]*data->tdi->X[im]);
-                fprintf(fptr,"%.12g ",data->tdi->Y[re]*data->tdi->Y[re] + data->tdi->Y[im]*data->tdi->Y[im]);
-                fprintf(fptr,"%.12g ",data->tdi->Z[re]*data->tdi->Z[re] + data->tdi->Z[im]*data->tdi->Z[im]);
-
-                fprintf(fptr,"%.12g ",model->tdi->X[re]*model->tdi->X[re] + model->tdi->X[im]*model->tdi->X[im]);
-                fprintf(fptr,"%.12g ",model->tdi->Y[re]*model->tdi->Y[re] + model->tdi->Y[im]*model->tdi->Y[im]);
-                fprintf(fptr,"%.12g ",model->tdi->Z[re]*model->tdi->Z[re] + model->tdi->Z[im]*model->tdi->Z[im]);
-                
-                fprintf(fptr,"%.12g ",(data->tdi->X[re]-model->tdi->X[re])*(data->tdi->X[re]-model->tdi->X[re]) + (data->tdi->X[im]-model->tdi->X[im])*(data->tdi->X[im]-model->tdi->X[im]) );
-                fprintf(fptr,"%.12g ",(data->tdi->Y[re]-model->tdi->Y[re])*(data->tdi->Y[re]-model->tdi->Y[re]) + (data->tdi->Y[im]-model->tdi->Y[im])*(data->tdi->Y[im]-model->tdi->Y[im]) );
-                fprintf(fptr,"%.12g ",(data->tdi->Z[re]-model->tdi->Z[re])*(data->tdi->Z[re]-model->tdi->Z[re]) + (data->tdi->Z[im]-model->tdi->Z[im])*(data->tdi->Z[im]-model->tdi->Z[im]) );
-
-                break;
-        }
-        fprintf(fptr,"\n");
-        //    }
-    }
-}
 
 void print_waveform_strain(struct Data *data, struct Model *model, FILE *fptr)
 {
@@ -964,13 +882,16 @@ void print_waveform_strain(struct Data *data, struct Model *model, FILE *fptr)
     }
     if(!strcmp(data->basis,"wavelet"))
     {
-        for(int j=0; j<data->wdm->NF; j++)
+        for(int j=data->lmin; j<data->lmax; j++)
         {
             for(int i=0; i<data->wdm->NT; i++)
             {
+                double f = j*data->wdm->df;
+                double t = i*data->wdm->dt;
                 int k;
                 wavelet_pixel_to_index(data->wdm, i, j, &k);
-                fprintf(fptr,"%.12g %.12g ",i*WAVELET_DURATION,j*WAVELET_BANDWIDTH + WAVELET_BANDWIDTH/2);
+                k-=data->wdm->kmin;
+                fprintf(fptr,"%.12g %.12g ",t,f);
                 fprintf(fptr,"%.12g ",model->tdi->X[k]);
                 fprintf(fptr,"%.12g ",model->tdi->Y[k]);
                 fprintf(fptr,"%.12g ",model->tdi->Z[k]);
@@ -981,17 +902,6 @@ void print_waveform_strain(struct Data *data, struct Model *model, FILE *fptr)
     }
 }
 
-
-void print_waveform_draw(struct Data *data, struct Model *model, struct Flags *flags)
-{
-    FILE *fptr;
-    char filename[128];
-    
-    sprintf(filename,"%s/waveform_draw.dat",data->dataDir);
-    fptr=fopen(filename,"w");
-    print_waveform(data, model, fptr);
-    fclose(fptr);
-}
 void print_waveforms_reconstruction(struct Data *data, struct Flags *flags)
 {
     char filename[1024];

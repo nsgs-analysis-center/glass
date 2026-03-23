@@ -15,8 +15,9 @@
  */
 
 #include <glass_utils.h>
+#include "glass_mbh.h"
 #include "glass_mbh_IMRPhenom.h"
-#include "glass_mbh_waveform.h"
+
 #define NSETUP 7 //size of setup array for wdm trasnform
 
 double mbh_final_spin(double *params)
@@ -172,7 +173,9 @@ static double * mbh_time_frequency_grid(double *params, int *N, int *Nc)
         if(fabs(remainder(omega[Nwork],omega_star)/omega[Nwork] ) < 5.0e-2) //close enough to transfer frequency to take small steps
             dt = dPhase_fstar/omega[Nwork];
         else
-            dt = dPhase/omega[Nwork];        if(dt > dt_max) dt = dt_max;
+            dt = dPhase/omega[Nwork];
+
+        if(dt > dt_max) dt = dt_max;
         if(dt < dt_min) dt = dt_min;
         if(dt < dt_min) dt = dt_min;
 
@@ -220,8 +223,8 @@ static void reconstruct_td_waveform(double Tobs, double t0, double *time_ssb, st
     struct CubicSpline *amp_interpolant   = alloc_cubic_spline(Nspline);
     struct CubicSpline *phase_interpolant = alloc_cubic_spline(Nspline);
     
-    initialize_cubic_spline(amp_interpolant,   time_ssb, tdi_amp->X);
-    initialize_cubic_spline(phase_interpolant, time_ssb, tdi_phase->X);
+    initialize_cubic_spline(amp_interpolant,   time_ssb, tdi_amp->X, SPLINE_BINARY_SEARCH);
+    initialize_cubic_spline(phase_interpolant, time_ssb, tdi_phase->X,SPLINE_BINARY_SEARCH);
     
     for(n=0; n<N; n++)
     {
@@ -234,8 +237,8 @@ static void reconstruct_td_waveform(double Tobs, double t0, double *time_ssb, st
         }
     }
     
-    initialize_cubic_spline(amp_interpolant,   time_ssb, tdi_amp->Y);
-    initialize_cubic_spline(phase_interpolant, time_ssb, tdi_phase->Y);
+    initialize_cubic_spline(amp_interpolant,   time_ssb, tdi_amp->Y,SPLINE_BINARY_SEARCH);
+    initialize_cubic_spline(phase_interpolant, time_ssb, tdi_phase->Y, SPLINE_BINARY_SEARCH);
     
     for(n=0; n<N; n++)
     {
@@ -248,8 +251,8 @@ static void reconstruct_td_waveform(double Tobs, double t0, double *time_ssb, st
         }
     }
     
-    initialize_cubic_spline(amp_interpolant,   time_ssb, tdi_amp->Z);
-    initialize_cubic_spline(phase_interpolant, time_ssb, tdi_phase->Z);
+    initialize_cubic_spline(amp_interpolant,   time_ssb, tdi_amp->Z, SPLINE_BINARY_SEARCH);
+    initialize_cubic_spline(phase_interpolant, time_ssb, tdi_phase->Z, SPLINE_BINARY_SEARCH);
     
     for(n=0; n<N; n++)
     {
@@ -298,8 +301,8 @@ void mbh_td_waveform(struct Orbit *orbit, struct Wavelets *wdm, double Tobs, dou
     double *phase_ssb = double_vector(Nspline);
     double *amp_ssb   = double_vector(Nspline);
 
-    double costh = sin(params[7]); // EclipticLatitude
-    double phi  = params[8];       // EclipticLongitude
+    double costh = params[7]; // EclipticLatitude
+    double phi   = params[8]; // EclipticLongitude
     LISA_spacecraft_to_barycenter_time(orbit, costh, phi, time_sc, time_ssb, Nspline, +1);
 
     
@@ -317,8 +320,8 @@ void mbh_td_waveform(struct Orbit *orbit, struct Wavelets *wdm, double Tobs, dou
     struct CubicSpline *amp_ssb_spline   = alloc_cubic_spline(Nspline);
     struct CubicSpline *phase_ssb_spline = alloc_cubic_spline(Nspline);
     
-    initialize_cubic_spline(amp_ssb_spline,time_ssb,amp_ssb);
-    initialize_cubic_spline(phase_ssb_spline,time_ssb,phase_ssb);
+    initialize_cubic_spline(amp_ssb_spline,time_ssb,amp_ssb, SPLINE_BINARY_SEARCH);
+    initialize_cubic_spline(phase_ssb_spline,time_ssb,phase_ssb, SPLINE_BINARY_SEARCH);
     
     // trim the edge of the interpolation domain so that we don't run off the end
     n=0;
@@ -608,7 +611,7 @@ static struct TimeFrequencyTrack * wdm_time_frequency_pixels(struct Wavelets *wd
     
     // spline for t(f)
     struct CubicSpline *tf_spline = alloc_cubic_spline(N);
-    initialize_cubic_spline(tf_spline, freq, time);
+    initialize_cubic_spline(tf_spline, freq, time, SPLINE_BINARY_SEARCH);
         
     // which frequency layers
     track->min_layer = (int)floor((freq[0] - HBW)/WAVELET_BANDWIDTH);
@@ -672,8 +675,8 @@ static void reconstruct_fd_waveform(double Tobs, double *params, double *freq_gr
     struct CubicSpline *amp_interpolant   = alloc_cubic_spline(Nspline);
     struct CubicSpline *phase_interpolant = alloc_cubic_spline(Nspline);
     
-    initialize_cubic_spline(amp_interpolant,   freq_grid, tdi_amp->X);
-    initialize_cubic_spline(phase_interpolant, freq_grid, tdi_phase->X);
+    initialize_cubic_spline(amp_interpolant,   freq_grid, tdi_amp->X, SPLINE_BINARY_SEARCH);
+    initialize_cubic_spline(phase_interpolant, freq_grid, tdi_phase->X, SPLINE_BINARY_SEARCH);
     
     for(int i=0; i<N/2; i++)
     {
@@ -691,8 +694,8 @@ static void reconstruct_fd_waveform(double Tobs, double *params, double *freq_gr
         }
     }
     
-    initialize_cubic_spline(amp_interpolant,   freq_grid, tdi_amp->Y);
-    initialize_cubic_spline(phase_interpolant, freq_grid, tdi_phase->Y);
+    initialize_cubic_spline(amp_interpolant,   freq_grid, tdi_amp->Y, SPLINE_BINARY_SEARCH);
+    initialize_cubic_spline(phase_interpolant, freq_grid, tdi_phase->Y, SPLINE_BINARY_SEARCH);
     
     for(int i=0; i<N/2; i++)
     {
@@ -710,8 +713,8 @@ static void reconstruct_fd_waveform(double Tobs, double *params, double *freq_gr
         }
     }
     
-    initialize_cubic_spline(amp_interpolant,   freq_grid, tdi_amp->Z);
-    initialize_cubic_spline(phase_interpolant, freq_grid, tdi_phase->Z);
+    initialize_cubic_spline(amp_interpolant,   freq_grid, tdi_amp->Z, SPLINE_BINARY_SEARCH);
+    initialize_cubic_spline(phase_interpolant, freq_grid, tdi_phase->Z, SPLINE_BINARY_SEARCH);
     
     for(int i=0; i<N/2; i++)
     {
@@ -797,8 +800,8 @@ void mbh_fd_waveform(struct Orbit *orbit, struct Wavelets *wdm, double Tobs, dou
     struct CubicSpline *amp_ssb_spline   = alloc_cubic_spline(Nspline);
     struct CubicSpline *freq_ssb_spline  = alloc_cubic_spline(Nspline);
     
-    initialize_cubic_spline(amp_ssb_spline,time_ssb,amp_ssb);
-    initialize_cubic_spline(freq_ssb_spline,time_ssb,freq_grid);
+    initialize_cubic_spline(amp_ssb_spline,time_ssb,amp_ssb, SPLINE_BINARY_SEARCH);
+    initialize_cubic_spline(freq_ssb_spline,time_ssb,freq_grid, SPLINE_BINARY_SEARCH);
     
     /*
      get reference phase
@@ -817,7 +820,7 @@ void mbh_fd_waveform(struct Orbit *orbit, struct Wavelets *wdm, double Tobs, dou
     alloc_tdi(tdi_amp,Nspline,3);
 
     //extract extrinsic parameters from MBH parameter vector
-    double costh = sin(params[7]);
+    double costh = params[7];
     double phi   = params[8];
     double cosi  = params[10];
     double psi   = params[9];
@@ -863,20 +866,19 @@ void mbh_fd_waveform(struct Orbit *orbit, struct Wavelets *wdm, double Tobs, dou
     struct CubicSpline *phase_tdi_spline_Y = alloc_cubic_spline(Nspline);
     struct CubicSpline *phase_tdi_spline_Z = alloc_cubic_spline(Nspline);
 
-    initialize_cubic_spline(amp_tdi_spline_X,   freq_grid, tdi_amp->X);
-    initialize_cubic_spline(amp_tdi_spline_Y,   freq_grid, tdi_amp->Y);
-    initialize_cubic_spline(amp_tdi_spline_Z,   freq_grid, tdi_amp->Z);
-    initialize_cubic_spline(phase_tdi_spline_X, freq_grid, tdi_phase->X);
-    initialize_cubic_spline(phase_tdi_spline_Y, freq_grid, tdi_phase->Y);
-    initialize_cubic_spline(phase_tdi_spline_Z, freq_grid, tdi_phase->Z);
+    initialize_cubic_spline(amp_tdi_spline_X,   freq_grid, tdi_amp->X, SPLINE_BINARY_SEARCH);
+    initialize_cubic_spline(amp_tdi_spline_Y,   freq_grid, tdi_amp->Y, SPLINE_BINARY_SEARCH);
+    initialize_cubic_spline(amp_tdi_spline_Z,   freq_grid, tdi_amp->Z, SPLINE_BINARY_SEARCH);
+    initialize_cubic_spline(phase_tdi_spline_X, freq_grid, tdi_phase->X, SPLINE_BINARY_SEARCH);
+    initialize_cubic_spline(phase_tdi_spline_Y, freq_grid, tdi_phase->Y, SPLINE_BINARY_SEARCH);
+    initialize_cubic_spline(phase_tdi_spline_Z, freq_grid, tdi_phase->Z, SPLINE_BINARY_SEARCH);
 
     //also need SSB amplitude on the frequency grid (already allocated)
-    initialize_cubic_spline(amp_ssb_spline, freq_grid, amp_ssb);
+    initialize_cubic_spline(amp_ssb_spline, freq_grid, amp_ssb, SPLINE_BINARY_SEARCH);
 
     
     int N=0; //number of wavelet pixels
     int k;   //wavelet pixel index
-
 
     for(int layer=track->min_layer; layer<track->max_layer; layer++)
     {
@@ -884,27 +886,13 @@ void mbh_fd_waveform(struct Orbit *orbit, struct Wavelets *wdm, double Tobs, dou
         int nmid = track->segment_midpt[layer];
 
         //wavelet transfrom the piece of the track in this layer
-        #pragma omp parallel num_threads(3)
-        {
-            //perform different tasks based on thread ID
-            switch(omp_get_thread_num())
-            {
-                case 0:
-                    build_interpolated_waveform(track, layer, Tobs, tc, amp_ssb_spline, amp_tdi_spline_X, phase_tdi_spline_X, wave->X);
-                    wavelet_transform_segment(wdm, Nsegment, layer, wave->X);
-                    break;
-                case 1:
-                    build_interpolated_waveform(track, layer, Tobs, tc, amp_ssb_spline, amp_tdi_spline_Y, phase_tdi_spline_Y, wave->Y);
-                    wavelet_transform_segment(wdm, Nsegment, layer, wave->Y);
-                    break;
-                case 2:
-                    build_interpolated_waveform(track, layer, Tobs, tc, amp_ssb_spline, amp_tdi_spline_Z, phase_tdi_spline_Z, wave->Z);
-                    wavelet_transform_segment(wdm, Nsegment, layer, wave->Z);
-                    break;
-                default:
-                    break;
-            }
-        }
+        build_interpolated_waveform(track, layer, Tobs, tc, amp_ssb_spline, amp_tdi_spline_X, phase_tdi_spline_X, wave->X);
+        build_interpolated_waveform(track, layer, Tobs, tc, amp_ssb_spline, amp_tdi_spline_Y, phase_tdi_spline_Y, wave->Y);
+        build_interpolated_waveform(track, layer, Tobs, tc, amp_ssb_spline, amp_tdi_spline_Z, phase_tdi_spline_Z, wave->Z);
+        
+        wavelet_transform_freq_segment(wdm, Nsegment, layer, wave->X);
+        wavelet_transform_freq_segment(wdm, Nsegment, layer, wave->Y);
+        wavelet_transform_freq_segment(wdm, Nsegment, layer, wave->Z);
         
         //map to full tf grid
         for(int n=0; n<Nsegment; n++)
@@ -974,4 +962,303 @@ void mbh_fd_waveform(struct Orbit *orbit, struct Wavelets *wdm, double Tobs, dou
     free_tdi(wave);
     free_tdi(tdi_phase);
     free_tdi(tdi_amp);
+    
+    free_time_frequency_track(track);
+}
+
+void mbh_fisher(struct Orbit *orbit, struct Data *data, struct Source *source, struct Noise *noise)
+{
+    int i,j,n;
+
+    double *epsilon = double_vector(MBH_MODEL_NP);
+    // [0] ln(Mass1)  [1] ln(Mass2)  [2] Spin1 [3] Spin2 [4] phic [5] tc [6] ln(distance)
+    // [7] cosEclipticCoLatitude, [8] EclipticLongitude  [9] polarization, [10] inclination
+    epsilon[0] = 1.0e-7;
+    epsilon[1] = 1.0e-7;
+    epsilon[2] = 1.0e-7;
+    epsilon[3] = 1.0e-7;
+    epsilon[4] = 1.0e-7;
+    epsilon[5] = 1.0e-7;
+    epsilon[6] = 1.0e-7;
+    epsilon[7] = 1.0e-7;
+    epsilon[8] = 1.0e-7;
+    epsilon[9] = 1.0e-7;
+    epsilon[10] = 1.0e-7;
+
+    double *params_p = double_vector(MBH_MODEL_NP);
+    double *params_m = double_vector(MBH_MODEL_NP);
+
+    struct Source *wave_p = malloc(sizeof(struct Source));
+    struct Source *wave_m = malloc(sizeof(struct Source));
+    
+    alloc_source(wave_p, data->N, MBH_MODEL_NP, data->Nchannel);
+    alloc_source(wave_m, data->N, MBH_MODEL_NP, data->Nchannel);
+
+    // TDI variables to hold derivatives of h
+    struct TDI **dhdx = malloc(MBH_MODEL_NP*sizeof(struct TDI *));
+    for(n=0; n<MBH_MODEL_NP; n++)
+    {
+        dhdx[n] = malloc(sizeof(struct TDI));
+        alloc_tdi(dhdx[n], data->N, data->Nchannel);
+    }
+
+    for(i=0; i<MBH_MODEL_NP; i++)
+    {
+        
+        // copy parameters
+        for(j=0; j<MBH_MODEL_NP; j++)
+        {
+            wave_p->params[j] = source->params[j];
+            wave_m->params[j] = source->params[j];
+        }
+        
+        // perturb parameters
+        wave_p->params[i] += epsilon[i]/2.;
+        wave_m->params[i] -= epsilon[i]/2.;
+
+        // complete info in source structure
+        map_array_to_mbh_params(wave_p, wave_p->params);
+        map_array_to_mbh_params(wave_m, wave_m->params);
+
+        // clean up TDI arrays, just in case
+        for(j=0; j<data->N; j++)
+        {
+            wave_p->tdi->X[j]=0.0;
+            wave_p->tdi->Y[j]=0.0;
+            wave_p->tdi->Z[j]=0.0;
+            
+            wave_m->tdi->X[j]=0.0;
+            wave_m->tdi->Y[j]=0.0;
+            wave_m->tdi->Z[j]=0.0;
+
+            dhdx[i]->X[j] = 0.0;
+            dhdx[i]->Y[j] = 0.0;
+            dhdx[i]->Z[j] = 0.0;
+        }
+        
+        
+        // compute perturbed waveforms
+        mbh_fd_waveform(orbit,data->wdm,data->T, data->t0, wave_p->params, wave_p->list, &wave_p->Nlist, wave_p->tdi->X, wave_p->tdi->Y, wave_p->tdi->Z);
+        mbh_fd_waveform(orbit,data->wdm,data->T, data->t0, wave_m->params, wave_m->list, &wave_m->Nlist, wave_m->tdi->X, wave_m->tdi->Y, wave_m->tdi->Z);
+
+        // central differencing derivatives of waveforms w.r.t. parameters
+        for(n=0; n<wave_p->Nlist; n++)
+        {
+            int k = wave_p->list[n];
+            if(k>=0 && k<data->N)
+            {
+//                dhdx[i]->X[k] = (wave_p->tdi->X[k] - source->tdi->X[k])/epsilon[i];
+//                dhdx[i]->Y[k] = (wave_p->tdi->Y[k] - source->tdi->Y[k])/epsilon[i];
+//                dhdx[i]->Z[k] = (wave_p->tdi->Z[k] - source->tdi->Z[k])/epsilon[i];
+                dhdx[i]->X[k] = (wave_p->tdi->X[k] - wave_m->tdi->X[k])/epsilon[i];
+                dhdx[i]->Y[k] = (wave_p->tdi->Y[k] - wave_m->tdi->Y[k])/epsilon[i];
+                dhdx[i]->Z[k] = (wave_p->tdi->Z[k] - wave_m->tdi->Z[k])/epsilon[i];
+            }
+        }
+
+    }
+    
+    // Calculate fisher matrix
+    for(i=0; i<MBH_MODEL_NP; i++)
+    {
+        for(j=0; j<MBH_MODEL_NP; j++)
+        {
+            source->fisher_matrix[i][j]  = wavelet_nwip(dhdx[i]->X, dhdx[j]->X, noise->invC[0][0], wave_p->list, wave_p->Nlist);
+            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->Y, dhdx[j]->Y, noise->invC[1][1], wave_p->list, wave_p->Nlist);
+            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->Z, dhdx[j]->Z, noise->invC[2][2], wave_p->list, wave_p->Nlist);
+            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->X, dhdx[j]->Y, noise->invC[0][1], wave_p->list, wave_p->Nlist);
+            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->X, dhdx[j]->Z, noise->invC[0][2], wave_p->list, wave_p->Nlist);
+            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->Y, dhdx[j]->Z, noise->invC[1][2], wave_p->list, wave_p->Nlist);
+            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->Y, dhdx[j]->X, noise->invC[1][0], wave_p->list, wave_p->Nlist);
+            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->Z, dhdx[j]->X, noise->invC[2][0], wave_p->list, wave_p->Nlist);
+            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->Z, dhdx[j]->Y, noise->invC[2][1], wave_p->list, wave_p->Nlist);
+
+            
+            
+//            if(!isfinite(source->fisher_matrix[i][j]))
+//            {
+//                fprintf(stderr,"WARNING: nan matrix element (line %d of file %s)\n",__LINE__,__FILE__);
+//                fprintf(stderr, "fisher_matrix[%i][%i], Snf=[%g,%g]\n",i,j,noise->C[0][0][data->N/2],noise->C[1][1][data->N/2]);
+//                for(int k=0; k<MBH_MODEL_NP; k++)
+//                {
+//                    fprintf(stderr,"source->params[%i]=%g\n",k,source->params[k]);
+//                }
+//                source->fisher_matrix[i][j] = 10.0;
+//            }
+//            source->fisher_matrix[j][i] = source->fisher_matrix[i][j];
+        }
+    }
+    
+    // Calculate eigenvalues and eigenvectors of fisher matrix
+    matrix_eigenstuff(source->fisher_matrix, source->fisher_evectr, source->fisher_evalue, MBH_MODEL_NP);
+    
+    free_source(wave_p);
+    free_source(wave_m);
+
+    for(n=0; n<MBH_MODEL_NP; n++) free_tdi(dhdx[n]);
+    free(dhdx);
+    
+    
+    free_double_vector(epsilon);
+    free_double_vector(params_p);
+    free_double_vector(params_m);
+}
+
+double mbh_Fstat_logL(struct Orbit *orbit, struct Data *data, double *params)
+{
+
+    /* compute filters A_i */
+    
+    int Nfilter = 4;
+    
+    struct Source **A = malloc(Nfilter*(sizeof(struct Source *)));
+    for(int i=0; i<Nfilter; i++)
+    {
+        A[i] = malloc(sizeof(struct Source));
+        alloc_source(A[i],data->N,MBH_MODEL_NP,data->Nchannel);
+    }
+    
+    //set parameters for each filter
+    for(int i=0; i<Nfilter; i++)
+    {
+        // blindly copy all source parameters into work space
+        for(int n=0; n<MBH_MODEL_NP; n++)
+            A[i]->params[n] = params[n];
+        
+        // set inclination for filter calculation
+        A[i]->params[10] = 0.0; //cosi
+        
+        switch(i)
+        {
+            case 0:
+                A[i]->params[9] = 0;      //polarization
+                A[i]->params[4] = 0;      //reference phase
+                break;
+            case 1:
+                A[i]->params[9] = M_PI_4; //polarization
+                A[i]->params[4] = M_PI;   //reference phase
+                break;
+            case 2:
+                A[i]->params[9] = 0;       //polarization
+                A[i]->params[4] = 3*M_PI_2;//reference phase
+                break;
+            case 3:
+                A[i]->params[9] = M_PI_4;  //polarization
+                A[i]->params[4] = M_PI_2;  //reference phase
+                break;
+            default:
+                break;
+        }
+
+        map_array_to_mbh_params(A[i], A[i]->params);
+        mbh_fd_waveform(orbit,data->wdm,data->T, data->t0, A[i]->params, A[i]->list, &A[i]->Nlist, A[i]->tdi->X, A[i]->tdi->Y, A[i]->tdi->Z);
+
+        //catch waveforms that are out of band
+        if(A[i]->Nlist==0) return 1.0;
+        
+    }
+    
+    /* compute vectors N_i = (s|A_i) */
+    double *N = double_vector(Nfilter);
+
+    for(int i=0; i<Nfilter; i++)
+    {
+        N[i] += wavelet_nwip(data->tdi->X, A[i]->tdi->X, data->noise->invC[0][0], A[i]->list, A[i]->Nlist);
+        N[i] += wavelet_nwip(data->tdi->Y, A[i]->tdi->Y, data->noise->invC[1][1], A[i]->list, A[i]->Nlist);
+        N[i] += wavelet_nwip(data->tdi->Z, A[i]->tdi->Z, data->noise->invC[2][2], A[i]->list, A[i]->Nlist);
+        N[i] += wavelet_nwip(data->tdi->X, A[i]->tdi->Y, data->noise->invC[0][1], A[i]->list, A[i]->Nlist);
+        N[i] += wavelet_nwip(data->tdi->X, A[i]->tdi->Z, data->noise->invC[0][2], A[i]->list, A[i]->Nlist);
+        N[i] += wavelet_nwip(data->tdi->Y, A[i]->tdi->Z, data->noise->invC[1][2], A[i]->list, A[i]->Nlist);
+        N[i] += wavelet_nwip(data->tdi->Y, A[i]->tdi->X, data->noise->invC[1][0], A[i]->list, A[i]->Nlist);
+        N[i] += wavelet_nwip(data->tdi->Z, A[i]->tdi->X, data->noise->invC[2][0], A[i]->list, A[i]->Nlist);
+        N[i] += wavelet_nwip(data->tdi->Z, A[i]->tdi->Y, data->noise->invC[2][1], A[i]->list, A[i]->Nlist);
+    }
+
+    /* compute matrix M_ij = (A_i|A_j) */
+    double **M = double_matrix(Nfilter,Nfilter);
+    for(int i=0; i<Nfilter; i++)
+    {
+        for(int j=0; j<Nfilter; j++) //Mij symmetric so this could be faster
+        {
+            int *list = int_vector(data->N);
+            int Nlist;
+            list_union(A[i]->list, A[j]->list, A[i]->Nlist, A[j]->Nlist, list, &Nlist);
+
+            M[i][j] += wavelet_nwip(A[i]->tdi->X, A[j]->tdi->X, data->noise->invC[0][0], list, Nlist);
+            M[i][j] += wavelet_nwip(A[i]->tdi->Y, A[j]->tdi->Y, data->noise->invC[1][1], list, Nlist);
+            M[i][j] += wavelet_nwip(A[i]->tdi->Z, A[j]->tdi->Z, data->noise->invC[2][2], list, Nlist);
+            M[i][j] += wavelet_nwip(A[i]->tdi->X, A[j]->tdi->Y, data->noise->invC[0][1], list, Nlist);
+            M[i][j] += wavelet_nwip(A[i]->tdi->X, A[j]->tdi->Z, data->noise->invC[0][2], list, Nlist);
+            M[i][j] += wavelet_nwip(A[i]->tdi->Y, A[j]->tdi->Z, data->noise->invC[1][2], list, Nlist);
+            M[i][j] += wavelet_nwip(A[i]->tdi->Y, A[j]->tdi->X, data->noise->invC[1][0], list, Nlist);
+            M[i][j] += wavelet_nwip(A[i]->tdi->Z, A[j]->tdi->X, data->noise->invC[2][0], list, Nlist);
+            M[i][j] += wavelet_nwip(A[i]->tdi->Z, A[j]->tdi->Y, data->noise->invC[2][1], list, Nlist);
+
+            free(list);
+        }
+    }
+    
+    //invert M-matrix
+    invert_matrix(M,Nfilter);
+
+    /*
+     get logL = N * M^-1 * N
+     and a_{i}'s associated with filters to get the F-stat ML parameters
+     */
+    double *a = double_vector(Nfilter);
+
+    double logL = 0.0;
+    for(int i=0; i<Nfilter; i++)
+    {
+        for(int j=0; j<Nfilter; j++)
+        {
+            logL += N[i]*M[i][j]*N[j]; //also ignoring symmetry
+            a[i] += M[i][j]*N[j];
+        }
+    }
+    
+    /* Get maximized parameters */
+    
+    //some helper variables
+    double x = (a[0]+a[3]);
+    double y = (a[1]-a[2]);
+    double u = (a[0]-a[3]);
+    double v = (a[1]+a[2]);
+    double x2 = x*x;
+    double y2 = y*y;
+    double u2 = u*u;
+    double v2 = v*v;
+    
+    double Aplus  = sqrt(x2+y2)+sqrt(u2+v2);
+    double Across = sqrt(x2+y2)-sqrt(u2+v2);
+    double Atotal = Aplus + sqrt(Aplus*Aplus-Across*Across);
+
+    double cosi = Across/Atotal;
+    double scale = 4.0/Atotal;
+
+    double phi_x = atan2(y,x);
+    double phi_y = atan2(-v,u);
+    double psi = 0.25*(phi_y-phi_x);
+    while(psi < 0.0)  psi += M_PI;
+    while(psi > M_PI) psi -= M_PI;
+    
+    double phase = 0.25*(phi_x+phi_y);
+    while(phase < 0.0)  phase += M_PI;
+    while(phase > M_PI) phase -= M_PI;
+    
+    // replace input parameters w/ maximized values
+    params[10] = cosi;       //cos inclination
+    params[9]  = psi;        //polarization
+    params[6] += log(scale); //logD
+    params[4]  = phase;      //reference phase
+    
+    
+    for(int i=0; i<Nfilter; i++) free_source(A[i]);
+    free(A);
+
+    free_double_vector(N);
+    free_double_vector(a);
+    free_double_matrix(M,Nfilter);
+
+    return logL;
 }

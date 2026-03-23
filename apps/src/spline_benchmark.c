@@ -1,4 +1,4 @@
-#include <glass_math.h>
+#include <glass_utils.h>
 #include <math.h>
 #include <time.h>
 #include <stdio.h>
@@ -16,18 +16,20 @@ int main(int argc, char** argv) {
         y[i] = sin(2*M_PI*0.1*i);
     }
 
-    struct CubicSplineEvenSampling *splineES = alloc_cubic_spline_even_sampling(2*N);
+    struct CubicSpline *spline = alloc_cubic_spline(2*N);
 
-    initialize_cubic_spline_even_sampling(splineES, x, y, 1.0);
+    initialize_cubic_spline(spline, x, y, SPLINE_EVEN_SAMPLED);
 
     clock_t start = clock();
     for (int i=0; i<N; i++) {
-        yp[i] = spline_interpolation_even_sampling(splineES, i+0.1);
+        yp[i] = spline_interpolation(spline, i+0.1);
     }
     clock_t end = clock();
+    spline->interp_type = SPLINE_BINARY_SEARCH;
+    spline->index_lookup = &binary_search;
     clock_t start2 = clock();
     for (int i=0; i<N; i++) {
-        yp2[i] = spline_interpolation(splineES->cspline, i+0.1);
+        yp2[i] = spline_interpolation(spline, i+0.1);
     }
     clock_t end2 = clock();
     double errorCS = 0.0;
@@ -39,12 +41,12 @@ int main(int argc, char** argv) {
     }
     errorCS = sqrtf(errorCS);
     errorCSES = sqrtf(errorCSES);
-    printf("CubicSplineEvenSampling\n\ttime to interpolate %d times (in input data of size %d): %lf\n", N, 2*N, (double)(end-start)/CLOCKS_PER_SEC);
+    printf("CubicSpline with (%s) interpolation:\n\ttime to interpolate %d times (in input data of size %d): %lf\n", SPLINE_INTERPOLATION_NAMES[SPLINE_EVEN_SAMPLED], N, 2*N, (double)(end-start)/CLOCKS_PER_SEC);
     printf("\terror: %lg (%lg per point)\n", errorCSES, errorCSES/N);
-    printf("CubicSpline\n\ttime to interpolate %d times (in input data of size %d): %lf\n", N, 2*N, (double)(end2-start2)/CLOCKS_PER_SEC);
+    printf("CubicSpline with %s interpolation:\n\ttime to interpolate %d times (in input data of size %d): %lf\n",SPLINE_INTERPOLATION_NAMES[SPLINE_BINARY_SEARCH], N, 2*N, (double)(end2-start2)/CLOCKS_PER_SEC);
     printf("\terror: %lg (%lg per point)\n", errorCS, errorCS/N);
 
 
-    free_cubic_spline_even_sampling(splineES);
+    free_cubic_spline(spline);
     return 0;
 };
