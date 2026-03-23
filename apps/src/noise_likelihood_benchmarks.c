@@ -26,7 +26,7 @@
 
 #define NTOT 10
 #define NBINS 20
-#define NFFT_TEST (1536*7)
+#define NFFT_TEST (1536*10)
 
 // TODO this wavelet logic is only actually different in the loop. must be a way to combine them?
 void whitening_test_wavelet(const struct Data* data)
@@ -168,6 +168,21 @@ int write_fft_data(double df, int NFFT, double* data, char* fname) {
     return 0;
 }
 
+int write_time_data(double dt, int N, double* data, char* fname) {
+    FILE *fptr = NULL;
+    fptr = fopen(fname,"w");
+    if (!fptr) {
+        fprintf(stderr, "Couldn't open %s for writing!\n", fname);
+        return 1;
+    }
+    for (int i=0; i<N; i++) {
+            double f = i*dt;
+            fprintf(fptr,"%lg ",f);
+            fprintf(fptr,"%lg" ,data[i]);
+            fprintf(fptr,"\n");
+    }
+    return 0;
+}
 int main(int argc, char *argv[])
 {
 
@@ -225,7 +240,20 @@ int main(int argc, char *argv[])
     wavelet_transform_inverse_fourier(&wdm, &test_data);
     write_fft_data(1./T, NFFT_TEST/2, &test_data, "./dbg_wdmfft_impulse.dat");
     write_fft_data(1./T, NFFT_TEST/2, &test_data_copy, "./dbg_fft_impulse.dat");
-
+    glass_inverse_real_fft(&test_data, NFFT_TEST);
+    write_time_data(T/NFFT_TEST, NFFT_TEST, &test_data, "./dbg_invwdm_impulse.dat");
+    // try to fourier directly
+    memset(test_data, 0, NFFT_TEST*sizeof(double));
+    test_data[0] = 1.0;
+    // could window here, but let's not for reversibility
+    /*
+    glass_forward_real_fft(&test_data, NFFT_TEST);
+    wavelet_transform_fourier(&wdm, &test_data);
+    write_wdm_data(&wdm, &test_data, "./dbg_fftwdm_impulse.dat");
+    wavelet_transform_inverse_fourier(&wdm, &test_data);
+    write_fft_data(1./T, NFFT_TEST/2, &test_data, "./dbg_invfftwdm_impulse.dat");
+    */
+    /*
     perfect = true;
     printf("WDM(impulse)->FFT vs FFT(impulse):\n");
     for (int i=0; i<NFFT_TEST; i++) {
@@ -239,7 +267,7 @@ int main(int argc, char *argv[])
     }
     if (perfect)
         printf("\tMatches within atol=%g\n", atol);
-    
+    */
     
 
 

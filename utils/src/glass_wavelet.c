@@ -344,6 +344,148 @@ void wavelet_transform(struct Wavelets *wdm, double *data)
     free_double_matrix(wave,wdm->NT);
 }
 
+/*
+def transform_wavelet_freq(data: NDArray[np.complex128], Nf: int, Nt: int, nx: float = 4.0) -> NDArray[np.float64]:
+    """Do the wavelet transform using the fast wavelet domain transform"""
+    assert len(data.shape) == 1, 'Only 1D Arrays supported currently'
+    phif: NDArray[np.float64] = 2 / Nf * phitilde_vec_norm(Nf, Nt, nx)
+    return transform_wavelet_freq_helper(data, Nf, Nt, phif)
+def transform_wavelet_freq_helper(
+    data: NDArray[np.complex128],
+    Nf: int,
+    Nt: int,
+    phif: NDArray[np.float64],
+) -> NDArray[np.float64]:
+    """Helper to do the wavelet transform using the fast wavelet domain transform"""
+    assert len(data.shape) == 1, 'Only support 1D Arrays currently'
+    assert len(phif.shape) == 1, 'phif must be 1D'
+    wave = np.zeros((Nt, Nf))  # wavelet wavepacket transform of the signal
+
+    DX = np.zeros(Nt, dtype=np.complex128)
+    for m in range(Nf + 1):
+        DX_assign_loop(m, Nt, Nf, DX, data, phif)
+        DX_trans = fft.ifft(DX, Nt)
+        DX_unpack_loop(m, Nt, Nf, DX_trans, wave)
+    return wave
+@njit()
+def DX_assign_loop(
+    m: int,
+    Nt: int,
+    Nf: int,
+    DX: NDArray[np.complex128],
+    data: NDArray[np.complex128],
+    phif: NDArray[np.float64],
+) -> None:
+    """Helper for assigning DX in the main loop"""
+    assert len(DX.shape) == 1, 'Storage array must be 1D'
+    assert len(data.shape) == 1, 'Data must be 1D'
+    assert len(phif.shape) == 1, 'Phi array must be 1D'
+
+    i_base: int = int(Nt // 2)
+    jj_base: int = int(m * Nt // 2)
+
+    if m in (0, Nf):
+        # NOTE this term appears to be needed to recover correct constant (at least for m=0) but was previously missing
+        DX[Nt // 2] = phif[0] * data[int(m * Nt // 2)] / 2.0
+    else:
+        DX[Nt // 2] = phif[0] * data[int(m * Nt // 2)]
+
+    for jj in range(jj_base + 1 - int(Nt // 2), jj_base + int(Nt // 2)):
+        j: int = int(np.abs(jj - jj_base))
+        i: int = i_base - jj_base + jj
+        if (m == Nf and jj > jj_base) or (m == 0 and jj < jj_base):
+            DX[i] = 0.0
+        elif j == 0:
+            continue
+        else:
+            DX[i] = phif[j] * data[jj]
+
+
+@njit()
+def DX_unpack_loop(m: int, Nt: int, Nf: int, DX_trans: NDArray[np.complex128], wave: NDArray[np.float64]) -> None:
+    """Helper for unpacking fftd DX in main loop"""
+    assert len(DX_trans.shape) == 1, 'Data array must be 1D'
+    assert len(wave.shape) == 2, 'Output array must be 2D'
+    if m == 0:
+        # half of lowest and highest frequency bin pixels are redundant
+        # so store them in even and odd components of m=0 respectively
+        for n in range(0, Nt, 2):
+            wave[n, 0] = DX_trans[n].real * np.sqrt(2.0)
+    elif m == Nf:
+        for n in range(0, Nt, 2):
+            wave[n + 1, 0] = DX_trans[n].real * np.sqrt(2.0)
+    else:
+        for n in range(Nt):
+            if m % 2:
+                if (n + m) % 2:
+                    wave[n, m] = -DX_trans[n].imag
+                else:
+                    wave[n, m] = DX_trans[n].real
+            elif (n + m) % 2:
+                wave[n, m] = DX_trans[n].imag
+            else:
+                wave[n, m] = DX_trans[n].real
+*/
+/*
+void wavelet_transform_fourier(struct Wavelets *wdm, double *fftdata, double* wave) {
+    // phif: NDArray[np.float64] = 2 / Nf * phitilde_vec_norm(Nf, Nt, nx)
+    // nx = 4.0
+
+    int k;
+    int nx = WAVELET_FILTER_CONSTANT;
+    // phif: NDArray[np.float64] = 2 / Nf * phitilde_vec_norm(Nf, Nt, nx)
+    // nx = 4.0
+
+    double DX[wdm->NT];
+    for (int m=0; m<wdm->NF+1; m++) {
+        int ibase = wdm->NT/2;
+        int jjbase = (m*wdm->NT)/2; // integer math
+        if (m == 0 or m == wdm->NF) {
+            DX[ibase] = phif[0] * data[jjbase] / 2.0;
+        } else {
+            DX[ibase] = phif[0] * data[jjbase];
+        }
+        for (int jj= jjbase+1-ibase; j<jjbase+ibase; jj++) {
+            int j = abs(jj-jjbase);
+            int i = ibase - jjbase + jj;
+            if ((m == wdm->NF && jj > jjbase) || (m == 0 && jj < jjbase)) {
+                DX[i] = 0.0;
+            }
+            else if (j==0) {
+                continue;
+            } 
+            else {
+                DX[i] = phif[j] * data[jj];
+            }
+        }
+        double DX_trans[wdm->NT];
+        for (int i=0; i<wdm->NT; i++) {
+            DX_trans[i] = DX[i];
+        }
+        glass_inverse_complex_fft(&DX_trans, wdm->NT);
+        if (m == 0)
+            for (int n=0; n<wdm->NT; n+=2)
+                wave[n,0] = DX_trans[n].real*MSQRT_2;
+        else if (m == wdm->NF)
+            for (int n=0; n<wdm->NT; n+=2)
+                wave[n+1,0] = DX_trans[n].real*MSQRT_2;
+        else {
+            for (int n=0; i<wdm->NT; n++) {
+                if (m%2) {
+                    if ((n+m)%2)
+                        wave[n,m] = -DX_trans[n].imag;
+                    else
+                        wave[n,m] = DX_trans[n].real;
+                else if ((n+m)%2)
+                    wave[n,m] = DX_trans[n].imag
+                else
+                    wave[n,m] = DX_trans[n].real
+            }
+        }
+    }
+}
+*/
+
 void wavelet_transform_inverse_fourier(struct Wavelets *wdm, double *data)
 {
     int k;
@@ -410,7 +552,7 @@ void wavelet_transform_inverse_fourier(struct Wavelets *wdm, double *data)
     unpack_fft_output(data,work,N);
 
     //normalize -- wtf?
-    double fft_norm = 2.*sqrt(M_PI/Tobs);
+    double fft_norm = 2.*sqrt(M_PI/Tobs) * sqrt(Tobs) / LISA_CADENCE;
     for(int n=0; n<N; n++) data[n] *= fft_norm;
 
 
