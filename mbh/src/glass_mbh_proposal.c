@@ -165,7 +165,7 @@ void initialize_mbh_proposal(struct Orbit *orbit, struct Data *data, struct Prio
                 setup_differential_evolution_proposal(proposal[i]);
                 proposal[i]->function = &differential_evolution_jump;
                 proposal[i]->density  = &symmetric_density;
-                proposal[i]->weight   = 0.4;
+                proposal[i]->weight   = 0.0;
                 proposal[i]->rjweight = 0.0;
                 check   += proposal[i]->weight;
                 rjcheck += proposal[i]->rjweight;
@@ -174,7 +174,7 @@ void initialize_mbh_proposal(struct Orbit *orbit, struct Data *data, struct Prio
                 sprintf(proposal[i]->name, "fisher");
                 proposal[i]->function = &draw_from_mbh_fisher;
                 proposal[i]->density  = &symmetric_density;
-                proposal[i]->weight   = 0.4;
+                proposal[i]->weight   = 0.8;
                 proposal[i]->rjweight = 0.0;
                 check   += proposal[i]->weight;
                 rjcheck += proposal[i]->rjweight;

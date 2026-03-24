@@ -804,6 +804,7 @@ double gaussian_log_likelihood_model_norm(struct Data *data, struct Model *model
 
 double gaussian_log_likelhood_wavelet(struct Data *data, struct Model *model)
 {
+    int i,j,k;
     /*
     Form residual and sum
     */
@@ -815,23 +816,23 @@ double gaussian_log_likelhood_wavelet(struct Data *data, struct Model *model)
     memcpy(residual->X,data->tdi->X,data->N*sizeof(double));
     memcpy(residual->Y,data->tdi->Y,data->N*sizeof(double));
     memcpy(residual->Z,data->tdi->Z,data->N*sizeof(double));
-
-    
-    for(int n=0; n<data->N; n++)
-    {
-        residual->X[n] = data->tdi->X[n];
-        residual->Y[n] = data->tdi->Y[n];
-        residual->Z[n] = data->tdi->Z[n];
-    }
     
     for(int n=0; n<model->Nlist; n++)
     {
-        int k = model->list[n];
+        k = model->list[n];
+        wavelet_index_to_pixel(data->wdm,&i,&j,k+data->wdm->kmin);
         if(k>=0 && k<data->N)
         {
             residual->X[k] -= waveform->X[k];
             residual->Y[k] -= waveform->Y[k];
             residual->Z[k] -= waveform->Z[k];
+            
+            if(i < data->wdm->imin || i > data->wdm->imax)
+            {
+                residual->X[k] = 0.0;
+                residual->Y[k] = 0.0;
+                residual->Z[k] = 0.0;
+            }
         }
     }
     

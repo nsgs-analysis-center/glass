@@ -216,11 +216,13 @@ int main(int argc, char *argv[])
         }
         
         //store reconstructed waveform
+        /* expensive!  FFTs!!
         if(!flags->quiet)
         {
             print_waveform_draw(data, model[chain->index[0]], flags);
             print_psd_draw(data, model[chain->index[0]], flags);
         }
+        */
         
         //update run status
         if(mcmc%data->downsample==0)

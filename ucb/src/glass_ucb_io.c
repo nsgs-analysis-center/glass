@@ -882,13 +882,16 @@ void print_waveform_strain(struct Data *data, struct Model *model, FILE *fptr)
     }
     if(!strcmp(data->basis,"wavelet"))
     {
-        for(int j=0; j<data->wdm->NF; j++)
+        for(int j=data->lmin; j<data->lmax; j++)
         {
             for(int i=0; i<data->wdm->NT; i++)
             {
+                double f = j*data->wdm->df;
+                double t = i*data->wdm->dt;
                 int k;
                 wavelet_pixel_to_index(data->wdm, i, j, &k);
-                fprintf(fptr,"%.12g %.12g ",i*WAVELET_DURATION,j*WAVELET_BANDWIDTH + WAVELET_BANDWIDTH/2);
+                k-=data->wdm->kmin;
+                fprintf(fptr,"%.12g %.12g ",t,f);
                 fprintf(fptr,"%.12g ",model->tdi->X[k]);
                 fprintf(fptr,"%.12g ",model->tdi->Y[k]);
                 fprintf(fptr,"%.12g ",model->tdi->Z[k]);

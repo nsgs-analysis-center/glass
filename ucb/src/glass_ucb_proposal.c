@@ -586,10 +586,6 @@ double fm_shift(struct Data *data, struct Model *model, struct Source *source, s
     
     params[0] += scale*fm;
     params[2] = params[2] + -0.2 + rand_r_U_0_1(seed)*0.4;
-    params[7] -= 2.*scale*fm*fm;
-    
-    //perturb all parameters by Fisher Matrix (in liu of Jacaboian)
-    draw_from_fisher(data, model, source, proposal, params, seed);
     
     //fm shift is symmetric
     return 0.0;
