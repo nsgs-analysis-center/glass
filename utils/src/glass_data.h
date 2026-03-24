@@ -444,11 +444,23 @@ void alloc_calibration(struct Calibration *calibration);
  */
 void copy_data(struct Data *origin, struct Data *copy);
 
+/** @name MPI Send/Receive for data structure */
+///@{
+void mpi_send_data(struct Data *data, int dest);
+void mpi_receive_data(struct Data *data, int source);
+///@}
+
 /** @name Deep copy structure contents */
 ///@{
 void copy_noise(struct Noise *origin, struct Noise *copy);
 void copy_Cij(double ***origin, double ***copy, int M, int N);
 void copy_calibration(struct Calibration *origin, struct Calibration *copy);
+///@}
+
+/** @name MPI Send/Receive for noise structure */
+///@{
+void mpi_send_noise(struct Noise *noise, int dest);
+void mpi_receive_noise(struct Noise *noise, int source);
 ///@}
 
 /** @name Free memory for structures */

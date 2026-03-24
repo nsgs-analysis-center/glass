@@ -321,6 +321,105 @@ void alloc_noise(struct Noise *noise, int N, int Nlayer, int Nchannel)
     }
 }
 
+void mpi_send_noise(struct Noise *noise, int dest)
+{
+    //pack up and send integers
+    int int_values[4];
+    int_values[0] = noise->N;
+    int_values[1] = noise->kmin;
+    int_values[2] = noise->Nchannel;
+    int_values[3] = noise->Nlayer;
+    MPI_Send(&int_values, 4, MPI_INT, dest, 0, MPI_COMM_WORLD);
+    
+    //pack up and send doubles
+    int N = noise->N;
+    int Nlayer = noise->Nlayer;
+    int Nchannel = noise->Nchannel;
+    int Nsend = Nchannel*Nlayer + 3*N;
+    double *double_values = double_vector(Nsend);
+    
+    for(int n=0; n<N; n++)
+    {
+        double_values[n]     = noise->detC[n];
+        double_values[n+N]   = noise->transfer[n];
+        double_values[n+2*N] = noise->f[n];
+    }
+    for(int n=0; n<Nchannel*Nlayer; n++) double_values[n+3*N] = noise->eta[n];
+    MPI_Send(double_values, Nsend, MPI_DOUBLE, dest, 0, MPI_COMM_WORLD);
+    
+    //pack up and send covariance matrices
+    int Ncij = Nchannel*Nchannel*N;
+    Nsend = 2*Ncij;
+    double *cij_values = double_vector(Nsend);
+    int m;
+    for(int i=0; i<Nchannel; i++)
+    {
+        for(int j=0; j<Nchannel; j++)
+        {
+            for(int n=0; n<N; n++)
+            {
+                m = i*Nchannel + j*Nchannel + n;
+                cij_values[m]      = noise->C[i][j][n];
+                cij_values[m+Ncij] = noise->invC[i][j][n];
+            }
+        }
+    }
+    MPI_Send(cij_values, Nsend, MPI_DOUBLE, dest, 0, MPI_COMM_WORLD);
+
+    free_double_vector(cij_values);
+    free_double_vector(double_values);
+}
+
+void mpi_receive_noise(struct Noise *noise, int source)
+{
+    MPI_Status status;
+    
+    //receive and unpack integers
+    int int_values[4];
+    MPI_Recv(&int_values, 4, MPI_INT, source, 0, MPI_COMM_WORLD, &status);
+    noise->N        = int_values[0];
+    noise->kmin     = int_values[1];
+    noise->Nchannel = int_values[2];
+    noise->Nlayer   = int_values[3];
+    
+    //receive and unpack doubles
+    int N = noise->N;
+    int Nlayer = noise->Nlayer;
+    int Nchannel = noise->Nchannel;
+    int Nrecv = Nchannel*Nlayer + 3*N;
+    double *double_values = double_vector(Nrecv);
+    MPI_Recv(double_values, Nrecv, MPI_DOUBLE, source, 0, MPI_COMM_WORLD, &status);
+    for(int n=0; n<N; n++)
+    {
+        noise->detC[n]     = double_values[n];
+        noise->transfer[n] = double_values[n+N];
+        noise->f[n]        = double_values[n+2*N];
+    }
+    for(int n=0; n<Nchannel*Nlayer; n++) noise->eta[n] = double_values[n+3*N];
+
+    //receive and unpack covariance matrices
+    int Ncij = Nchannel*Nchannel*N;
+    Nrecv = 2*Ncij;
+    double *cij_values = double_vector(Nrecv);
+    MPI_Recv(cij_values, Nrecv, MPI_DOUBLE, source, 0, MPI_COMM_WORLD, &status);
+    int m;
+    for(int i=0; i<Nchannel; i++)
+    {
+        for(int j=0; j<Nchannel; j++)
+        {
+            for(int n=0; n<N; n++)
+            {
+                m = i*Nchannel + j*Nchannel + n;
+                noise->C[i][j][n]    = cij_values[m];
+                noise->invC[i][j][n] = cij_values[m+Ncij];
+            }
+        }
+    }
+
+    free_double_vector(double_values);
+    free_double_vector(cij_values);
+}
+
 void alloc_calibration(struct Calibration *calibration)
 {
     calibration->dampA = 0.0;
@@ -356,6 +455,79 @@ void copy_data(struct Data *origin, struct Data *copy)
     copy->t0=origin->t0;
     //TODO: need copy_wavelet
 }
+
+void mpi_send_data(struct Data *data, int dest)
+{
+    //pack up and send integers
+    int int_values[9];
+    int_values[0] = data->N;
+    int_values[1] = data->NFFT;
+    int_values[2] = data->Nchannel;
+    int_values[3] = data->Nlayer;
+    int_values[4] = data->qmin;
+    int_values[5] = data->qmax;
+    int_values[6] = data->qpad;
+    int_values[7] = data->lmin;
+    int_values[8] = data->lmax;
+    MPI_Send(&int_values, 9, MPI_INT, dest, 0, MPI_COMM_WORLD);
+    
+    //pack up send doubles
+    double double_values[9];
+    double_values[0] = data->logN;
+    double_values[1] = data->T;
+    double_values[2] = data->sqT;
+    double_values[3] = data->t0;
+    double_values[4] = data->fmin;
+    double_values[5] = data->fmax;
+    double_values[6] = data->sine_f_on_fstar;
+    double_values[7] = data->pmax;
+    double_values[8] = data->SNR2;
+    MPI_Send(&double_values, 9, MPI_DOUBLE, dest, 0, MPI_COMM_WORLD);
+    
+    //send TDI structures
+    mpi_send_tdi(data->tdi, dest);
+    mpi_send_tdi(data->raw, dest);
+    mpi_send_tdi(data->dft, dest);
+    mpi_send_tdi(data->dwt, dest);
+}
+
+void mpi_receive_data(struct Data *data, int source)
+{
+    MPI_Status status;
+    
+    //receive and unpack integers
+    int int_values[9];
+    MPI_Recv(&int_values, 9, MPI_INT, source, 0, MPI_COMM_WORLD, &status);
+    data->N        = int_values[0];
+    data->NFFT     = int_values[1];
+    data->Nchannel = int_values[2];
+    data->Nlayer   = int_values[3];
+    data->qmin     = int_values[4];
+    data->qmax     = int_values[5];
+    data->qpad     = int_values[6];
+    data->lmin     = int_values[7];
+    data->lmax     = int_values[8];
+    
+    //receive and unpack doubles
+    double double_values[9];
+    MPI_Recv(&double_values, 9, MPI_DOUBLE, source, 0, MPI_COMM_WORLD, &status);
+    data->logN            = double_values[0];
+    data->T               = double_values[1];
+    data->sqT             = double_values[2];
+    data->t0              = double_values[3];
+    data->fmin            = double_values[4];
+    data->fmax            = double_values[5];
+    data->sine_f_on_fstar = double_values[6];
+    data->pmax            = double_values[7];
+    data->SNR2            = double_values[8];
+    
+    //send TDI structures
+    mpi_receive_tdi(data->tdi, source);
+    mpi_receive_tdi(data->raw, source);
+    mpi_receive_tdi(data->dft, source);
+    mpi_receive_tdi(data->dwt, source);
+}
+
 
 void copy_noise(struct Noise *origin, struct Noise *copy)
 {

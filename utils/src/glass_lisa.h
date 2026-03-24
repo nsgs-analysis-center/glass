@@ -311,6 +311,13 @@ void copy_tdi_segment(struct TDI *origin, struct TDI *copy, int index, int N);
 void free_tdi(struct TDI *tdi);
 ///@}
 
+/** @name MPI Send/Receive for tdi structure */
+///@{
+void mpi_send_tdi(struct TDI *tdi, int dest);
+void mpi_receive_tdi(struct TDI *tdi, int source);
+///@}
+
+
 /**
  \brief HDF5 parser for LISA Data
  

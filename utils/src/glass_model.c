@@ -119,6 +119,96 @@ void copy_model_lite(struct Model *origin, struct Model *copy)
     memcpy(copy->list,origin->list,origin->Nlist*sizeof(int));
 }
 
+void mpi_send_model(struct Model *model, int dest)
+{
+    //pack up and send integers
+    int int_values[5];
+    int_values[0] = model->NP;
+    int_values[1] = model->Nmax;
+    int_values[2] = model->Neff;
+    int_values[3] = model->Nlive;
+    int_values[4] = model->Nlist;
+    MPI_Send(&int_values, 5, MPI_INT, dest, 0, MPI_COMM_WORLD);
+    MPI_Send(model->list, model->Nlist, MPI_INT, dest, 1, MPI_COMM_WORLD);
+    
+    //pack up and send doubles
+    double double_values[3];
+    double_values[0] = model->t0;
+    double_values[1] = model->logL;
+    double_values[2] = model->logLnorm;
+    MPI_Send(&double_values, 3, MPI_DOUBLE, dest, 0, MPI_COMM_WORLD);
+
+    //pack up and send priors
+    int NP = model->NP;
+    double *prior_values = double_vector(2*NP + NP);
+    for(int n=0; n<NP; n++)
+    {
+        prior_values[2*n]    = model->prior[n][0];
+        prior_values[2*n+1]  = model->prior[n][1];
+        prior_values[2*NP+n] = model->logPriorVolume[n];
+    }
+    MPI_Send(prior_values, 2*NP+NP, MPI_DOUBLE, dest, 0, MPI_COMM_WORLD);
+
+    //ship off the noise structure
+    mpi_send_noise(model->noise, dest);
+
+    //...and the TDI
+    mpi_send_tdi(model->tdi, dest);
+    mpi_send_tdi(model->residual, dest);
+
+    //...and the Source structures
+    for(int n=0; n<model->Nlive; n++)
+        mpi_send_source(model->source[n], dest);
+
+    free_double_vector(prior_values);
+}
+
+void mpi_receive_model(struct Model *model, int source)
+{
+    MPI_Status status;
+    
+    //pack up and send integers
+    int int_values[5];
+    MPI_Recv(&int_values, 5, MPI_INT, source, 0, MPI_COMM_WORLD, &status);
+    model->NP    = int_values[0];
+    model->Nmax  = int_values[1];
+    model->Neff  = int_values[2];
+    model->Nlive = int_values[3];
+    model->Nlist = int_values[4];
+    MPI_Recv(model->list, model->Nlist, MPI_INT, source, 1, MPI_COMM_WORLD, &status);
+
+    //pack up and send doubles
+    double double_values[3];
+    MPI_Recv(&double_values, 3, MPI_DOUBLE, source, 0, MPI_COMM_WORLD, &status);
+    model->t0       = double_values[0];
+    model->logL     = double_values[1];
+    model->logLnorm = double_values[2];
+
+    //pack up and send priors
+    int NP = model->NP;
+    double *prior_values = double_vector(2*NP + NP);
+    MPI_Recv(prior_values, 2*NP+NP, MPI_DOUBLE, source, 0, MPI_COMM_WORLD, &status);
+    for(int n=0; n<NP; n++)
+    {
+        model->prior[n][0]       = prior_values[2*n];
+        model->prior[n][1]       = prior_values[2*n+1];
+        model->logPriorVolume[n] = prior_values[2*NP+n];
+    }
+
+    //ship off the noise structure
+    mpi_receive_noise(model->noise, source);
+    
+    //...and the TDI
+    mpi_receive_tdi(model->tdi, source);
+    mpi_receive_tdi(model->residual, source);
+    
+    //...and the Source structures
+    for(int n=0; n<model->Nlive; n++)
+        mpi_receive_source(model->source[n], source);
+    
+    free_double_vector(prior_values);
+}
+
 void swap_model(struct Model **ptr1, struct Model **ptr2)
 {
     struct Model *temp = *ptr1; // Store the value pointed to by ptr1 in a temporary variable
@@ -385,6 +475,131 @@ void copy_source(struct Source *origin, struct Source *copy)
     copy->Nlist = origin->Nlist;
     memcpy(copy->list, origin->list, origin->Nlist*sizeof(int));
     
+}
+
+void mpi_send_source(struct Source *source, int dest)
+{
+    int NP = source->NP;
+    
+    //pack up and send integers
+    int int_values[8];
+    int_values[0] = source->NP;
+    int_values[1] = source->BW;
+    int_values[2] = source->qmin;
+    int_values[3] = source->qmax;
+    int_values[4] = source->imin;
+    int_values[5] = source->imax;
+    int_values[6] = source->Nlist;
+    int_values[7] = source->fisher_update_flag;
+    MPI_Send(&int_values, 8, MPI_INT, dest, 0, MPI_COMM_WORLD);
+    MPI_Send(source->list, source->Nlist, MPI_INT, dest, 1, MPI_COMM_WORLD);
+    
+    //pack up and send doubles
+    double double_values[17+NP];
+    double_values[0]  = source->f0;
+    double_values[1]  = source->dfdt;
+    double_values[2]  = source->d2fdt2;
+    double_values[3]  = source->amp;
+    double_values[4]  = source->psi;
+    double_values[5]  = source->cosi;
+    double_values[6]  = source->phiref;
+    double_values[7]  = source->phi;
+    double_values[8]  = source->costheta;
+    double_values[9]  = source->dL;
+    double_values[10] = source->tref;
+    double_values[11] = source->m1;
+    double_values[12] = source->m2;
+    double_values[13] = source->Mchirp;
+    double_values[14] = source->Mtotal;
+    double_values[15] = source->chi1;
+    double_values[16] = source->chi2;
+    for(int i=0; i<NP; i++) double_values[17+i] = source->params[i];
+    MPI_Send(&double_values, 17+NP, MPI_DOUBLE, dest, 0, MPI_COMM_WORLD);
+    
+    //pack fisher matrices into one big array
+    int l,m,n;
+    double *fisher_matrix_array = double_vector(2*NP*NP+NP);
+    for(int i=0; i<NP; i++)
+    {
+        n = 2*NP*NP+i;
+        for(int j=0; j<NP; j++)
+        {
+            l = NP*i+j;
+            m = NP*i+j + NP*NP;
+            fisher_matrix_array[l] = source->fisher_matrix[i][j];
+            fisher_matrix_array[m] = source->fisher_evectr[i][j];
+        }
+        fisher_matrix_array[n] = source->fisher_evalue[i];
+    }
+    MPI_Send(fisher_matrix_array, 2*NP*NP+NP, MPI_DOUBLE, dest, 0, MPI_COMM_WORLD);
+    
+    //last but not least, ship over the tdi representation of the source
+    mpi_send_tdi(source->tdi,dest);
+    
+    free_double_vector(fisher_matrix_array);
+}
+
+void mpi_receive_source(struct Source *source, int src)
+{
+    MPI_Status status;
+    
+    //receive and unpack integers
+    int int_values[8];
+    MPI_Recv(&int_values, 8, MPI_INT, src, 0, MPI_COMM_WORLD, &status);
+    source->NP = int_values[0];
+    source->BW = int_values[1];
+    source->qmin = int_values[2];
+    source->qmax = int_values[3];
+    source->imin = int_values[4];
+    source->imax = int_values[5];
+    source->Nlist = int_values[6];
+    source->fisher_update_flag = int_values[7];
+    MPI_Recv(source->list, source->Nlist, MPI_INT, src, 1, MPI_COMM_WORLD, &status);
+
+    //receive and unpack doubles
+    int NP = source->NP;
+    double double_values[17+NP];
+    MPI_Recv(&double_values, 17+NP, MPI_DOUBLE, src, 0, MPI_COMM_WORLD, &status);
+    source->f0 = double_values[0];
+    source->dfdt = double_values[1];
+    source->d2fdt2 = double_values[2];
+    source->amp = double_values[3];
+    source->psi = double_values[4];
+    source->cosi = double_values[5];
+    source->phiref = double_values[6];
+    source->phi = double_values[7];
+    source->costheta = double_values[8];
+    source->dL = double_values[9];
+    source->tref = double_values[10];
+    source->m1 = double_values[11];
+    source->m2 = double_values[12];
+    source->Mchirp = double_values[13];
+    source->Mtotal = double_values[14];
+    source->chi1 = double_values[15];
+    source->chi2 = double_values[16];
+    for(int i=0; i<NP; i++) source->params[i] = double_values[17+i];
+    
+    //receive and unpack fisher matrix data
+    int l,m,n;
+    double *fisher_matrix_array = double_vector(2*NP*NP+NP);
+    MPI_Recv(fisher_matrix_array, 2*NP*NP+NP, MPI_DOUBLE, src, 0, MPI_COMM_WORLD, &status);
+    for(int i=0; i<NP; i++)
+    {
+        n = 2*NP*NP+i;
+        for(int j=0; j<NP; j++)
+        {
+            l = NP*i+j;
+            m = NP*i+j + NP*NP;
+            source->fisher_matrix[i][j] = fisher_matrix_array[l];
+            source->fisher_evectr[i][j] = fisher_matrix_array[m];
+        }
+        source->fisher_evalue[i] = fisher_matrix_array[n];
+    }
+
+    //last but not least, receive tdi representation of the source
+    mpi_receive_tdi(source->tdi,src);
+    
+    free_double_vector(fisher_matrix_array);
 }
 
 void free_source(struct Source *source)
