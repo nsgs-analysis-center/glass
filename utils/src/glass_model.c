@@ -205,7 +205,7 @@ int compare_model(struct Model *a, struct Model *b)
     for(int n=0; n<na->Nchannel; n++)
     {
         if(na->eta[n] != nb->eta[n]) return 1;
-        for(int i=0; i<na->N; i++) if(na->detC[i] != nb->detC[i]) return 1;
+        for(int i=0; i<na->N; i++) if(na->logdetC[i] != nb->logdetC[i]) return 1;
         for(int m=n; m<na->Nchannel; m++)
         {
             for(int i=0; i<na->N; i++)
@@ -564,8 +564,8 @@ double gaussian_log_likelihood_constant_norm(struct Data *data, struct Model *mo
     double logLnorm = 0.0;
     
     //loop over time segments
-    if(!strcmp(data->basis,"fourier")) logLnorm -= (double)data->NFFT*log(model->noise->detC[0]);
-    if(!strcmp(data->basis,"wavelet")) logLnorm -= 0.5*(double)data->N*log(model->noise->detC[0]);
+    if(!strcmp(data->basis,"fourier")) logLnorm -= (double)data->NFFT*model->noise->logdetC[0];
+    if(!strcmp(data->basis,"wavelet")) logLnorm -= 0.5*(double)data->N*model->noise->logdetC[0];
     
     return logLnorm;
 }
@@ -580,7 +580,7 @@ double gaussian_log_likelihood_model_norm(struct Data *data, struct Model *model
 
     //loop over time segments
     for(int n=0; n<N; n++)
-        logLnorm -= log(model->noise->detC[n]);
+        logLnorm -= model->noise->logdetC[n];
 
     if(!strcmp(data->basis,"wavelet")) logLnorm *= 0.5;  //normalization of 1/2 for wavelet domain (sum over N, not N/2)
     

@@ -15,7 +15,7 @@ int main(int argc, char** argv) {
     struct Wavelets wdm = {0};
     initialize_wavelet(&wdm, TOBS);
 
-    wavelet_transform(&wdm, data);
+    wavelet_transform_timefreq(&wdm, data);
     
     for (int i=0; i<N; i++) {
         printf("%lg\n", data[i]);

@@ -287,8 +287,8 @@ void inline wavelet_pixel_to_index(struct Wavelets *wdm, int i, int j, int *k)
     *k = i + j*NT;
 }
 
-// Note that this is called the timefreq transform in other codes:
 // FFT first, then use the fast algorithm for FFT->WDM
+// to the user, appears to be an in-place operation
 void wavelet_transform_timefreq(struct Wavelets *wdm, double *timedata) {
     int ND = wdm->NT*wdm->NF;
     double freqdata[ND + 2]; // extra complex element
@@ -466,6 +466,7 @@ void wavelet_transform_freq_one_layer(struct Wavelets *wdm, int N, double *freqd
 
     int Nf = wdm->NF;
     int Nt = wdm->NT;
+    // TODO: which N are allowed compared to Nt?
 
     double   DX[2*N]; // length N complex array, we will ifft later
     double DX_t[2*N]; // length N complex array, result of ifft

@@ -850,7 +850,6 @@ void ReadASCII_timeseries(struct Data* data, struct TDI* tdi_dft, struct TDI* td
             
     }
     double Tobs = t;
-    double dt = Tobs / Nsamples;
 
 
     //load full dataset into TDI structure
@@ -860,28 +859,18 @@ void ReadASCII_timeseries(struct Data* data, struct TDI* tdi_dft, struct TDI* td
 
     // TODO: in principle, detrend, window here
 
-    for (int n=0; n<Nsamples; n++) {
-        tdi_dft->X[n] = tdi_td.X[n];
-        tdi_dft->Y[n] = tdi_td.Y[n];
-        tdi_dft->Z[n] = tdi_td.Z[n];
-    }
-    glass_forward_real_fft(tdi_dft->X,Nsamples);
-    glass_forward_real_fft(tdi_dft->Y,Nsamples);
-    glass_forward_real_fft(tdi_dft->Z,Nsamples);
+    glass_forward_real_fft_outplace(tdi_td.X, tdi_dft->X, Nsamples);
+    glass_forward_real_fft_outplace(tdi_td.Y, tdi_dft->Y, Nsamples);
+    glass_forward_real_fft_outplace(tdi_td.Z, tdi_dft->Z, Nsamples);
+
 
     /* Wavelet transform time-domain TDI channels */
     if(!strcmp(data->basis,"wavelet"))
     {
-        for(int n=0; n<Nsamples; n++)
-        {
-            tdi_dwt->X[n] = tdi_td.X[n];
-            tdi_dwt->Y[n] = tdi_td.Y[n];
-            tdi_dwt->Z[n] = tdi_td.Z[n];
-        }
 
-        wavelet_transform(data->wdm, tdi_dwt->X);
-        wavelet_transform(data->wdm, tdi_dwt->Y);
-        wavelet_transform(data->wdm, tdi_dwt->Z);
+        wavelet_transform_freq(data->wdm, tdi_dft->X, tdi_dwt->X); 
+        wavelet_transform_freq(data->wdm, tdi_dft->Y, tdi_dwt->Y); 
+        wavelet_transform_freq(data->wdm, tdi_dft->Z, tdi_dwt->Z); 
         
         /* populate AET channels because I can't let go */
         for(int n=0; n<Nsamples; n++) XYZ2AET(tdi_dwt->X[n], tdi_dwt->Y[n], tdi_dwt->Z[n], &tdi_dwt->A[n], &tdi_dwt->E[n], &tdi_dwt->T[n]);

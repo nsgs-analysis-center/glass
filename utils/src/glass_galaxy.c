@@ -342,12 +342,12 @@ void initialize_galaxy_modulation(struct GalaxyModulation *gm, struct Wavelets *
     free(sa);
     
     //interpolants for modulation pattern
-    gm->XX_spline = alloc_cubic_spline_even_sampling(gm->N);
-    gm->YY_spline = alloc_cubic_spline_even_sampling(gm->N);
-    gm->ZZ_spline = alloc_cubic_spline_even_sampling(gm->N);
-    gm->XY_spline = alloc_cubic_spline_even_sampling(gm->N);
-    gm->XZ_spline = alloc_cubic_spline_even_sampling(gm->N);
-    gm->YZ_spline = alloc_cubic_spline_even_sampling(gm->N);
+    gm->XX_spline = alloc_cubic_spline(gm->N);
+    gm->YY_spline = alloc_cubic_spline(gm->N);
+    gm->ZZ_spline = alloc_cubic_spline(gm->N);
+    gm->XY_spline = alloc_cubic_spline(gm->N);
+    gm->XZ_spline = alloc_cubic_spline(gm->N);
+    gm->YZ_spline = alloc_cubic_spline(gm->N);
 
 
     double theta, phi;

@@ -374,12 +374,12 @@ struct SGWBResponse
     ///@name Each independent channel response 
     ///@{
     int N; // length of channel response
-    struct CubicSplineEvenSampling* spline_logRXX;
-    struct CubicSplineEvenSampling* spline_logRYY;
-    struct CubicSplineEvenSampling* spline_logRZZ;
-    struct CubicSplineEvenSampling* spline_asinhRXY;
-    struct CubicSplineEvenSampling* spline_asinhRXZ;
-    struct CubicSplineEvenSampling* spline_asinhRYZ;
+    struct CubicSpline* spline_logRXX;
+    struct CubicSpline* spline_logRYY;
+    struct CubicSpline* spline_logRZZ;
+    struct CubicSpline* spline_asinhRXY;
+    struct CubicSpline* spline_asinhRXZ;
+    struct CubicSpline* spline_asinhRYZ;
     double *logf;
     double *logXX;
     double *logYY;

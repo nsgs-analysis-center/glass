@@ -216,149 +216,85 @@ int main(int argc, char *argv[])
             struct InstrumentModel *inst_trial_ptr = inst_trial[chain->index[ic]];
             struct ForegroundModel *conf_model_ptr = conf_model[chain->index[ic]];
             struct ForegroundModel *conf_trial_ptr = conf_trial[chain->index[ic]];
-            
+            struct SGWBModel       *sgwb_model_ptr = sgwb_model[chain->index[ic]];
+            struct SGWBModel       *sgwb_trial_ptr = sgwb_trial[chain->index[ic]];
+
             for(int steps=0; steps<10; steps++)
             {
-                struct Noise *psd_ptr = psd[chain->index[ic]];
-                struct InstrumentModel *inst_model_ptr = inst_model[chain->index[ic]];
-                struct InstrumentModel *inst_trial_ptr = inst_trial[chain->index[ic]];
-                struct ForegroundModel *conf_model_ptr = conf_model[chain->index[ic]];
-                struct ForegroundModel *conf_trial_ptr = conf_trial[chain->index[ic]];
-                struct SGWBModel       *sgwb_model_ptr = sgwb_model[chain->index[ic]];
-                struct SGWBModel       *sgwb_trial_ptr = sgwb_trial[chain->index[ic]];
-
-                for(int mc=0; mc<10; mc++)
-                {
-                    noise_instrument_model_mcmc(orbit, data, inst_model_ptr, inst_trial_ptr, conf_model_ptr, sgwb_model_ptr, psd_ptr, chain, flags, ic);
-                    if(flags->confNoise) noise_foreground_model_mcmc(data, inst_model_ptr, conf_model_ptr, conf_trial_ptr, sgwb_model_ptr, psd_ptr, chain, flags, ic);
-                    if(flags->sgwbTemplate>=0) noise_sgwb_model_mcmc(data, inst_model_ptr, conf_model_ptr, sgwb_model_ptr, sgwb_trial_ptr, psd_ptr, chain, flags, ic);
-                }
-            }// end (parallel) loop over chains
-            
-            //Next section is single threaded. Every thread must get here before continuing
-            
-            #pragma omp barrier
-            
-            if(threadID==0)
-            {
-                noise_ptmcmc(inst_model, chain, flags);
-                
-                if(step%(flags->NMCMC/10)==0)printf("noise_mcmc at step %i\n",step);
-                
-                // print chain files
-                fprintf(noiseChainFile,"%i %.12g ",step,inst_model[chain->index[0]]->logL);
-                print_instrument_state(inst_model[chain->index[0]], noiseChainFile);
-                fprintf(noiseChainFile,"\n");
-
-                if(flags->confNoise) 
-                {
-                    fprintf(foregroundChainFile,"%i %.12g ",step,conf_model[chain->index[0]]->logL);
-                    print_foreground_state(conf_model[chain->index[0]], foregroundChainFile);
-                    fprintf(foregroundChainFile,"\n");
-                }
-
-                if(flags->sgwbTemplate>=0) 
-                {
-                    fprintf(sgwbChainFile,"%i %.12g ",step,sgwb_model[chain->index[0]]->logL);
-                    print_sgwb_state(sgwb_model[chain->index[0]], sgwbChainFile);
-                    fprintf(sgwbChainFile,"\n");
-                }
-
-                if(step%(flags->NMCMC/10)==0)
-                {
-                    generate_instrument_noise_model(orbit,inst_model[chain->index[0]]);
-                    sprintf(filename,"%s/current_instrument_noise_model.dat",data->dataDir);
-                    print_noise_model(inst_model[chain->index[0]]->psd, filename);
-
-                    if(flags->confNoise)
-                    {
-                        generate_galactic_foreground_model(conf_model[chain->index[0]]);
-                        sprintf(filename,"%s/current_foreground_noise_model.dat",data->dataDir);
-                        print_noise_model(conf_model[chain->index[0]]->psd, filename);
-                    }
-                    if(flags->sgwbTemplate>=0) 
-                    {
-                        generate_sgwb_model(sgwb_model[chain->index[0]]);
-                        sprintf(filename,"%s/current_sgwb_noise_model.dat",data->dataDir);
-                        print_noise_model(sgwb_model[chain->index[0]]->psd, filename);
-                    }
-                }
-                
-                if(step%data->downsample==0 && step/data->downsample < data->Nwave)
-                {
-                    generate_instrument_noise_model(orbit,inst_model[chain->index[0]]);
-                    if(flags->confNoise)
-                    {
-                        generate_galactic_foreground_model(conf_model[chain->index[0]]);
-                        generate_full_covariance_matrix(inst_model[chain->index[0]]->psd,conf_model[chain->index[0]]->psd, data->Nchannel);
-                    }
-                    if(flags->sgwbTemplate>=0) 
-                    {
-                        generate_sgwb_model(sgwb_model[chain->index[0]]);
-                        generate_full_covariance_matrix(inst_model[chain->index[0]]->psd,sgwb_model[chain->index[0]]->psd, data->Nchannel);
-                    }
-                    
-                    for(int n=0; n<data->NFFT; n++)
-                        for(int i=0; i<data->Nchannel; i++)
-                            data->S_pow[n][i][step/data->downsample] = inst_model[chain->index[0]]->psd->C[i][i][n];
-                }
-
-                step++;
-                
-                
+                noise_instrument_model_mcmc(orbit, data, inst_model_ptr, inst_trial_ptr, conf_model_ptr, sgwb_model_ptr, psd_ptr, chain, flags, ic);
+                if(flags->confNoise) noise_foreground_model_mcmc(data, inst_model_ptr, conf_model_ptr, conf_trial_ptr, sgwb_model_ptr, psd_ptr, chain, flags, ic);
+                if(flags->sgwbTemplate>=0) noise_sgwb_model_mcmc(data, inst_model_ptr, conf_model_ptr, sgwb_model_ptr, sgwb_trial_ptr, psd_ptr, chain, flags, ic);
             }
         }// end (parallel) loop over chains
-        
+            
         //Next section is single threaded. Every thread must get here before continuing
-        
+            
         noise_ptmcmc(inst_model, chain, flags);
-        
+            
         if(mcmc%(flags->NMCMC/10)==0)printf("noise_mcmc at step %i\n",mcmc);
-        
+            
         // print chain files
         fprintf(noiseChainFile,"%i %.12g ",mcmc,inst_model[chain->index[0]]->logL);
         print_instrument_state(inst_model[chain->index[0]], noiseChainFile);
         fprintf(noiseChainFile,"\n");
-        
-        if(flags->confNoise)
+
+        if(flags->confNoise) 
         {
             fprintf(foregroundChainFile,"%i %.12g ",mcmc,conf_model[chain->index[0]]->logL);
             print_foreground_state(conf_model[chain->index[0]], foregroundChainFile);
             fprintf(foregroundChainFile,"\n");
         }
-        
+
+        if(flags->sgwbTemplate>=0) 
+        {
+            fprintf(sgwbChainFile,"%i %.12g ",mcmc,sgwb_model[chain->index[0]]->logL);
+            print_sgwb_state(sgwb_model[chain->index[0]], sgwbChainFile);
+            fprintf(sgwbChainFile,"\n");
+        }
+
         if(mcmc%(flags->NMCMC/10)==0)
         {
             generate_instrument_noise_model(orbit,inst_model[chain->index[0]]);
             sprintf(filename,"%s/current_instrument_noise_model.dat",data->dataDir);
             print_noise_model(inst_model[chain->index[0]]->psd, filename);
-            
+
             if(flags->confNoise)
             {
                 generate_galactic_foreground_model(conf_model[chain->index[0]]);
                 sprintf(filename,"%s/current_foreground_noise_model.dat",data->dataDir);
                 print_noise_model(conf_model[chain->index[0]]->psd, filename);
             }
+            if(flags->sgwbTemplate>=0) 
+            {
+                generate_sgwb_model(sgwb_model[chain->index[0]]);
+                sprintf(filename,"%s/current_sgwb_noise_model.dat",data->dataDir);
+                print_noise_model(sgwb_model[chain->index[0]]->psd, filename);
+            }
         }
-        
+            
         if(mcmc%data->downsample==0 && mcmc/data->downsample < data->Nwave)
         {
             generate_instrument_noise_model(orbit,inst_model[chain->index[0]]);
             if(flags->confNoise)
             {
                 generate_galactic_foreground_model(conf_model[chain->index[0]]);
-                generate_full_covariance_matrix(inst_model[chain->index[0]]->psd,conf_model[chain->index[0]]->psd, data->Nchannel);
+                generate_full_covariance_matrix(inst_model[chain->index[0]]->psd, conf_model[chain->index[0]]->psd, data->Nchannel);
+            }
+            if(flags->sgwbTemplate>=0) 
+            {
+                generate_sgwb_model(sgwb_model[chain->index[0]]);
+                generate_full_covariance_matrix(inst_model[chain->index[0]]->psd,sgwb_model[chain->index[0]]->psd, data->Nchannel);
             }
             
             for(int n=0; n<data->NFFT; n++)
                 for(int i=0; i<data->Nchannel; i++)
                     data->S_pow[n][i][mcmc/data->downsample] = inst_model[chain->index[0]]->psd->C[i][i][n];
         }
-        
+
         mcmc++;
-        
-        
-    }// end of MCMC loop
+            
+            
+    } // end of mcmc loop
     
     
     fclose(noiseChainFile);

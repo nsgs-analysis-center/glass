@@ -170,19 +170,18 @@ void alloc_pop_sgwb_response(struct SGWBResponse* sgwbr, char* fname) {
 
 
     // memory leak
-    sgwbr->spline_logRXX   = alloc_cubic_spline_even_sampling(*N);
-    sgwbr->spline_logRYY   = alloc_cubic_spline_even_sampling(*N);
-    sgwbr->spline_logRZZ   = alloc_cubic_spline_even_sampling(*N);
-    sgwbr->spline_asinhRXY = alloc_cubic_spline_even_sampling(*N);
-    sgwbr->spline_asinhRXZ = alloc_cubic_spline_even_sampling(*N);
-    sgwbr->spline_asinhRYZ = alloc_cubic_spline_even_sampling(*N);
-    double dlogf = sgwbr->logf[1] - sgwbr->logf[0];
-    initialize_cubic_spline_even_sampling(sgwbr->spline_logRXX, sgwbr->logf, sgwbr->logXX, dlogf);
-    initialize_cubic_spline_even_sampling(sgwbr->spline_logRYY, sgwbr->logf, sgwbr->logYY, dlogf);
-    initialize_cubic_spline_even_sampling(sgwbr->spline_logRZZ, sgwbr->logf, sgwbr->logZZ, dlogf);
-    initialize_cubic_spline_even_sampling(sgwbr->spline_asinhRXY, sgwbr->logf, sgwbr->asinhXY, dlogf);
-    initialize_cubic_spline_even_sampling(sgwbr->spline_asinhRXZ, sgwbr->logf, sgwbr->asinhXZ, dlogf);
-    initialize_cubic_spline_even_sampling(sgwbr->spline_asinhRYZ, sgwbr->logf, sgwbr->asinhYZ, dlogf);
+    sgwbr->spline_logRXX   = alloc_cubic_spline(*N);
+    sgwbr->spline_logRYY   = alloc_cubic_spline(*N);
+    sgwbr->spline_logRZZ   = alloc_cubic_spline(*N);
+    sgwbr->spline_asinhRXY = alloc_cubic_spline(*N);
+    sgwbr->spline_asinhRXZ = alloc_cubic_spline(*N);
+    sgwbr->spline_asinhRYZ = alloc_cubic_spline(*N);
+    initialize_cubic_spline(sgwbr->spline_logRXX, sgwbr->logf, sgwbr->logXX, SPLINE_EVEN_SAMPLED);
+    initialize_cubic_spline(sgwbr->spline_logRYY, sgwbr->logf, sgwbr->logYY, SPLINE_EVEN_SAMPLED);
+    initialize_cubic_spline(sgwbr->spline_logRZZ, sgwbr->logf, sgwbr->logZZ, SPLINE_EVEN_SAMPLED);
+    initialize_cubic_spline(sgwbr->spline_asinhRXY, sgwbr->logf, sgwbr->asinhXY, SPLINE_EVEN_SAMPLED);
+    initialize_cubic_spline(sgwbr->spline_asinhRXZ, sgwbr->logf, sgwbr->asinhXZ, SPLINE_EVEN_SAMPLED);
+    initialize_cubic_spline(sgwbr->spline_asinhRYZ, sgwbr->logf, sgwbr->asinhYZ, SPLINE_EVEN_SAMPLED);
 
 }
 
@@ -194,12 +193,12 @@ void free_sgwb_response(struct SGWBResponse *sgwbr) {
     free(sgwbr->asinhXY);
     free(sgwbr->asinhXZ);
     free(sgwbr->asinhYZ);
-    free_cubic_spline_even_sampling(sgwbr->spline_logRXX);
-    free_cubic_spline_even_sampling(sgwbr->spline_logRYY);
-    free_cubic_spline_even_sampling(sgwbr->spline_logRZZ);
-    free_cubic_spline_even_sampling(sgwbr->spline_asinhRXY);
-    free_cubic_spline_even_sampling(sgwbr->spline_asinhRXZ);
-    free_cubic_spline_even_sampling(sgwbr->spline_asinhRYZ);
+    free_cubic_spline(sgwbr->spline_logRXX);
+    free_cubic_spline(sgwbr->spline_logRYY);
+    free_cubic_spline(sgwbr->spline_logRZZ);
+    free_cubic_spline(sgwbr->spline_asinhRXY);
+    free_cubic_spline(sgwbr->spline_asinhRXZ);
+    free_cubic_spline(sgwbr->spline_asinhRYZ);
     free(sgwbr);
 }
 
@@ -736,19 +735,20 @@ void generate_sgwb_model(struct SGWBModel *model)
         switch(model->psd->Nchannel)
         {
             double Rxx, Ryy, Rzz, Rxy, Rxz, Ryz;
+            double logf;
             case 1:
             case 2:
                 fprintf(stderr, "Unimplemented error! SGWB covariance generation with Nchannels = %d\n",model->psd->Nchannel);
                 exit(-3);
                 break;
             case 3:
-                double logf = log(f);
-                Rxx =  exp(spline_interpolation_even_sampling(model->R->spline_logRXX, logf));
-                Ryy =  exp(spline_interpolation_even_sampling(model->R->spline_logRYY, logf));
-                Rzz =  exp(spline_interpolation_even_sampling(model->R->spline_logRZZ, logf));
-                Rxy = model->R->asinh_scale * sinh(spline_interpolation_even_sampling(model->R->spline_asinhRXY, logf));
-                Rxz = model->R->asinh_scale * sinh(spline_interpolation_even_sampling(model->R->spline_asinhRXZ, logf));
-                Ryz = model->R->asinh_scale * sinh(spline_interpolation_even_sampling(model->R->spline_asinhRYZ, logf));
+                logf = log(f);
+                Rxx =  exp(spline_interpolation(model->R->spline_logRXX, logf));
+                Ryy =  exp(spline_interpolation(model->R->spline_logRYY, logf));
+                Rzz =  exp(spline_interpolation(model->R->spline_logRZZ, logf));
+                Rxy = model->R->asinh_scale * sinh(spline_interpolation(model->R->spline_asinhRXY, logf));
+                Rxz = model->R->asinh_scale * sinh(spline_interpolation(model->R->spline_asinhRXZ, logf));
+                Ryz = model->R->asinh_scale * sinh(spline_interpolation(model->R->spline_asinhRYZ, logf));
                 // note that, in equal-arm LISA, XYZ: Rxx = Ryy = Rzz, and Rxy = Rxz = Ryz = -0.5*Rxx
                 model->psd->C[0][0][n] = Rxx*Sgw;
                 model->psd->C[1][1][n] = Ryy*Sgw;
@@ -856,12 +856,12 @@ void generate_full_dynamic_covariance_matrix(struct Wavelets *wdm, struct Instru
 
             //modulated galactic foreground
             if (conf) { // this is NULL when confusion is disabled
-                full->C[0][0][k] += conf->psd->C[0][0][j-jmin]*spline_interpolation_even_sampling(conf->modulation->XX_spline, t);
-                full->C[1][1][k] += conf->psd->C[1][1][j-jmin]*spline_interpolation_even_sampling(conf->modulation->YY_spline, t);
-                full->C[2][2][k] += conf->psd->C[2][2][j-jmin]*spline_interpolation_even_sampling(conf->modulation->ZZ_spline, t);
-                full->C[0][1][k] += conf->psd->C[0][1][j-jmin]*spline_interpolation_even_sampling(conf->modulation->XY_spline, t);
-                full->C[0][2][k] += conf->psd->C[0][2][j-jmin]*spline_interpolation_even_sampling(conf->modulation->XZ_spline, t);
-                full->C[1][2][k] += conf->psd->C[1][2][j-jmin]*spline_interpolation_even_sampling(conf->modulation->YZ_spline, t);
+                full->C[0][0][k] += conf->psd->C[0][0][j-jmin]*spline_interpolation(conf->modulation->XX_spline, t);
+                full->C[1][1][k] += conf->psd->C[1][1][j-jmin]*spline_interpolation(conf->modulation->YY_spline, t);
+                full->C[2][2][k] += conf->psd->C[2][2][j-jmin]*spline_interpolation(conf->modulation->ZZ_spline, t);
+                full->C[0][1][k] += conf->psd->C[0][1][j-jmin]*spline_interpolation(conf->modulation->XY_spline, t);
+                full->C[0][2][k] += conf->psd->C[0][2][j-jmin]*spline_interpolation(conf->modulation->XZ_spline, t);
+                full->C[1][2][k] += conf->psd->C[1][2][j-jmin]*spline_interpolation(conf->modulation->YZ_spline, t);
             }
 
 

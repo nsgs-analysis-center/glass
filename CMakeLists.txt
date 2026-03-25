@@ -23,7 +23,6 @@ project(glass VERSION 2.0.0 LANGUAGES C)
 
 # External packages
 find_package(LAPACK REQUIRED)
-<<<<<<< HEAD
 #set(LAPACK_LIBRARIES lapacke gfortran ${LAPACK_LIBRARIES})
 #find_package(OpenBLAS REQUIRED)
 find_package(BLAS REQUIRED)
@@ -89,7 +88,7 @@ set (GITVERSION "\"${_build_version}\"")
 add_subdirectory(external)
 add_subdirectory(utils)
 add_subdirectory(ucb)
-add_subdirectory(mbh)
+#add_subdirectory(mbh)
 add_subdirectory(noise)
 
 # Merge into a single library
@@ -97,7 +96,7 @@ add_library(glass
         $<TARGET_OBJECTS:glass_external>
         $<TARGET_OBJECTS:glass_utils>
         $<TARGET_OBJECTS:glass_ucb>
-        $<TARGET_OBJECTS:glass_mbh>
+        #        $<TARGET_OBJECTS:glass_mbh>
         $<TARGET_OBJECTS:glass_noise>
 )
 install(TARGETS glass DESTINATION lib)

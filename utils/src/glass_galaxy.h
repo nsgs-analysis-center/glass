@@ -54,12 +54,12 @@ struct GalaxyModulation
     double ***XZR;
     double ***XZI;
 
-    struct CubicSplineEvenSampling *XX_spline; //!<Modulation in PSD of X channel
-    struct CubicSplineEvenSampling *YY_spline; //!<Modulation in PSD of Y channel
-    struct CubicSplineEvenSampling *ZZ_spline; //!<Modulation in PSD of X channel
-    struct CubicSplineEvenSampling *XY_spline; //!<Modulation in CSD of XY channels
-    struct CubicSplineEvenSampling *XZ_spline; //!<Modulation in PSD of XZ channels
-    struct CubicSplineEvenSampling *YZ_spline; //!<Modulation in PSD of YZ channels
+    struct CubicSpline *XX_spline; //!<Modulation in PSD of X channel
+    struct CubicSpline *YY_spline; //!<Modulation in PSD of Y channel
+    struct CubicSpline *ZZ_spline; //!<Modulation in PSD of X channel
+    struct CubicSpline *XY_spline; //!<Modulation in CSD of XY channels
+    struct CubicSpline *XZ_spline; //!<Modulation in PSD of XZ channels
+    struct CubicSpline *YZ_spline; //!<Modulation in PSD of YZ channels
 
     long Npix;        //!<Number of pixels on the healpix grid
     double *skytheta; //!<Latitude value of healpix grid pixels
