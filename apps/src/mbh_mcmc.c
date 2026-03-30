@@ -44,8 +44,8 @@ static void set_mbh_defaults(struct Data *data)
     data->sqT      = sqrt(data->T);
     data->Nchannel = 3; //1=X, 2=AE, 3=XYZ
     data->qpad     = 0;
-    data->fmin     = 1e-4; //Hz
-    data->fmax     = 2e-2; //Hz
+    data->fmin     = 2e-4; //Hz
+    data->fmax     = 1e-2; //Hz
     data->lmin     = (int)floor(data->fmin/WAVELET_BANDWIDTH);
     data->lmax     = (int)ceil(data->fmax/WAVELET_BANDWIDTH);
     data->Nlayer   = data->lmax-data->lmin;
@@ -199,7 +199,7 @@ int main(int argc, char *argv[])
                 mbh_mcmc(orbit, data, model_ptr, trial_ptr, chain, flags, prior, proposal, ic);
 
             //update information matrix for each chain
-            if(mcmc%10==0)
+            if(mcmc%100==0)
             {
                 for(int n=0; n<model_ptr->Nlive; n++)
                 {
@@ -221,10 +221,10 @@ int main(int argc, char *argv[])
             model[ic]->logL = (*model[ic]->log_likelihood)(data, model[ic]);
 
         //track maximum log Likelihood
-        if(mcmc%100)
-        {
-            if(update_max_log_likelihood(model, chain, flags)) mcmc = -flags->NBURN;
-        }
+        //if(mcmc%100)
+        //{
+        //    if(update_max_log_likelihood(model, chain, flags)) mcmc = -flags->NBURN;
+        //}
             
         //add current cold chain state to differential evolution buffer
         update_differential_evolution_buffer(proposal, model[chain->index[0]], &chain->r[0]);

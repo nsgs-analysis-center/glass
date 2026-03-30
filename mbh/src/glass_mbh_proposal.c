@@ -46,20 +46,31 @@ double differential_evolution_jump(struct Data *data, struct Model *model, struc
     if(rand_r_U_0_1(seed)<0.9) alpha = rand_r_N_0_1(seed)*0.5;
 
     // jump in all parameters
-    if(rand_r_U_0_1(seed)<0.5)
+    double draw = rand_r_U_0_1(seed);
+    if(draw<0.25)
     {
         for(int n=0; n<MBH_MODEL_NP; n++) 
             params[n] += alpha*(history[i][n] - history[j][n]);
     }
     // just intrinsic parameters
+    else if(draw<0.5)
+    {
+        for(int n=0; n<4; n++)
+            params[n] += alpha*(history[i][n] - history[j][n]);
+
+    }
+    // just sky location
+    else if(draw<0.75)
+    {
+        params[7] = params[7]+alpha*(history[i][7]-history[j][7]);
+        params[8] = params[8]+alpha*(history[i][8]-history[j][8]);
+    }
+    // just extrinsic parameters
     else
     {
-        params[0] = params[0]+alpha*(history[i][0]-history[j][0]);
-        params[1] = params[1]+alpha*(history[i][1]-history[j][1]);
-        params[2] = params[2]+alpha*(history[i][2]-history[j][2]);
-        params[3] = params[3]+alpha*(history[i][3]-history[j][3]);
+        for(int n=4; n<MBH_MODEL_NP; n++)
+            params[n] += alpha*(history[i][n] - history[j][n]);
     }
-
     //differential evolution jump is symmetric
     return 0.0;
 }
@@ -98,7 +109,7 @@ double draw_from_mbh_fisher(UNUSED struct Data *data, struct Model *model, struc
     double jump[MBH_MODEL_NP];
     for (j=0; j<MBH_MODEL_NP; j++)
     {
-        jump[j] = Amp*source->fisher_evectr[i][j];
+        jump[j] = Amp*source->fisher_evectr[j][i];
     }
 
     //check jump value, set to small value if singular
@@ -165,7 +176,7 @@ void initialize_mbh_proposal(struct Orbit *orbit, struct Data *data, struct Prio
                 setup_differential_evolution_proposal(proposal[i]);
                 proposal[i]->function = &differential_evolution_jump;
                 proposal[i]->density  = &symmetric_density;
-                proposal[i]->weight   = 0.0;
+                proposal[i]->weight   = 0.3;
                 proposal[i]->rjweight = 0.0;
                 check   += proposal[i]->weight;
                 rjcheck += proposal[i]->rjweight;
@@ -174,7 +185,7 @@ void initialize_mbh_proposal(struct Orbit *orbit, struct Data *data, struct Prio
                 sprintf(proposal[i]->name, "fisher");
                 proposal[i]->function = &draw_from_mbh_fisher;
                 proposal[i]->density  = &symmetric_density;
-                proposal[i]->weight   = 0.8;
+                proposal[i]->weight   = 0.5;
                 proposal[i]->rjweight = 0.0;
                 check   += proposal[i]->weight;
                 rjcheck += proposal[i]->rjweight;

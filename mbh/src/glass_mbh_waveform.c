@@ -967,21 +967,23 @@ void mbh_fd_waveform(struct Orbit *orbit, struct Wavelets *wdm, double Tobs, dou
 void mbh_fisher(struct Orbit *orbit, struct Data *data, struct Source *source, struct Noise *noise)
 {
     int i,j,n;
+    int i_wdm, j_wdm;
 
     double *epsilon = double_vector(MBH_MODEL_NP);
     // [0] ln(Mass1)  [1] ln(Mass2)  [2] Spin1 [3] Spin2 [4] phic [5] tc [6] ln(distance)
     // [7] cosEclipticCoLatitude, [8] EclipticLongitude  [9] polarization, [10] inclination
-    epsilon[0] = 1.0e-7;
-    epsilon[1] = 1.0e-7;
-    epsilon[2] = 1.0e-7;
-    epsilon[3] = 1.0e-7;
-    epsilon[4] = 1.0e-7;
-    epsilon[5] = 1.0e-7;
-    epsilon[6] = 1.0e-7;
-    epsilon[7] = 1.0e-7;
-    epsilon[8] = 1.0e-7;
-    epsilon[9] = 1.0e-7;
-    epsilon[10] = 1.0e-7;
+    epsilon[0] = 1.0e-5;
+    epsilon[1] = 1.0e-5;
+    epsilon[2] = 1.0e-4;
+    epsilon[3] = 1.0e-4;
+    epsilon[4] = 1.0e-4;
+    epsilon[5] = 1.0e+2;
+    epsilon[6] = 1.0e-4;
+    epsilon[7] = 1.0e-3;
+    epsilon[8] = 1.0e-3;
+    epsilon[9] = 1.0e-3;
+    epsilon[10] = 1.0e-3;
+
 
     double *params_p = double_vector(MBH_MODEL_NP);
     double *params_m = double_vector(MBH_MODEL_NP);
@@ -999,6 +1001,9 @@ void mbh_fisher(struct Orbit *orbit, struct Data *data, struct Source *source, s
         dhdx[n] = malloc(sizeof(struct TDI));
         alloc_tdi(dhdx[n], data->N, data->Nchannel);
     }
+    
+    int *list = int_vector(data->N);
+    for(n=0; n<data->N; n++) list[n] = n;
 
     for(i=0; i<MBH_MODEL_NP; i++)
     {
@@ -1043,11 +1048,10 @@ void mbh_fisher(struct Orbit *orbit, struct Data *data, struct Source *source, s
         for(n=0; n<wave_p->Nlist; n++)
         {
             int k = wave_p->list[n];
-            if(k>=0 && k<data->N)
+            wavelet_index_to_pixel(data->wdm, &i_wdm, &j_wdm, k+data->wdm->kmin);
+
+            if(i_wdm>data->wdm->imin && i_wdm<data->wdm->imax && k>=0 && k<data->N)
             {
-//                dhdx[i]->X[k] = (wave_p->tdi->X[k] - source->tdi->X[k])/epsilon[i];
-//                dhdx[i]->Y[k] = (wave_p->tdi->Y[k] - source->tdi->Y[k])/epsilon[i];
-//                dhdx[i]->Z[k] = (wave_p->tdi->Z[k] - source->tdi->Z[k])/epsilon[i];
                 dhdx[i]->X[k] = (wave_p->tdi->X[k] - wave_m->tdi->X[k])/epsilon[i];
                 dhdx[i]->Y[k] = (wave_p->tdi->Y[k] - wave_m->tdi->Y[k])/epsilon[i];
                 dhdx[i]->Z[k] = (wave_p->tdi->Z[k] - wave_m->tdi->Z[k])/epsilon[i];
@@ -1061,15 +1065,15 @@ void mbh_fisher(struct Orbit *orbit, struct Data *data, struct Source *source, s
     {
         for(j=0; j<MBH_MODEL_NP; j++)
         {
-            source->fisher_matrix[i][j]  = wavelet_nwip(dhdx[i]->X, dhdx[j]->X, noise->invC[0][0], wave_p->list, wave_p->Nlist);
-            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->Y, dhdx[j]->Y, noise->invC[1][1], wave_p->list, wave_p->Nlist);
-            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->Z, dhdx[j]->Z, noise->invC[2][2], wave_p->list, wave_p->Nlist);
-            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->X, dhdx[j]->Y, noise->invC[0][1], wave_p->list, wave_p->Nlist);
-            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->X, dhdx[j]->Z, noise->invC[0][2], wave_p->list, wave_p->Nlist);
-            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->Y, dhdx[j]->Z, noise->invC[1][2], wave_p->list, wave_p->Nlist);
-            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->Y, dhdx[j]->X, noise->invC[1][0], wave_p->list, wave_p->Nlist);
-            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->Z, dhdx[j]->X, noise->invC[2][0], wave_p->list, wave_p->Nlist);
-            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->Z, dhdx[j]->Y, noise->invC[2][1], wave_p->list, wave_p->Nlist);
+            source->fisher_matrix[i][j]  = wavelet_nwip(dhdx[i]->X, dhdx[j]->X, noise->invC[0][0], list, data->N);
+            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->Y, dhdx[j]->Y, noise->invC[1][1], list, data->N);
+            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->Z, dhdx[j]->Z, noise->invC[2][2], list, data->N);
+            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->X, dhdx[j]->Y, noise->invC[0][1], list, data->N);
+            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->X, dhdx[j]->Z, noise->invC[0][2], list, data->N);
+            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->Y, dhdx[j]->Z, noise->invC[1][2], list, data->N);
+            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->Y, dhdx[j]->X, noise->invC[1][0], list, data->N);
+            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->Z, dhdx[j]->X, noise->invC[2][0], list, data->N);
+            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->Z, dhdx[j]->Y, noise->invC[2][1], list, data->N);
 
             
             
@@ -1096,7 +1100,7 @@ void mbh_fisher(struct Orbit *orbit, struct Data *data, struct Source *source, s
     for(n=0; n<MBH_MODEL_NP; n++) free_tdi(dhdx[n]);
     free(dhdx);
     
-    
+    free_int_vector(list);
     free_double_vector(epsilon);
     free_double_vector(params_p);
     free_double_vector(params_m);

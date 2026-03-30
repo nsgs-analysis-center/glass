@@ -577,6 +577,7 @@ void UCBInjectSimulatedSource(struct Data *data, struct Orbit *orbit, struct Fla
                 
                 
                 printf("\n Fisher std. errors:\n");
+                invert_matrix(inj->fisher_matrix, UCB_MODEL_NP);
                 for(int j=0; j<UCB_MODEL_NP; j++)  fprintf(stdout," %.2e\n", sqrt(inj->fisher_matrix[j][j]));
             }
             
