@@ -17,6 +17,10 @@
 
 #include "glass_utils.h"
 
+#define static_assert_types_equal(T1, T2) \
+    _Static_assert(_Generic((T1){0}, T2: 1, default: 0), \
+                   #T1 " != " #T2)
+
 struct CubicSpline* alloc_cubic_spline(int N)
 {
     struct CubicSpline *spline = malloc(sizeof(struct CubicSpline));
@@ -696,6 +700,15 @@ void glass_forward_complex_fft(double *data, int N)
     free(timedata);
 }
 
+void glass_forward_complex_fft_outplace(double *timedata, double*freqdata, int N)
+{
+    static_assert_types_equal(double, kiss_fft_scalar);
+    // here N is length of freq data in complexes (so array is length 2N doubles)
+    kiss_fft_cfg cfg = kiss_fft_alloc(N, 0, NULL, NULL); // 0 indicates forward FFT;
+    kiss_fft(cfg, (kiss_fft_cpx*)timedata, (kiss_fft_cpx*)freqdata); 
+    kiss_fft_free(cfg);
+}
+
 void glass_inverse_complex_fft(double *data, int N)
 {
     kiss_fft_cfg cfg = kiss_fft_alloc(N, 1, NULL, NULL); // 1 indicates backward FFT;
@@ -714,14 +727,24 @@ void glass_inverse_complex_fft(double *data, int N)
     
     for(int i=0; i<N; i++)
     {
-        data[2*i]   = timedata[i].r;
-        data[2*i+1] = timedata[i].i;
+        data[2*i]   = timedata[i].r/N;
+        data[2*i+1] = timedata[i].i/N;
     }
     
     // Clean up and free memory
     kiss_fft_free(cfg);
     free(freqdata);
     free(timedata);
+}
+void glass_inverse_complex_fft_outplace(double *freqdata, double *timedata, int N)
+{
+    static_assert_types_equal(double, kiss_fft_scalar);
+    // here N is length of freq data in complexes (so array is length 2N doubles)
+    kiss_fft_cfg cfg = kiss_fft_alloc(N, 1, NULL, NULL); // 0 indicates forward FFT;
+    kiss_fft(cfg, (kiss_fft_cpx*)freqdata, (kiss_fft_cpx*)timedata); 
+    // fix normalization
+    for(int i=0; i<(2*N); i++)  timedata[i] /= N;
+    kiss_fft_free(cfg);
 }
 
 void glass_forward_real_fft(double *data, int N)
@@ -736,6 +759,7 @@ void glass_forward_real_fft(double *data, int N)
     kiss_fftr(cfg, timedata, freqdata);
     
     
+    // NOTE: strictly speaking, this is lacking the Nyquist bin!
     for(int i=0; i<N/2; i++)
     {
         data[2*i]   = freqdata[i].r;
@@ -749,6 +773,55 @@ void glass_forward_real_fft(double *data, int N)
     free(timedata);
 }
 
+// note that this version doesn't allocate the arrays.
+// Freq data needs room for N+2 doubles (N/2+1 complexes)
+void glass_forward_real_fft_outplace(double* timedata, double *freqdata, int N)
+{
+    static_assert_types_equal(double, kiss_fft_scalar);
+    kiss_fftr_cfg cfg = kiss_fftr_alloc(N, 0, NULL, NULL); // 0 indicates forward FFT;
+    
+    // Perform the rFFT
+    kiss_fftr(cfg, (kiss_fft_scalar*)timedata, (kiss_fft_cpx*)freqdata);
+    
+    // Clean up and free memory
+    kiss_fftr_free(cfg);
+}
+void glass_inverse_real_fft_outplace(double *freqdata, double *timedata, int N)
+{
+    static_assert_types_equal(double, kiss_fft_scalar);
+    // here N is length of time data!
+    kiss_fftr_cfg cfg = kiss_fftr_alloc(N, 1, NULL, NULL); // 0 indicates forward FFT;
+    kiss_fftri(cfg, (kiss_fft_cpx*)freqdata, (kiss_fft_scalar*)timedata); 
+    // fix normalization
+    for(int i=0; i<N; i++)  timedata[i] /= N;
+    kiss_fftr_free(cfg);
+}
+
+void glass_inverse_real_fft(double *data, int N)
+{
+    // TODO: with creative pointer casting we can probably avoid any allocs here
+    kiss_fftr_cfg cfg = kiss_fftr_alloc(N, 1, NULL, NULL); // 0 indicates forward FFT;
+    kiss_fft_scalar *timedata = malloc(N*sizeof(kiss_fft_scalar));
+    kiss_fft_cpx    *freqdata = malloc((N/2+1)*sizeof(kiss_fft_cpx));
+
+    for(int i=0; i<N/2+1; i++)
+    {
+        freqdata[i].r = data[2*i];
+        freqdata[i].i = data[2*i+1];
+    }
+    
+    // Perform the inverse rFFT
+    kiss_fftri(cfg, freqdata, timedata);
+    
+    for(int i=0; i<N; i++)  data[i] = timedata[i]/N;
+    
+    // Clean up and free memory
+    kiss_fftr_free(cfg);
+    free(timedata);
+    free(freqdata);
+}
+
+/*
 void glass_inverse_real_fft(double *data, int N)
 {
     kiss_fftr_cfg cfg = kiss_fftr_alloc(N, 1, NULL, NULL); // 0 indicates forward FFT;
@@ -771,6 +844,7 @@ void glass_inverse_real_fft(double *data, int N)
     free(timedata);
     free(freqdata);
 }
+*/
 
 void CubicSplineGLASS(int N, double *x, double *y, int Nint, double *xint, double *yint)
 {
