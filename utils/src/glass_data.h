@@ -26,7 +26,7 @@
 #define FILTER_LENGTH 5e3 //seconds
 #define MAXSTRINGSIZE 1024 //!<maximum number of characters for `path+filename` strings
 
-#define WAVELET_EDGE_BUFFER 50 //!<number of time slices to leave out of likelihood to avoid edge effects
+#define WAVELET_EDGE_BUFFER 100 //!<number of time slices to leave out of likelihood to avoid edge effects
 #define WAVELET_DURATION 7680.0
 #define WAVELET_BANDWIDTH 6.51041666666667e-5
 //#define WAVELET_DURATION 20480.0 //!<duration of wavelet pixels [s]
