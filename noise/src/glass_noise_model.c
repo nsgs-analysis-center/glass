@@ -386,6 +386,14 @@ void generate_instrument_noise_model(struct Orbit *orbit, struct InstrumentModel
     for(int n=0; n<model->psd->N; n++)
     {
         f = model->psd->f[n];
+        if(f == 0.0) {
+            model->psd->C[0][0][n] = 0.0;
+            model->psd->C[0][1][n] = 0.0;
+            model->psd->C[0][2][n] = 0.0;
+            model->psd->C[1][2][n] = 0.0;
+            model->psd->C[2][2][n] = 0.0;
+            continue;
+        }
         x = f/orbit->fstar;
         f2= f*f;
         
@@ -989,9 +997,9 @@ double my_noise_log_likelihood_wavelet(struct Data *data, struct Noise *noise) {
             logL -=     tdi->X[k]*tdi->Y[k]*noise->invC[0][1][k];
             logL -=     tdi->X[k]*tdi->Z[k]*noise->invC[0][2][k];
             logL -=     tdi->Y[k]*tdi->Z[k]*noise->invC[1][2][k];
-            logL -= noise->logdetC[k];
+            logL -= 0.5*noise->logdetC[k];
     }
-    logL -= 3 * data->N * log2pi;
+    logL -= 0.5 * 3 * data->N * log2pi;
 
     return logL;
 }
@@ -1055,10 +1063,10 @@ double noise_log_likelihood_wavelet(struct Data *data, struct Noise *noise)
             break;
     }
     for(int n=0; n<N; n++)
-        logL -= noise->logdetC[n];
-    
+        logL -= 0.5*noise->logdetC[n];
+
     return logL;
-    // this comment constitutes an offering to the diety responsible for the correct factors of 2
+    // this comment constitutes an offering to the deity responsible for the correct factors of 2
 }
 
 double noise_delta_log_likelihood(struct Data *data, struct SplineModel *model_x, struct SplineModel *model_y, double fmin, double fmax,int ic)

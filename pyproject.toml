@@ -11,4 +11,5 @@ dependencies = [
     "scipy>=1.16.3",
     "seaborn>=0.13.2",
     "snakebar>=0.1.1",
+    "wdmwavelettransforms>=0.0.1",
 ]

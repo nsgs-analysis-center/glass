@@ -34,6 +34,64 @@ static void print_usage()
     exit(0);
 }
 
+int write_time_data(double dt, int N, double* data, char* fname) {
+    FILE *fptr = NULL;
+    fptr = fopen(fname,"w");
+    if (!fptr) {
+        fprintf(stderr, "Couldn't open %s for writing!\n", fname);
+        return 1;
+    }
+    for (int i=0; i<N; i++) {
+            double f = i*dt;
+            fprintf(fptr,"%lg ",f);
+            fprintf(fptr,"%lg" ,data[i]);
+            fprintf(fptr,"\n");
+    }
+    fclose(fptr);
+    return 0;
+}
+
+int write_fft_data(double df, int NFFT, double* data, char* fname) {
+    FILE *fptr = NULL;
+    fptr = fopen(fname,"w");
+    if (!fptr) {
+        fprintf(stderr, "Couldn't open %s for writing!\n", fname);
+        return 1;
+    }
+    for (int i=0; i<NFFT; i++) {
+            double f = i*df;
+            fprintf(fptr,"%lg ",f);
+            fprintf(fptr,"%lg ",data[2*i]);
+            fprintf(fptr,"%lg" ,data[2*i+1]);
+            fprintf(fptr,"\n");
+    }
+    fclose(fptr);
+    return 0;
+}
+
+int write_wdm_data(struct Wavelets* wdm, double* data, char* fname) {
+    FILE *fptr = NULL;
+    fptr = fopen(fname,"w");
+    if (!fptr) {
+        fprintf(stderr, "Couldn't open %s for writing!\n", fname);
+        return 1;
+    }
+    int k;
+    for (int i=0; i<wdm->NT; i++) {
+        double t = i*wdm->dt;
+        for (int j=0; j<wdm->NF; j++) {
+            double f = j*wdm->df;
+            wavelet_pixel_to_index(wdm, i, j, &k);
+            fprintf(fptr,"%lg ",t);
+            fprintf(fptr,"%lg ",f);
+            fprintf(fptr,"%lg",data[k]);
+            fprintf(fptr,"\n");
+        }
+    }
+    fclose(fptr);
+    return 0;
+}
+
 int main(int argc, char *argv[])
 {
     fprintf(stdout, "\n============== NOISE WAVELET MCMC ===========\n");
@@ -71,6 +129,7 @@ int main(int argc, char *argv[])
 
 
     /* Initialize data structures */
+    data->Nchannel = 3;
     alloc_data(data, flags);
 
     /*
@@ -96,6 +155,10 @@ int main(int argc, char *argv[])
     printf("new fmin=%lg, fmax=%lg\n",data->fmin,data->fmax);
 
     printf("total wavelet pixels: %d\n", data->N);
+    if (data->wdm->NF%2==1 || data->wdm->NT%2==1) {
+        fprintf(stderr, "Currently, cannot handle odd length NF or NT wdm basis!\n");
+        exit(-1);
+    }
 
     /* Initialize chain structure and files */
     initialize_chain(chain, flags, &data->cseed, "w");
@@ -104,6 +167,10 @@ int main(int argc, char *argv[])
     if(flags->strainData)
         ReadData(data,orbit,flags);
     else if(flags->simNoise) {
+#if 0
+        __builtin_debugtrap();
+        data->lmin=0;
+        data->lmax=data->wdm->NF-1;
         // inject some noise
         struct InstrumentModel inst_inj = {0};
         initialize_instrument_model_wavelet(orbit, data, &inst_inj);
@@ -126,12 +193,58 @@ int main(int argc, char *argv[])
 
         //AddNoiseWavelet(data,data->tdi);
         MyAddNoiseWavelet(data,data->tdi);
+        write_wdm_data(data->wdm, data->tdi->X, "./debug_wdm_noise.dat");
+        write_wdm_data(data->wdm, data->noise->C[0][0], "./debug_wdm_C00.dat");
+#else
+
+        // HACK: generate noise in FFT domain and transform to WDM
+        // This tests whether the WDM noise model normalization is correct
+        struct Wavelets *wdm = data->wdm;
+        int ND = wdm->NF * wdm->NT;
+        int NFFT_full = ND / 2 + 1;
+
+        struct Data data2 = {0};
+        data2.NFFT = NFFT_full;
+        data2.fmin = 0.0;
+        data2.T = data->T;
+        data2.Nchannel = 3;
+        // orbit hopefully fine?
+        struct InstrumentModel *inst_fft = malloc(sizeof(struct InstrumentModel));
+        initialize_instrument_model(orbit, &data2, inst_fft);
+        data2.noise = inst_fft->psd;
+
+        // Allocate FFT-domain TDI (needs size ND+2 for interleaved Re/Im + Nyquist)
+        struct TDI *fft_tdi = malloc(sizeof(struct TDI));
+        alloc_tdi(fft_tdi, 2*NFFT_full, 3);
+
+        // Generate correlated Gaussian noise in FFT domain
+        MyAddNoise(&data2, fft_tdi);
+
+        // Transform FFT noise to WDM domain
+        wavelet_transform_freq(wdm, fft_tdi->X, data->tdi->X);
+        wavelet_transform_freq(wdm, fft_tdi->Y, data->tdi->Y);
+        wavelet_transform_freq(wdm, fft_tdi->Z, data->tdi->Z);
+
+        write_fft_data(inst_fft->psd->f[2] - inst_fft->psd->f[0], NFFT_full, fft_tdi->X, "./debug_fft_noise.dat");
+        write_time_data(inst_fft->psd->f[2] - inst_fft->psd->f[0], NFFT_full, inst_fft->psd->C[0][0], "./debug_fft_psd.dat");
+        write_wdm_data(wdm, data->tdi->X, "./debug_fftwdm_noise.dat");
+
+        __builtin_debugtrap();
+
+        free_tdi(fft_tdi);
+        free_instrument_model(inst_fft);
+#endif
+
     }
 
     /* Store DFT copy of simulated data */
     // TODO: is this right?
     data->qmin = data->lmin;
-    if(!flags->strainData) wavelet_layer_to_fourier_transform(data);
+    if(!flags->strainData) {
+        wavelet_transform_inverse_freq(data->wdm, data->dwt->X, data->dft->X);
+        wavelet_transform_inverse_freq(data->wdm, data->dwt->Y, data->dft->Y);
+        wavelet_transform_inverse_freq(data->wdm, data->dwt->Z, data->dft->Z);
+    }
     
     /* print various data products for plotting */
     print_data(data, flags);
@@ -266,7 +379,7 @@ int main(int argc, char *argv[])
     
     // TODO improve paralellization
     //#pragma omp parallel num_threads(flags->threads)
-    {
+    //{
         int threadID;
         
         //Save individual thread number
@@ -312,28 +425,28 @@ int main(int argc, char *argv[])
                 // TODO fix this to be the model-agnostic stochastic component struct once we make it
                 //noise_ptmcmc(inst_model, chain, flags);
                 
-                if(step%(flags->NMCMC/100)==0)printf("noise_wavelet_mcmc at step %i\n",step);
-                
+                if(flags->NMCMC >= 100 && step%(flags->NMCMC/100)==0)printf("noise_wavelet_mcmc at step %i\n",step);
+
                 // print chain files
                 fprintf(noiseChainFile,"%i %.12g ",step,inst_model[chain->index[0]]->logL);
                 print_instrument_state(inst_model[chain->index[0]], noiseChainFile);
                 fprintf(noiseChainFile,"\n");
 
-                if(flags->confNoise) 
+                if(flags->confNoise)
                 {
                     fprintf(foregroundChainFile,"%i %.12g ", step, conf_model[chain->index[0]]->logL);
                     print_foreground_state(conf_model[chain->index[0]], foregroundChainFile);
                     fprintf(foregroundChainFile,"\n");
                 }
 
-                if(flags->sgwbTemplate>=0) 
+                if(flags->sgwbTemplate>=0)
                 {
                     fprintf(sgwbChainFile,"%i %.12g ", step, sgwb_model[chain->index[0]]->logL);
                     print_sgwb_state(sgwb_model[chain->index[0]], sgwbChainFile);
                     fprintf(sgwbChainFile, "\n");
                 }
 
-                if(step%(flags->NMCMC/100)==0)
+                if(flags->NMCMC >= 100 && step%(flags->NMCMC/100)==0)
                 {
                     generate_instrument_noise_model_wavelet(data->wdm, orbit, inst_model[chain->index[0]]);
                     sprintf(filename,"%s/current_instrument_noise_model.dat",data->dataDir);
@@ -383,7 +496,7 @@ int main(int argc, char *argv[])
             
         }// end of MCMC loop
         
-    }// End of parallelization
+    //}// End of parallelization
     
     fclose(noiseChainFile);
     if(flags->confNoise)fclose(foregroundChainFile);

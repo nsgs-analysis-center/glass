@@ -8,15 +8,15 @@
 #OMP_NUM_THREADS=1 lldb -- build/apps/src/noise_wavelet_mcmc --sim-noise --conf-noise --sgwb-template 0 --steps 10 --chains 1 --cheat --fmin 5e-4 --fmax 8e-3 --duration $((60*60*24*30*12)) --threads 1
 #OMP_NUM_THREADS=1 build/apps/src/noise_wavelet_mcmc --sim-noise --conf-noise --sgwb-template 0 --steps 10000 --chains 1 --cheat --fmin 5e-4 --fmax 8e-3 --duration $((60*60*24*30*1)) --threads 1
 #OMP_NUM_THREADS=1 build/apps/src/noise_wavelet_mcmc --sim-noise --conf-noise --sgwb-template 0 --steps 500 --chains 1 --cheat --fmin 1e-3 --fmax 1.1e-3 --duration $((60*60*24*30*12)) --threads 1
+#build/apps/src/noise_wavelet_mcmc \
     OMP_NUM_THREADS=1 lldb -- build/apps/src/noise_wavelet_mcmc \
-        --timeseries \
-        --data ./simulated_data_timeseries.dat\
         --steps 10000 \
         --chains 1 \
         --cheat \
         --fmin 5e-4 \
         --fmax 8e-3 \
-        --duration $((60*60*24*30*1)) \
-        --threads 1
-#        --sim-noise \
-
+        --duration $((7680*338)) \
+        --threads 1 \
+        --timeseries \
+        --sim-noise
+#        --data ./simulated_data_timeseries.dat

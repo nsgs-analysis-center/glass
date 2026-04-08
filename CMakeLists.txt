@@ -17,7 +17,7 @@ endforeach()
 
 # Set compiler
 #set(CMAKE_C_COMPILER mpicc)
-set(CMAKE_C_COMPILER /opt/homebrew/Cellar/llvm/22.1.1/bin/clang)
+set(CMAKE_C_COMPILER /opt/homebrew/Cellar/llvm/22.1.2/bin/clang )
 
 project(glass VERSION 2.0.0 LANGUAGES C)
 
@@ -47,7 +47,7 @@ set_target_properties(OpenMP::OpenMP_C PROPERTIES
 )
 endif()
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fopenmp -Wall -std=gnu99 -march=native -glldb -O0")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fopenmp -Wall -std=gnu99 -march=native")
 SET(CMAKE_C_FLAGS_DEBUG "-glldb -O0")
 SET(CMAKE_C_FLAGS_RELEASE "-O3")
 

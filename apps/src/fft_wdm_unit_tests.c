@@ -41,13 +41,14 @@ int write_wdm_data(struct Wavelets* wdm, double* data, char* fname) {
         double t = i*wdm->dt;
         for (int j=0; j<wdm->NF; j++) {
             double f = j*wdm->df;
-            k = j*wdm->NT + i;
+            wavelet_pixel_to_index(wdm, i, j, &k);
             fprintf(fptr,"%lg ",t);
             fprintf(fptr,"%lg ",f);
             fprintf(fptr,"%lg",data[k]);
             fprintf(fptr,"\n");
         }
     }
+    fclose(fptr);
     return 0;
 }
 
@@ -65,6 +66,7 @@ int write_fft_data(double df, int NFFT, double* data, char* fname) {
             fprintf(fptr,"%lg" ,data[2*i+1]);
             fprintf(fptr,"\n");
     }
+    fclose(fptr);
     return 0;
 }
 
@@ -81,6 +83,7 @@ int write_time_data(double dt, int N, double* data, char* fname) {
             fprintf(fptr,"%lg" ,data[i]);
             fprintf(fptr,"\n");
     }
+    fclose(fptr);
     return 0;
 }
 
@@ -252,22 +255,6 @@ int main(int argc, char *argv[])
     // Limits on WD windows are only from Necula et. al eq (7)
     // skip for now, seems hard
 
-    // WDM comparison with olitas
-    double olitas_wdm[NFFT_TEST] = {0};
-    FILE* f = fopen("./olitas_wdm_impulse.dat","r");
-    if (!f) {
-        printf("No Olitas.jl output to compare against, skipping WDM code comparison...");
-    } else {
-        for (int j=0; j < wdm.NT; j++)
-            for (int i=0; i< wdm.NF; i++)
-                fscanf(f, "%lf ", &olitas_wdm[i*wdm.NT+j]); // note transpose during read
-        ok = test_array_equality(test_data,
-                olitas_wdm,
-                NFFT_TEST,
-                &wdm_tests,
-                "Olitas.jl WDM(impulse) vs our WDM(impulse)");
-    }
-    fclose(f);
 
     if (CREATE_DEBUG_FILES)
         write_wdm_data(&wdm, test_data, "./dbg_wdm_impulse.dat");
@@ -296,6 +283,22 @@ int main(int argc, char *argv[])
     // wavelet_transform_from_table
     // active_wavelet_list
     // wavelet_window_frequency -- probably remove
+    // WDM comparison with olitas
+    double olitas_wdm[NFFT_TEST] = {0};
+    FILE* f = fopen("./olitas_wdm_impulse.dat","r");
+    if (!f) {
+        printf("No Olitas.jl output to compare against, skipping WDM code comparison...");
+    } else {
+        for (int j=0; j < wdm.NT; j++)
+            for (int i=0; i< wdm.NF; i++)
+                fscanf(f, "%lf ", &olitas_wdm[i*wdm.NT+j]); // note transpose during read
+        ok = test_array_equality(test_data,
+                olitas_wdm,
+                NFFT_TEST,
+                &wdm_tests,
+                "Olitas.jl WDM(impulse) vs our WDM(impulse)");
+    }
+    fclose(f);
 
     // wavelet_transform_segment
         // this one takes a short freq segment and transforms to wdm
@@ -411,7 +414,138 @@ int main(int argc, char *argv[])
 
     print_test_block_stats(&wdm_tests);
 
-    struct UnitTestBlockInfo* all_test_blocks[] = {&fft_tests, &wdm_tests};
+    fprintf(stdout, "\n================= WDM VARIANCE / PSD CHECKS ================\n");
+    struct UnitTestBlockInfo var_tests = {0};
+    var_tests.block_name = "WDM variance tests";
+    var_tests.atol = 0.0;
+    var_tests.rtol = 0.15; // 15% tolerance for statistical test with Nreal realizations
+
+    /*
+     * Empirical WDM variance test:
+     * Generate white noise in FFT domain (unit variance per complex bin),
+     * transform to WDM, accumulate variance per layer.
+     * This measures the actual transfer function from FFT PSD to WDM variance.
+     */
+    {
+        int Nreal = 200; // number of realizations for variance estimation
+        unsigned int seed = 12345;
+        int Nt = wdm.NT;
+        int Nf = wdm.NF;
+        int ND = Nf * Nt;
+        int NFFT = ND / 2 + 1;
+
+        // accumulate variance per WDM layer (NF+1 layers: 0..NF)
+        double *layer_var = calloc(Nf + 1, sizeof(double));
+        int    *layer_count = calloc(Nf + 1, sizeof(int));
+        double *fft_data = calloc(2 * NFFT, sizeof(double));
+        double *wdm_data = calloc(ND, sizeof(double));
+
+        for (int r = 0; r < Nreal; r++) {
+            // Generate unit-variance white noise in FFT domain
+            // Each complex bin: re ~ N(0, 1/sqrt(2)), im ~ N(0, 1/sqrt(2))
+            // so E[|X|^2] = 1
+            memset(fft_data, 0, 2 * NFFT * sizeof(double));
+            for (int k = 1; k < NFFT - 1; k++) {
+                fft_data[2*k]     = rand_r_N_0_1(&seed) / M_SQRT2;
+                fft_data[2*k + 1] = rand_r_N_0_1(&seed) / M_SQRT2;
+            }
+            // DC and Nyquist are real
+            fft_data[0] = rand_r_N_0_1(&seed);
+            fft_data[2*(NFFT-1)] = rand_r_N_0_1(&seed);
+
+            // Forward WDM transform
+            memset(wdm_data, 0, ND * sizeof(double));
+            wavelet_transform_freq(&wdm, fft_data, wdm_data);
+
+            // Accumulate per-layer variance
+            // DC layer (m=0): even rows of column 0
+            for (int n = 0; n < Nt; n += 2) {
+                layer_var[0] += wdm_data[n] * wdm_data[n];
+                layer_count[0]++;
+            }
+            // Nyquist layer (m=NF): odd rows of column 0
+            for (int n = 0; n < Nt; n += 2) {
+                layer_var[Nf] += wdm_data[n + 1] * wdm_data[n + 1];
+                layer_count[Nf]++;
+            }
+            // General layers (m=1..NF-1)
+            for (int m = 1; m < Nf; m++) {
+                for (int n = 0; n < Nt; n++) {
+                    int k = n + m * Nt;
+                    layer_var[m] += wdm_data[k] * wdm_data[k];
+                    layer_count[m]++;
+                }
+            }
+        }
+
+        // Normalize to get empirical variance
+        for (int m = 0; m <= Nf; m++) {
+            if (layer_count[m] > 0)
+                layer_var[m] /= layer_count[m];
+        }
+
+        // Compute analytical prediction: Σ phif_fwd[|j|]^2 / (2*Nt^2) for general layers
+        // For DC/Nyquist: factor of sqrt(2) in transform, and only Nt/2 coefficients
+        double *phif_fwd = wdm.window_freq_forward;
+        double window_sum = 0.0;
+        for (int j = 0; j <= Nt/2; j++) {
+            double w = (j == 0) ? 1.0 : 2.0;
+            window_sum += w * phif_fwd[j] * phif_fwd[j];
+        }
+        double predicted_var_general = window_sum / (2.0 * (double)Nt * (double)Nt);
+        // DC/Nyquist: sqrt(2) factor in transform, so variance is 2x, but only re part
+        // and only Nt/2 coefficients (even rows). The factor works out differently.
+        double predicted_var_dc = window_sum / ((double)Nt * (double)Nt);
+
+        if (CREATE_DEBUG_FILES) {
+            FILE *fvar = fopen("./dbg_wdm_layer_variance.dat", "w");
+            if (fvar) {
+                fprintf(fvar, "# layer  empirical_var  predicted_var_general  predicted_var_dc  Nsamples\n");
+                for (int m = 0; m <= Nf; m++) {
+                    double predicted = (m == 0 || m == Nf) ? predicted_var_dc : predicted_var_general;
+                    fprintf(fvar, "%d  %lg  %lg  %lg  %d\n", m, layer_var[m], predicted, predicted_var_dc, layer_count[m]);
+                }
+                fclose(fvar);
+            }
+        }
+
+        // Check general layers (skip a few near edges)
+        printf("Test %d: WDM empirical variance vs analytical (general layers)\n", ++(var_tests.test_counter));
+        printf("\tpredicted_var_general = %lg (window_sum=%lg, Nt=%d)\n", predicted_var_general, window_sum, Nt);
+        printf("\tpredicted_var_dc      = %lg\n", predicted_var_dc);
+        int var_fail = 0;
+        for (int m = 2; m < Nf - 1; m++) {
+            double rel_err = fabs(layer_var[m] - predicted_var_general) / predicted_var_general;
+            if (rel_err > var_tests.rtol) {
+                if (var_fail < 5) // limit output
+                    printf("\tlayer %d: empirical=%lg predicted=%lg rel_err=%lg\n",
+                           m, layer_var[m], predicted_var_general, rel_err);
+                var_fail++;
+            }
+        }
+        if (var_fail > 0) {
+            printf("\t%d/%d general layers failed (>%.0f%% relative error)\n", var_fail, Nf-3, var_tests.rtol*100);
+            var_tests.fail_counter++;
+        } else {
+            printf("\tpass (all general layers within %.0f%%)\n", var_tests.rtol*100);
+        }
+
+        // Print the ratio C_fft/C_wdm for reference (what the normalization factor should be)
+        printf("\n\tReference: for unit FFT PSD (C_fft=1), WDM variance = %lg\n", predicted_var_general);
+        printf("\tThis means C_wdm = C_fft * %lg\n", predicted_var_general);
+        printf("\tOr equivalently, C_wdm = C_fft / %lg\n", 1.0/predicted_var_general);
+        printf("\tCompare: code currently uses C_wdm = C_fft / 8\n");
+        printf("\tNf*Nt = %d, 1/(Nf*Nt) = %lg\n", Nf*Nt, 1.0/(Nf*Nt));
+
+        free(layer_var);
+        free(layer_count);
+        free(fft_data);
+        free(wdm_data);
+    }
+
+    print_test_block_stats(&var_tests);
+
+    struct UnitTestBlockInfo* all_test_blocks[] = {&fft_tests, &fft_outplace_tests, &wdm_tests, &var_tests};
     int num_blocks = sizeof(all_test_blocks)/sizeof(all_test_blocks[0]);
     print_test_blocks_summary_stats(all_test_blocks, num_blocks);
 

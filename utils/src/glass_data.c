@@ -179,7 +179,7 @@ void initialize_chain(struct Chain *chain, struct Flags *flags, unsigned int *se
 void alloc_data(struct Data *data, struct Flags *flags)
 {
     int NMCMC = flags->NMCMC;
-        
+
     data->logN = log((double)(data->N*data->Nchannel));
     
     data->tdi   = malloc(sizeof(struct TDI));
@@ -820,7 +820,8 @@ void ReadASCII_timeseries(struct Data* data, struct TDI* tdi_dft, struct TDI* td
     double junk;
 
     FILE *fptr = fopen(data->fileName,"r");
-    assert(data->Nchannel == 3);
+    // only can read XYZ
+    data->Nchannel = 3;
     
     //count number of samples
     int Nsamples = 0;
@@ -1118,7 +1119,11 @@ void MyAddNoise(struct Data *data, struct TDI *tdi)
     double L[Nc][Nc]; // will be Cholesky decomposition of covariance
     double C[Nc][Nc]; // non-ragged copy of covariance
     double n[Nc]; // vector of random normals
-    for (int k=0; k<data->NFFT; k++) {
+    // force 0 DC component (will probably be cropped out later anyway)
+    tdi->X[0] = 0.0; tdi->X[1] = 0.0;
+    tdi->Y[0] = 0.0; tdi->Y[1] = 0.0;
+    tdi->Z[0] = 0.0; tdi->Z[1] = 0.0;
+    for (int k=1; k<data->NFFT; k++) {
         for (int i=0; i<Nc; i++)
             for (int j=0; j<Nc; j++) {
                 C[i][j] = data->noise->C[i][j][k];
@@ -1242,8 +1247,7 @@ void MyAddNoiseWavelet(struct Data *data, struct TDI *tdi)
                 }
             my_cholesky_decomp(3, C, L);
             for (int m=0; m<3; m++)
-                n[m] = rand_r_N_0_1(&r) * M_SQRT2; // note 2 here -- variance of real or imaginary part
-                //n[m] = rand_r_N_0_1(&r) / M_SQRT2; // note 2 here -- variance of real or imaginary part
+                n[m] = rand_r_N_0_1(&r); // real wavelet coefficient gets full variance, no sqrt(2) factor
             for (int m=0; m<3; m++) {
                 tdi->X[k] += L[0][m] * n[m];
                 tdi->Y[k] += L[1][m] * n[m];
