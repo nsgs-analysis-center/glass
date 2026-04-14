@@ -843,3 +843,65 @@ void wavelet_transform_freq_segment(struct Wavelets *wdm, int N, int layer, doub
         freqdata[i] = wdmdata[i];
 }
 
+
+// This should more or less match the middle formula of (19) of Neil's paper: https://arxiv.org/pdf/2009.00043
+void stationary_dft_psd_to_wdm_psd(struct Wavelets* wdm, double * window, double * psd, double* wdm_psd) {
+    int NF = wdm->NF;
+    int NT = wdm->NT;
+    int ND = NF * NT;
+    int half = NT / 2;
+    int nmax = ND / 2;
+    double dt = WAVELET_DURATION / NF ;
+
+    // Compute variance for all NF+1 transform layers (0=DC ... NF=Nyquist)
+    double layer_psd[NF + 1];
+    memset(layer_psd, 0, (NF + 1) * sizeof(double));
+
+    for (int l = -(half - 1); l < half; l++) {
+        double w2 = window[abs(l)] * window[abs(l)];
+        for (int m = 0; m <= NF; m++) {
+            int k = m * half + l;
+            // Fold into [0, nmax] via reflection
+            // signal is real: S(-f)=S(f))
+            k = abs(k);
+            k = k % (2 * nmax);
+            if (k > nmax) k = 2 * nmax - k;
+            layer_psd[m] += w2 * psd[k];
+        }
+    }
+
+    double norm = dt * NT * NF;
+    for (int m = 0; m <= NF; m++)
+        layer_psd[m] /= norm;
+
+    //   regular layers m=1..NF-1: wdm_psd[n + NT*m]
+    //   DC (layer 0):     even rows of column 0
+    //   Nyquist (layer NF): odd rows of column 0
+    memset(wdm_psd, 0, NT * NF * sizeof(double));
+
+    for (int m = 1; m < NF; m++) {
+        for (int n = 0; n < NT; n++) {
+            wdm_psd[n + NT * m] = layer_psd[m];
+        }
+    }
+    for (int n = 0; n < NT; n += 2)
+        wdm_psd[n] = layer_psd[0];       // DC at even rows
+    for (int n = 1; n < NT; n += 2)
+        wdm_psd[n] = layer_psd[NF];      // Nyquist at odd rows
+}
+
+// this is the approximate conversion of a stationary FFT PSD into a wavelet PSD
+// This should more or less match the RHS of (19) of Neil's paper: https://arxiv.org/pdf/2009.00043
+// this approximation should be good when the `psd` changes slowly in the bandwith of one wavelet layer (wdm->df)
+void stationary_dft_psd_to_wdm_psd_approx(struct Wavelets* wdm, double * fftfreq, double fftfreq_min, double * psd, int lmin, int Nlayers,double* wdm_psd) {
+    double factor = wdm->df;
+    for (int i=0; i<Nlayers; i++) {
+        double fcenter = (i+lmin)*wdm->df + 0.5*wdm->df;
+        int fft_idx = (fcenter - fftfreq_min)*wdm->T;
+        int k;
+        for (int j=0; j<wdm->NT; j++) {
+            wavelet_pixel_to_index(wdm, i, j, &k);
+            wdm_psd[k] = psd[fft_idx] * factor;
+        }
+    }
+}

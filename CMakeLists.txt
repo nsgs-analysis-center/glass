@@ -17,7 +17,7 @@ endforeach()
 
 # Set compiler
 #set(CMAKE_C_COMPILER mpicc)
-set(CMAKE_C_COMPILER /opt/homebrew/Cellar/llvm/22.1.2/bin/clang )
+set(CMAKE_C_COMPILER /opt/homebrew/Cellar/llvm/22.1.3/bin/clang )
 
 project(glass VERSION 2.0.0 LANGUAGES C)
 
