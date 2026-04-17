@@ -24,7 +24,8 @@
 #include <time.h>
 #include <assert.h>
 
-#define NFFT_TEST (1536*10)
+#define N_FREQ_LAYERS ((int)WAVELET_DURATION / LISA_CADENCE)
+#define NFFT_TEST (N_FREQ_LAYERS*10)
 #define CREATE_DEBUG_FILES (true)
 // Note that for us, NF is essentially harcoded by the choice of WAVELET_DURATION
 // these tests were written for an NF=1536
@@ -105,10 +106,9 @@ void print_test_blocks_summary_stats(struct UnitTestBlockInfo** testinfos, int N
     }
     printf("\n\nAll tests finished. Failed %d/%d\n\n", total_fails, total_tests);
 }
-
-bool test_array_equality(double* ta, double* tb, int N, struct UnitTestBlockInfo* testinfo, char* test_name) {
+bool test_array_equality_from_index(double* ta, double* tb, int N, int istart, struct UnitTestBlockInfo* testinfo, char* test_name) {
     printf("Test %d: %s\n", ++(testinfo->test_counter), test_name);
-    for (int i=0; i<N; i++) {
+    for (int i=istart; i<N; i++) {
         if (fabs(ta[i] - tb[i]) > testinfo->atol + testinfo->rtol*fabs(tb[i])) {
             printf("\tarrays unequal within tolerance at index %d, got %lg != %lg\n", i, ta[i], tb[i]);
             (testinfo->fail_counter)++;
@@ -119,13 +119,31 @@ bool test_array_equality(double* ta, double* tb, int N, struct UnitTestBlockInfo
     return true;
 }
 
+bool test_array_equality(double* ta, double* tb, int N, struct UnitTestBlockInfo* testinfo, char* test_name) {
+    return test_array_equality_from_index(ta, tb, N, 0, testinfo, test_name);
+}
+
 /* unit test conventions!
  * I'll try to keep output minimal. Let's print name of test and either pass or fail with error
  */
 
+void fill_with_impulse(double* data, int N) {
+    memset(data,0,sizeof(double)*N);
+    data[0] = 1.0;
+}
+void fill_with_sines(double* data, int N, double* freqs, int Nfreqs) {
+    memset(data,0,sizeof(double)*N);
+    for (int i = 0; i < N; i++) {
+        double t = LISA_CADENCE*i;
+        for (int j = 0; j<Nfreqs; j++) {
+            data[i] += sin(2*M_PI*freqs[j]*t);
+        }
+    }
+}
+
 int main(int argc, char *argv[])
 {
-
+    _Static_assert(N_FREQ_LAYERS % 2 == 0, "Number of frequency layers must be even for our WDM implementation!");
     print_LISA_ASCII_art(stdout);
     print_version(stdout);
     // start test block
@@ -133,16 +151,20 @@ int main(int argc, char *argv[])
     struct UnitTestBlockInfo fft_tests = {0};
     struct UnitTestBlockInfo fft_outplace_tests = {0};
     struct UnitTestBlockInfo wdm_tests = {0};
+    struct UnitTestBlockInfo wdm_sine_tests = {0};
     total_tests.block_name = "All tests";
     fft_tests.block_name = "FFT inplace tests";
     fft_outplace_tests.block_name = "FFT outplace tests";
     wdm_tests.block_name = "WDM tests";
+    wdm_sine_tests.block_name = "WDM sine tests";
     fft_tests.atol = 1e-10;
     fft_tests.rtol = 1e-5;
     fft_outplace_tests.atol = 1e-10;
     fft_outplace_tests.rtol = 1e-5;
     wdm_tests.atol = 1e-10;
     wdm_tests.rtol = 1e-5;
+    wdm_sine_tests.atol = 1e-8;
+    wdm_sine_tests.rtol = 1e-5;
 
 
     // test what FFT coeffs are
@@ -157,6 +179,7 @@ int main(int argc, char *argv[])
     double ref_fft_data[NFFT_TEST+2] = {0};
     double ref_cx_fft_data[2*NFFT_TEST] = {0};
     double test_data_copy[NFFT_TEST] = {0};
+    double ref_wdm[NFFT_TEST];
     // these copies are just for reference, won't be touched
     ref_data[0]  = 1.0;
     ref_data_cx[0]  = 1.0;
@@ -173,9 +196,10 @@ int main(int argc, char *argv[])
             "Real FFT of impulse matches analytic");
 
     glass_inverse_real_fft(test_data, NFFT_TEST);
-    ok = test_array_equality(test_data,
+    ok = test_array_equality_from_index(test_data,
             ref_data,
             NFFT_TEST,
+            1,
             &fft_tests,
             "IFFTR of FFTR(impulse)");
 
@@ -338,35 +362,12 @@ int main(int argc, char *argv[])
             wdm.NT,
             &wdm_tests,
             "wavelet_transform_segment (layer 5) vs WDM(impulse) (layer 5)");
-    // wavelet_transform_by_layers
-        // this one appears to take time data, tukey window
-        // perform wdm essentially assuming content only goes from j=jmin to Nlayers+jmin
-        // used in UCB waveform
-    test_layer = 5;
-    int test_Nlayer = 3;
-    // timeseries, impulse again
-    memset(&test_data, 0, NFFT_TEST*sizeof(double));
-    test_data[0] = 1.0;
-    double window[wdm.NT/2 + 1];
-    build_wdm_filter_freq(window, wdm.NF, wdm.NT, wdm.A, true);
-    wavelet_transform_timefreq_by_layers(&wdm, test_layer, test_Nlayer, window, test_data);
-    // output is now the first test_Nlayer*NT elements of test_data
-    double wdm_crop[test_Nlayer*wdm.NT];
-    for (int i=0; i < test_Nlayer*wdm.NT; i++)
-        wdm_crop[i] = olitas_wdm[test_layer*wdm.NT + i];
-    ok = test_array_equality(test_data,
-            wdm_crop,
-            test_Nlayer*wdm.NT,
-            &wdm_tests,
-            "wavelet_transform_timefreq_by_layers (5-7) vs WDM(impulse) (5-7)");
-
 
     // Build full scalogram by calling my_wavelet_transform_segment on every layer
     // and compare against the full wavelet_transform_freq result
     memset(&test_data, 0, NFFT_TEST*sizeof(double));
     test_data[0] = 1.0;
     // get reference full WDM
-    double ref_wdm[NFFT_TEST];
     memcpy(ref_wdm, test_data, NFFT_TEST*sizeof(double));
     wavelet_transform_timefreq(&wdm, ref_wdm);
     // get full FFT for extracting segments
@@ -411,7 +412,110 @@ int main(int argc, char *argv[])
 
     print_test_block_stats(&wdm_tests);
 
-    struct UnitTestBlockInfo* all_test_blocks[] = {&fft_tests, &wdm_tests};
+    fprintf(stdout, "\n================= WDM CONVENTION CHECKS -- SINE WAVES ================\n");
+    double DeltaF = wdm.df;
+    double sine_freqs[] = {
+        10      *DeltaF,
+        20.5    *DeltaF,
+        1000.0  *DeltaF,
+        1000.5  *DeltaF,
+    };
+    int Nfreqs = sizeof(sine_freqs) / sizeof(sine_freqs[0]);
+    // timeseries, sine waves now
+    fill_with_sines(test_data, NFFT_TEST, sine_freqs, Nfreqs);
+    fill_with_sines(ref_wdm,   NFFT_TEST, sine_freqs, Nfreqs);
+    fill_with_sines(ref_data,  NFFT_TEST, sine_freqs, Nfreqs);
+
+    wavelet_transform_timefreq(&wdm, test_data);
+    wavelet_transform_timefreq(&wdm, ref_wdm);
+    // TODO: compare to reference?
+    
+    glass_forward_real_fft_outplace(ref_data, ref_fft_data, NFFT_TEST);
+    wavelet_transform_inverse_freq(&wdm, test_data, test_fft_data);
+    
+    ok = test_array_equality(test_fft_data,
+            ref_fft_data,
+            NFFT_TEST+2,
+            &wdm_sine_tests,
+            "WDM(sines) to FFT vs reference FFT");
+    // wavelet_transform_by_layers
+    // note that this is only used in the UCB wavefrom, which
+    // gets heterodyned and downsampled before calling this function
+    //
+    // We do an analagous thing here to match! 
+
+    test_layer = 999;
+    int test_Nlayer = 5;
+
+    double by_layer_sine_freqs[] = {
+        1001.0 * DeltaF, 
+       // 1001.5 * DeltaF, 
+       // note only integer layers work at the moment since we're not heterodyning the test correctly
+    };
+    /*
+     *
+     *
+      for (int i = 0; i < N_ds; i++) {
+          double t = dt_ds * i;
+          double re = 0, im = 0;
+          for (int j = 0; j < by_layer_Nfreqs; j++) {
+              // sin(2π f t) · e^{-2π i f₀ t} kept as complex
+              double ang_sig = 2*M_PI*by_layer_sine_freqs[j]*t;
+              double ang_het = 2*M_PI*f0*t;
+              // sin(a)·e^{-ib} = (cos(b)sin(a)) + i(-sin(b)sin(a))
+              re += sin(ang_sig)*cos(ang_het);
+              im += -sin(ang_sig)*sin(ang_het);
+          }
+          het_data_cx[2*i]   = re;
+          het_data_cx[2*i+1] = im;
+      }
+    */
+    int by_layer_Nfreqs = sizeof(by_layer_sine_freqs) / sizeof(by_layer_sine_freqs[0]);
+
+    double ref_wdm_sines[NFFT_TEST];
+    fill_with_sines(ref_wdm_sines, NFFT_TEST, by_layer_sine_freqs, by_layer_Nfreqs);
+    wavelet_transform_timefreq(&wdm, ref_wdm_sines);
+
+    // Heterodyned + downsampled input like UCB: carrier f0 shifts layer
+    // (test_layer-1) to DC, new cadence dt_ds = wdm.dt/(Nlayers+1)
+    int N_ds = wdm.NT * (test_Nlayer + 1);
+    int decimation = wdm.NF / (test_Nlayer + 1);
+    if (wdm.NF % (test_Nlayer + 1)) {
+        fprintf(stderr, "Couldn't evenly divide the number of frequencies by Nlayers+1 ! Can't decimate test signal cleanly");
+        exit(-1);
+    }
+    double dt_ds = decimation * LISA_CADENCE;
+    double f0 = (test_layer - 1) * wdm.df;
+    double het_data[N_ds];
+    memset(het_data, 0, N_ds*sizeof(double));
+    for (int i = 0; i < N_ds; i++) {
+        double t = dt_ds * i;
+        for (int j = 0; j < by_layer_Nfreqs; j++)
+            het_data[i] += sin(2*M_PI*(by_layer_sine_freqs[j] - f0) * t);
+    }
+
+    double window[wdm.NT/2 + 1];
+    build_wdm_filter_freq(window, wdm.NF, wdm.NT, wdm.A, true);
+    wavelet_transform_timefreq_by_layers(&wdm, test_layer, test_Nlayer, window, het_data);
+
+    double wdm_crop_sines[test_Nlayer*wdm.NT];
+    for (int n = 0; n < wdm.NT; n++)
+        for (int l = 0; l < test_Nlayer; l++)
+            wdm_crop_sines[n*test_Nlayer + l] = ref_wdm_sines[(test_layer + l)*wdm.NT + n];
+    ok = test_array_equality(het_data,
+            wdm_crop_sines,
+            test_Nlayer*wdm.NT,
+            &wdm_sine_tests,
+            "wavelet_transform_timefreq_by_layers(heterodyned, downsampled sine) vs WDM(sine)");
+
+    print_test_block_stats(&wdm_sine_tests);
+
+    struct UnitTestBlockInfo* all_test_blocks[] = {
+        &fft_tests,
+        &fft_outplace_tests,
+        &wdm_tests,
+        &wdm_sine_tests,
+    };
     int num_blocks = sizeof(all_test_blocks)/sizeof(all_test_blocks[0]);
     print_test_blocks_summary_stats(all_test_blocks, num_blocks);
 

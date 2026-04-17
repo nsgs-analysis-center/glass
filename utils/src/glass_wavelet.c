@@ -534,15 +534,20 @@ void wavelet_transform_freq_one_layer(struct Wavelets *wdm, int N, double *freqd
     }
 }
 
-// Basically the same thing as wavelet_transform_timefreq, but we assume
-// that the output fits into the layers with indices jmin...jmin+Nlayers
 // used only in the UCB waveform
 // expects timedata of length wdm->NT*(Nlayers+1)
+// assumes timedata has been heterodyned and freqs start at jmin
 void wavelet_transform_timefreq_by_layers(struct Wavelets* wdm, int jmin, int Nlayers, double *window, double* timedata) {
     int Nf = wdm->NF;
     int Nt = wdm->NT;
     int N = Nt * (Nlayers+1); // length of input data
     double freqdata[N + 2]; // full-length FFT
+
+    // RJR: my understanding of this factor is that it matches how signals
+    // (e.g. sines) scale in the FFT. We need this because we have downsampled and
+    // N here != wdm->NT*wdm->NF. 
+    // TODO: define all FFTs to include a dt factor? That would absorb this!
+    double normalization = ((double)wdm->NF)/(Nlayers+1.0);
 
     // TODO: tukey window was here, removed for invertibility in tests
     /*
@@ -556,8 +561,8 @@ void wavelet_transform_timefreq_by_layers(struct Wavelets* wdm, int jmin, int Nl
     double DX_t[2*Nt];
     double *phif = window; // should be length Nt/2+1
 
-    // output is packed as Nlayers * Nt elements
-    memset(timedata, 0, Nlayers * Nt * sizeof(double));
+    // zero the input buffer so samples beyond Nt*Nlayers don't leak
+    memset(timedata, 0, N * sizeof(double));
 
     for (int m = jmin; m < jmin + Nlayers; m++) {
         int center = (m - jmin + 1) * Nt / 2;
@@ -574,22 +579,28 @@ void wavelet_transform_timefreq_by_layers(struct Wavelets* wdm, int jmin, int Nl
         }
         glass_inverse_complex_fft_outplace(DX, DX_t, Nt);
 
-        int layer_offset = (m - jmin) * Nt;
+        int layer_offset = m - jmin;
+        int k;
         if (m == 0) {
-            for (int n = 0; n < Nt; n += 2)
-                timedata[layer_offset + n] = DX_t[2*n] * M_SQRT2;
+            for (int n = 0; n < Nt; n += 2) {
+                k = n*Nlayers + layer_offset;
+                timedata[k] = DX_t[2*n] * M_SQRT2 * normalization;
+            }
         }
         else if (m == Nf) {
-            for (int n = 0; n < Nt; n += 2)
-                timedata[layer_offset + n + 1] = DX_t[2*n] * M_SQRT2;
+            for (int n = 0; n < Nt; n += 2) {
+                k = n*Nlayers + layer_offset;  // unused in production since UCB has jmin>=1 and jmax<NF)
+                timedata[k] = DX_t[2*n] * M_SQRT2 * normalization;
+            }
         }
         else {
             int imag_sign = m % 2 == 0 ? 1 : -1;
             for (int n = 0; n < Nt; n++) {
+                k = n*Nlayers + layer_offset;
                 if ((n + m) % 2 == 0)
-                    timedata[layer_offset + n] = DX_t[2*n];
+                    timedata[k] = DX_t[2*n] * normalization;
                 else
-                    timedata[layer_offset + n] = imag_sign * DX_t[2*n+1];
+                    timedata[k] = imag_sign * DX_t[2*n+1] * normalization;
             }
         }
     }
