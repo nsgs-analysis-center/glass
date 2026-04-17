@@ -48,6 +48,7 @@ struct Wavelets
     double deltaf;
     double *fdot;
     double *window;
+    double *window_freq_forward;
     double norm;
     
     int N;
@@ -75,17 +76,27 @@ struct TimeFrequencyTrack * malloc_time_frequency_track(struct Wavelets *wdm);
 void free_time_frequency_track(struct TimeFrequencyTrack *track);
 
 void initialize_wavelet(struct Wavelets *wdm, double T);
-void wavelet_window_frequency(struct Wavelets *wdm, double *window, int Nlayers);
 void wavelet_index_to_pixel(struct Wavelets *wdm, int *i, int *j, int k);
 void wavelet_pixel_to_index(struct Wavelets *wdm, int i, int j, int *k);
+void active_wavelet_list(struct Wavelets *wdm, double *freqX, double *freqY, double *freqZ, double *fdotX, double *fdotY, double *fdotZ, int *wavelet_list, int *reverse_list, int *Nwavelet, int *jmin, int *jmax);
 
+/* // DEPRECATED WAVELET FUNCS, see new ones below
+void wavelet_window_frequency(struct Wavelets *wdm, double *window, int Nlayers);
 void wavelet_transform(struct Wavelets *wdm, double *data);
 void wavelet_transform_inverse_time(struct Wavelets *wdm, double *data);
-void wavelet_tansform_inverse_fourier(struct Wavelets *wdm, double *data);
+void wavelet_transform_inverse_fourier(struct Wavelets *wdm, double *data);
 void wavelet_transform_by_layers(struct Wavelets *wdm, int jmin, int Nlayers, double *window, double *data);
 void wavelet_transform_segment(struct Wavelets *wdm, int N, int layer, double *data);
 void wavelet_transform_from_table(struct Wavelets *wdm, double *phase, double *freq, double *freqd, double *amp, int *jmin, int *jmax, double *wave, int *list, int *rlist, int Nmax);
+*/
 
-void active_wavelet_list(struct Wavelets *wdm, double *freqX, double *freqY, double *freqZ, double *fdotX, double *fdotY, double *fdotZ, int *wavelet_list, int *reverse_list, int *Nwavelet, int *jmin, int *jmax);
+// new transform funcs from Robbie (March 2026)
+// these are mostly translations / simplifications of WDMWaveletTransforms
+void wavelet_transform_timefreq(struct Wavelets *wdm, double *timedata);
+void wavelet_transform_freq(struct Wavelets *wdm, double *freqdata, double *wdmdata);
+void wavelet_transform_inverse_freq(struct Wavelets *wdm, double *wdmdata, double *freqdata);
+void wavelet_transform_freq_segment(struct Wavelets *wdm, int N, int layer, double *data);
+void wavelet_transform_timefreq_by_layers(struct Wavelets* wdm, int jmin, int Nlayers, double *window, double* timedata);
+void build_wdm_filter_freq(double* phif, int Nf, int Nt, double A, bool forward);
 
 #endif /* glass_wavelet_h */
