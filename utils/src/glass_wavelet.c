@@ -1,5 +1,6 @@
 /*
  * Copyright 2024 Neil J. Cornish & Tyson B. Littenberg
+ * Copyright 2026 Robert J. Rosati
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -291,12 +292,14 @@ void wavelet_pixel_to_index(struct Wavelets *wdm, int i, int j, int *k)
 // FFT first, then use the fast algorithm for FFT->WDM
 void wavelet_transform_timefreq(struct Wavelets *wdm, double *timedata) {
     int ND = wdm->NT*wdm->NF;
-    double freqdata[ND + 2]; // extra complex element
+    double *freqdata = double_vector(ND + 2); // extra complex element
 
     glass_forward_real_fft_outplace(timedata, freqdata, ND);
 
     // note: below will overwrite timedata
     wavelet_transform_freq(wdm, freqdata, timedata);
+    
+    free_double_vector(freqdata);
 }
 
 static inline double my_phitilde(double omega, double DeltaOmega, double A)
@@ -830,9 +833,6 @@ void wavelet_window_frequency(struct Wavelets *wdm, double *window, int Nlayers)
     
 }
 
-// This is a utility function mostly used in the MBHB waveform
-// Here we assume that the freqdata only has frequency content in one layer
-// N is number of time data points, freqdata is length N/2+1
 void wavelet_transform_freq_segment(struct Wavelets *wdm, int N, int layer, double *freqdata)
 {
     double wdmdata[N];

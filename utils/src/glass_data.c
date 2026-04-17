@@ -781,7 +781,7 @@ void ReadHDF5(struct Data *data, struct TDI *tdi, struct TDI *tdi_dwt, struct Fl
     glass_forward_real_fft(Z,N);
     
     /* Normalize FD data */
-    double rft_norm = sqrt(Tobs)/(double)N;
+    double rft_norm = 1.0;//sqrt(Tobs)/(double)N;
     
     /* Account for losses from windowing
     double tukey_norm = tukey_scale(alpha, N);
@@ -1452,7 +1452,7 @@ void print_wavelet_fourier_spectra(struct Data *data, struct TDI *tdi, char file
     int N = wdm->NF*wdm->NT;
     double T = N*LISA_CADENCE;
 
-    double **freqData = double_matrix(3,N);
+    double **freqData = double_matrix(3,N+2); //needs DF & Nyq. bins for norms
     double **waveData = double_matrix(3,N);
 
     //get TDI data into context
@@ -1496,7 +1496,7 @@ void wavelet_layer_to_fourier_transform(struct Data *data)
     struct Wavelets *wdm = data->wdm;
     int N = wdm->NF*wdm->NT;
 
-    double **freqData = double_matrix(3,N);
+    double **freqData = double_matrix(3,N+2); //needs DF & Nyq. bins for norms
     double **waveData = double_matrix(3,N);
 
     /* store backup DWT data */

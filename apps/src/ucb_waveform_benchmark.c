@@ -134,6 +134,7 @@ int main(int argc, char* argv[])
     tdi = malloc(sizeof(struct TDI));
     alloc_tdi(tdi,N,3);
 
+    /*
     ucb_waveform_wavelet_tab(orbit, wdm, Tobs, 0.0, params, wavelet_list, &Nwavelet, tdi->X, tdi->Y, tdi->Z);
     out = fopen("wavelet_tab.dat","w");
     print_wavelet_pixels(wdm, tdi, out);
@@ -152,6 +153,7 @@ int main(int argc, char* argv[])
     free_tdi(tdi);
     tdi = malloc(sizeof(struct TDI));
     alloc_tdi(tdi,N,3);
+     */
 
     int BW = 2*ucb_bandwidth(orbit->L, orbit->fstar, params[0]/Tobs, params[7]/Tobs/Tobs, params[1], exp(params[3]), Tobs, 2048);
 

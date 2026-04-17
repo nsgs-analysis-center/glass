@@ -45,7 +45,7 @@ static void set_mbh_defaults(struct Data *data)
     data->Nchannel = 3; //1=X, 2=AE, 3=XYZ
     data->qpad     = 0;
     data->fmin     = 2e-4; //Hz
-    data->fmax     = 1e-2; //Hz
+    data->fmax     = 2e-2; //Hz
     data->lmin     = (int)floor(data->fmin/WAVELET_BANDWIDTH);
     data->lmax     = (int)ceil(data->fmax/WAVELET_BANDWIDTH);
     data->Nlayer   = data->lmax-data->lmin;

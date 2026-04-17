@@ -1038,10 +1038,10 @@ void LISA_spline_response(struct Orbit *orbit, double *tarray, int N, double cos
         //Full Antenna patterns
         for(i=0; i<3; i++)
         {
-            App[i] = 0.5 * dplus[i]  / (1.0 + kdotn[i]);
-            Apm[i] = 0.5 * dplus[i]  / (1.0 - kdotn[i]);
-            Acp[i] = 0.5 * dcross[i] / (1.0 + kdotn[i]);
-            Acm[i] = 0.5 * dcross[i] / (1.0 - kdotn[i]);
+            App[i] = dplus[i]  / (1.0 + kdotn[i]);
+            Apm[i] = dplus[i]  / (1.0 - kdotn[i]);
+            Acp[i] = dcross[i] / (1.0 + kdotn[i]);
+            Acm[i] = dcross[i] / (1.0 - kdotn[i]);
         }
         
         /* build X, Y, Z responses */

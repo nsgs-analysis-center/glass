@@ -589,13 +589,13 @@ void generate_full_dynamic_covariance_matrix(struct Wavelets *wdm, struct Instru
             full->C[0][2][k] = inst->psd->C[0][2][j-jmin];
             full->C[1][2][k] = inst->psd->C[1][2][j-jmin];
 
-            //modulated galactic foreground
+            /*modulated galactic foreground
             full->C[0][0][k] += conf->psd->C[0][0][j-jmin]*spline_interpolation(conf->modulation->XX_spline, t);
             full->C[1][1][k] += conf->psd->C[1][1][j-jmin]*spline_interpolation(conf->modulation->YY_spline, t);
             full->C[2][2][k] += conf->psd->C[2][2][j-jmin]*spline_interpolation(conf->modulation->ZZ_spline, t);
             full->C[0][1][k] += conf->psd->C[0][1][j-jmin]*spline_interpolation(conf->modulation->XY_spline, t);
             full->C[0][2][k] += conf->psd->C[0][2][j-jmin]*spline_interpolation(conf->modulation->XZ_spline, t);
-            full->C[1][2][k] += conf->psd->C[1][2][j-jmin]*spline_interpolation(conf->modulation->YZ_spline, t);
+            full->C[1][2][k] += conf->psd->C[1][2][j-jmin]*spline_interpolation(conf->modulation->YZ_spline, t);*/
 
             //noise covariance matrix is symmetric
             full->C[1][0][k] = full->C[0][1][k]; 

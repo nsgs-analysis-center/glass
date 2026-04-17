@@ -483,7 +483,7 @@ void UCBInjectSimulatedSource(struct Data *data, struct Orbit *orbit, struct Fla
                         double t = i*data->wdm->dt;
                         wavelet_pixel_to_index(data->wdm,i,j,&k);
                         k-=data->wdm->kmin;
-                        fprintf(fptr,"%.14e %.14e %.14e %.14e %.14e\n", t, f, inj->tdi->X[k], inj->tdi->Y[k], inj->tdi->Z[k]);
+                        fprintf(fptr,"%.14e %.14e %.14e %.14e %.14e\n", t, f + WAVELET_BANDWIDTH/2, inj->tdi->X[k], inj->tdi->Y[k], inj->tdi->Z[k]);
                     }
                     fprintf(fptr,"\n");
                 }
