@@ -550,7 +550,7 @@ void wavelet_transform_timefreq_by_layers(struct Wavelets* wdm, int jmin, int Nl
     // (e.g. sines) scale in the FFT. We need this because we have downsampled and
     // N here != wdm->NT*wdm->NF. 
     // TODO: define all FFTs to include a dt factor? That would absorb this!
-    double normalization = ((double)wdm->NF)/(Nlayers+1.0);
+    double normalization = sqrt((double)wdm->NF)/(Nlayers+1.0);
 
     // TODO: tukey window was here, removed for invertibility in tests
     /*

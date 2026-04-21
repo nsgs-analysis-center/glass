@@ -533,11 +533,14 @@ void ucb_fisher_wavelet(struct Orbit *orbit, struct Data *data, struct Source *s
     
     // Plus and minus parameters:
     double *params_p = double_vector(UCB_MODEL_NP);
-    
+    double *params_m = double_vector(UCB_MODEL_NP);
+
     // Plus and minus templates for each detector:
     struct Source *wave_p = malloc(sizeof(struct Source));
+    struct Source *wave_m = malloc(sizeof(struct Source));
     alloc_source(wave_p, data->N, UCB_MODEL_NP, data->Nchannel);
-    
+    alloc_source(wave_m, data->N, UCB_MODEL_NP, data->Nchannel);
+
     // TDI variables to hold derivatives of h
     struct TDI **dhdx = malloc(UCB_MODEL_NP*sizeof(struct TDI *));
     for(n=0; n<UCB_MODEL_NP; n++)
@@ -559,31 +562,36 @@ void ucb_fisher_wavelet(struct Orbit *orbit, struct Data *data, struct Source *s
         for(j=0; j<UCB_MODEL_NP; j++)
         {
             wave_p->params[j] = source->params[j];
+            wave_m->params[j] = source->params[j];
         }
         
         // perturb parameters
-        wave_p->params[i] += epsilon;
-        
+        wave_p->params[i] += epsilon/2.;
+        wave_m->params[i] -= epsilon/2.;
+
 	    // catch when cosine parameters get pushed out of bounds
         if(i==1 || i==4)
         {
             if(wave_p->params[i] > 1.0) wave_p->params[i] = 1.0;
+            if(wave_m->params[i] <-1.0) wave_m->params[i] =-1.0;
         }
 
         // complete info in source structure
         map_array_to_ucb_params(wave_p, wave_p->params, data->T);
-        
+        map_array_to_ucb_params(wave_m, wave_m->params, data->T);
+
         // clean up TDI arrays, just in case
-        for(j=0; j<data->N; j++)
-        {
-            wave_p->tdi->X[j]=0.0;
-            wave_p->tdi->Y[j]=0.0;
-            wave_p->tdi->Z[j]=0.0;
-        }
-        
+        memset(wave_p->tdi->X, 0, data->N*sizeof(double));
+        memset(wave_p->tdi->Y, 0, data->N*sizeof(double));
+        memset(wave_p->tdi->Z, 0, data->N*sizeof(double));
+        memset(wave_m->tdi->X, 0, data->N*sizeof(double));
+        memset(wave_m->tdi->Y, 0, data->N*sizeof(double));
+        memset(wave_m->tdi->Z, 0, data->N*sizeof(double));
+
         
         // compute perturbed waveforms
         ucb_waveform_wavelet(orbit,data->wdm,data->T, data->t0, wave_p->params, wave_p->list, &wave_p->Nlist, wave_p->tdi->X, wave_p->tdi->Y, wave_p->tdi->Z);
+        ucb_waveform_wavelet(orbit,data->wdm,data->T, data->t0, wave_m->params, wave_m->list, &wave_m->Nlist, wave_m->tdi->X, wave_m->tdi->Y, wave_m->tdi->Z);
 
         // central differencing derivatives of waveforms w.r.t. parameters
         for(n=0; n<wave_p->Nlist; n++)
@@ -592,9 +600,9 @@ void ucb_fisher_wavelet(struct Orbit *orbit, struct Data *data, struct Source *s
             wavelet_index_to_pixel(data->wdm, &i_wdm, &j_wdm, k+data->wdm->kmin);
             if(i_wdm>data->wdm->imin && i_wdm<data->wdm->imax && k>=0 && k<data->N)
             {
-                dhdx[i]->X[k] = (wave_p->tdi->X[k] - source->tdi->X[k])*invstep;
-                dhdx[i]->Y[k] = (wave_p->tdi->Y[k] - source->tdi->Y[k])*invstep;
-                dhdx[i]->Z[k] = (wave_p->tdi->Z[k] - source->tdi->Z[k])*invstep;
+                dhdx[i]->X[k] = (wave_p->tdi->X[k] - wave_m->tdi->X[k])*invstep;
+                dhdx[i]->Y[k] = (wave_p->tdi->Y[k] - wave_m->tdi->Y[k])*invstep;
+                dhdx[i]->Z[k] = (wave_p->tdi->Z[k] - wave_m->tdi->Z[k])*invstep;
             }
         }
     }
@@ -679,8 +687,10 @@ void ucb_fisher_wavelet(struct Orbit *orbit, struct Data *data, struct Source *s
      
     free_int_vector(list);
     free_double_vector(params_p);
+    free_double_vector(params_m);
     free_source(wave_p);
-    
+    free_source(wave_m);
+
     for(n=0; n<UCB_MODEL_NP; n++) free_tdi(dhdx[n]);
     free(dhdx);
 }
@@ -813,8 +823,8 @@ void ucb_waveform(struct Orbit *orbit, char *format, double T, double t0, double
     sinps	= sin(2.*psi);
     
     //Calculate GW polarization amplitudes
-    Aplus  =  amp*(1.+cosi*cosi);
-    Across = -amp*(2.0*cosi);
+    Aplus  =  amp*(1.+cosi*cosi)*0.5;
+    Across = -amp*(cosi);
     
     df = PI2*(((double)q)/T);
     

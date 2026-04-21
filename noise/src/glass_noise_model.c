@@ -545,7 +545,7 @@ void generate_galactic_foreground_model_wavelet(struct Wavelets *wdm, struct For
     for(int i=0; i<model->psd->N; i++)
         for(int n=0; n<3; n++)
             for(int m=n; m<3; m++)
-                C[n][m][i]/=8.;
+                C[n][m][i]/=4.;
 
 
 
