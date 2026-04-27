@@ -131,9 +131,9 @@ def nonstat_test(plots=True):
         plt.title("f-integrated wASD")
         plt.savefig("wpsd_nonstat.png")
         plt.show()
-        plt.imshow(wdmgen.T, aspect='auto', origin='lower',extent=(t[0],t[-1],f[0],f[-1]), norm='linear')
+        plt.imshow(np.abs(wdmgen.T), aspect='auto', origin='lower',extent=(t[0],t[-1],f[0],f[-1]), norm='log')
         plt.colorbar()
-        plt.title("WDM non-stationary data")
+        plt.title("WDM non-stationary data (|w_nm|)")
         plt.savefig("wdm_data_nonstat.png")
         plt.show()
         plt.imshow(wdmgen.T / np.sqrt(testwdmpsd_approx.T), aspect='auto', origin='lower',extent=(t[0],t[-1],f[0],f[-1]), norm='linear')
@@ -185,9 +185,9 @@ def stat_test(plots=True):
     testwdmgen = np.random.randn(*testwdmpsd.shape) * np.sqrt(testwdmpsd)
 
     if plots:
-        plt.imshow(testwdm.T, aspect='auto', origin='lower',extent=(t[0],t[-1],f[0],f[-1]), norm='linear')
+        plt.imshow(np.abs(testwdm.T), aspect='auto', origin='lower',extent=(t[0],t[-1],f[0],f[-1]), norm='log')
         plt.colorbar()
-        plt.title("WDM transform of data")
+        plt.title("WDM transform of data (|w_nm|)")
         plt.savefig("wdm_data.png")
         plt.show()
         plt.imshow(np.sqrt(testwdmpsd_approx.T), aspect='auto', origin='lower',extent=(t[0],t[-1],f[0],f[-1]), norm='log')
@@ -210,10 +210,10 @@ def stat_test(plots=True):
         plt.title("Whitened WDM data with approx wPSD")
         plt.savefig("whitened_approx.png")
         plt.show()
-        plt.imshow(testwdmgen.T / np.sqrt(testwdmpsd.T), aspect='auto', origin='lower',extent=(t[0],t[-1],f[0],f[-1]), norm='linear')
+        plt.imshow(testwdm.T / np.sqrt(testwdmpsd.T), aspect='auto', origin='lower',extent=(t[0],t[-1],f[0],f[-1]), norm='linear')
         plt.colorbar()
-        plt.title("Whitened WDM-generated data with Neil wPSD")
-        plt.savefig("whitened_exact_gen_wdm.png")
+        plt.title("Whitened WDM data with Neil wPSD")
+        plt.savefig("whitened_exact_wdm.png")
         plt.show()
 
 

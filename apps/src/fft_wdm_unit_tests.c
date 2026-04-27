@@ -124,17 +124,105 @@ bool test_array_equality(double* ta, double* tb, int N, struct UnitTestBlockInfo
     return true;
 }
 
-/* Even dof only: Q = e^{-z} * sum_{k=0}^{dof/2-1} z^k/k! */
-double chi2_sf_even(double x, int dof) {
-    assert(dof%2 == 0);
+/* Wilson-Hilferty normal approximation: works for any dof >= 1 */
+double chi2_sf(double x, int dof) {
     if (x <= 0.0) return 1.0;
-    double z = 0.5 * x;
-    double sum = 1.0, term = 1.0;
-    for (int k = 1; k < dof / 2; k++) {
-        term *= z / k;
-        sum += term;
+    double nu = (double)dof;
+    double z = (pow(x / nu, 1.0/3.0) - (1.0 - 2.0/(9.0*nu))) / sqrt(2.0/(9.0*nu));
+    return 0.5 * erfc(z / M_SQRT2);
+}
+bool test_whitening_wdm_3ch(const struct TDI* tdi, const struct Noise* noise, int N, struct UnitTestBlockInfo* testinfo, char* testname)
+{
+    // whitening test
+    double max_bin = 8.0;
+    double min_bin = -max_bin;
+    double delta_bin = (max_bin - min_bin)/NBINS;
+    int k;
+
+    double* psds[] = {
+        noise->C[0][0],
+        noise->C[1][1],
+        noise->C[2][2],
+    };
+    double* datas[] = {
+        tdi->X,
+        tdi->Y,
+        tdi->Z,
+    };
+    char* ch_names[] = {
+        "X",
+        "Y",
+        "Z",
+    };
+    printf("Test %d: %s\n", ++(testinfo->test_counter), testname);
+    bool all_ch_good = true;
+    for (int ich=0; ich<3; ich++) {
+        double* psd = psds[ich];
+        double* data = datas[ich];
+        double mean = 0.0;
+        double var = 0.0;
+        double wht;
+        mean = 0.0;
+        var = 0.0;
+        int Nactive = 0;
+        int counts[NBINS] = {0};
+
+        // note: we skip DC bin to avoid division by 0
+        for (int i=0; i<N; i++) {
+            double asd = sqrt(psd[i]/2);
+            wht = data[i] / asd;
+            mean += wht;
+            if (wht<min_bin) { counts[0]++; continue; }
+            if (wht>max_bin) { counts[NBINS-1]++; continue; }
+            int b = (int)((wht - min_bin) / delta_bin);
+            assert(b >= 0 && b < NBINS);
+            counts[b]++;
+            Nactive++;
+        }
+        mean /= Nactive ;
+        for (int i=0; i<N; i++) {
+            double asd = sqrt(psd[i]/2);
+            wht = data[i] / asd;
+            var += (wht - mean)*(wht - mean);
+        }
+        var /= Nactive;
+
+        printf("\n");
+        // strictly speaking , let's just test 3sigma CI
+        double sample_mean_sigma = sqrtf(1.0/Nactive);
+        if (fabs(mean) < 3*sample_mean_sigma ) {
+            printf("\t%s (mean) pass\n", ch_names[ich]);
+        } else {
+            printf("\t%s (mean) fail, inconsistent within 3sigma. Tested |%lf| < %lf\n", ch_names[ich], mean, 3*sample_mean_sigma);
+            all_ch_good = false;
+        }
+
+        double corrected_var = (Nactive) * var; // sample variance
+        int dof = Nactive - 1;
+        double chi2_upper = chi2_sf(corrected_var, dof);
+        double chi2_lower = 1.0 - chi2_upper;
+        double p = 2.0 * fmin(chi2_upper, chi2_lower);
+        if (p >  0.0027) { // equivalent of 3sigma, basically 99.7%
+            printf("\t%s (var) pass\n", ch_names[ich]);
+        } else {
+            printf("\t%s (var) fail, inconsistent with chi2 distribution at 99.7%% CI. Got var %lf\n", ch_names[ich], var);
+            all_ch_good = false;
+        }
+
+        /*
+        // print out histogram
+        printf("\t\tHistogram:\n");
+        for (int i=0; i<NBINS; i++) {
+            printf("\t\t\t%5.2lf %6d\n", min_bin + delta_bin*i, counts[i]);
+        }
+        */
     }
-    return exp(-z) * sum;
+    if (!all_ch_good) {
+        testinfo->fail_counter++;
+        return false;
+    } else {
+        return true;
+    }
 }
 
 bool test_whitening_fft_3ch(const struct TDI* tdi, const struct Noise* noise, int N, struct UnitTestBlockInfo* testinfo, char* testname)
@@ -188,15 +276,17 @@ bool test_whitening_fft_3ch(const struct TDI* tdi, const struct Noise* noise, in
             mean += wht;
             if (wht<min_bin) { counts[0]++; continue; }
             if (wht>max_bin) { counts[NBINS-1]++; continue; }
-            int b = (int)((wht - min_bin) / delta_bin);
+            b = (int)((wht - min_bin) / delta_bin);
             assert(b >= 0 && b < NBINS);
             counts[b]++;
             Nactive++;
         }
         mean /= Nactive ;
         for (int i=1; i<N; i++) {
-            double asd = sqrt(psd[k]/2);
-            wht = data[k] / asd;
+            double asd = sqrt(psd[i]/2);
+            wht = data[2*i] / asd;
+            var += (wht - mean)*(wht - mean);
+            wht = data[2*i+1] / asd;
             var += (wht - mean)*(wht - mean);
         }
         var /= Nactive;
@@ -204,16 +294,16 @@ bool test_whitening_fft_3ch(const struct TDI* tdi, const struct Noise* noise, in
         printf("\n");
         // strictly speaking , let's just test 3sigma CI
         double sample_mean_sigma = sqrtf(1.0/Nactive);
-        if ((-3*sample_mean_sigma < mean) && (mean > 3*sample_mean_sigma)) {
+        if (fabs(mean) < 3*sample_mean_sigma ) {
             printf("\t%s (mean) pass\n", ch_names[ich]);
         } else {
             printf("\t%s (mean) fail, inconsistent within 3sigma. Tested |%lf| < %lf\n", ch_names[ich], mean, 3*sample_mean_sigma);
             all_ch_good = false;
         }
 
-        double corrected_var = (Nactive - 1) * var; // sample variance
+        double corrected_var = (Nactive) * var; // sample variance
         int dof = Nactive - 1;
-        double chi2_upper = chi2_sf_even(corrected_var, dof);
+        double chi2_upper = chi2_sf(corrected_var, dof);
         double chi2_lower = 1.0 - chi2_upper;
         double p = 2.0 * fmin(chi2_upper, chi2_lower);
         if (p >  0.0027) { // equivalent of 3sigma, basically 99.7%
@@ -241,6 +331,7 @@ bool test_whitening_fft_3ch(const struct TDI* tdi, const struct Noise* noise, in
 
 int main(int argc, char *argv[])
 {
+    _Static_assert(WAVELET_DURATION == 7680, "currently we have hardcoded the WAVELET_DURATION. Either fix it or go back");
 
     print_LISA_ASCII_art(stdout);
     print_version(stdout);
@@ -368,6 +459,9 @@ int main(int argc, char *argv[])
     // Limits on WD windows are only from Necula et. al eq (7)
     // skip for now, seems hard
 
+    // save WDM result before inverse chain overwrites test_data
+    double our_wdm_impulse[NFFT_TEST];
+    memcpy(our_wdm_impulse, test_data, NFFT_TEST*sizeof(double));
 
     if (CREATE_DEBUG_FILES)
         write_wdm_data(&wdm, test_data, "./dbg_wdm_impulse.dat");
@@ -405,7 +499,7 @@ int main(int argc, char *argv[])
         for (int j=0; j < wdm.NT; j++)
             for (int i=0; i< wdm.NF; i++)
                 fscanf(f, "%lf ", &olitas_wdm[i*wdm.NT+j]); // note transpose during read
-        ok = test_array_equality(test_data,
+        ok = test_array_equality(our_wdm_impulse,
                 olitas_wdm,
                 NFFT_TEST,
                 &wdm_tests,
@@ -549,15 +643,9 @@ int main(int argc, char *argv[])
     data2.noise = inst->psd;
 
     struct TDI* testtdi = malloc(sizeof(struct TDI));
-    alloc_tdi(testtdi, data2.NFFT, data2.Nchannel);
+    alloc_tdi(testtdi, 2*data2.NFFT, data2.Nchannel);
     MyAddNoise(&data2, testtdi);
 
-    double wht[2*data2.NFFT];
-    for (int i=0; i<data2.NFFT; i++) {
-        wht[2*i] = testtdi->X[2*i] / sqrtf(data2.noise->C[0][0][i]);
-        wht[2*i+1] = testtdi->X[2*i+1] / sqrtf(data2.noise->C[0][0][i]);
-    }
-    
     ok = test_whitening_fft_3ch(testtdi,
             data2.noise,
             data2.NFFT,
@@ -567,6 +655,34 @@ int main(int argc, char *argv[])
     free_instrument_model(inst);
     free_tdi(testtdi);
 
+    // test WDM PSD definitions
+    struct Data data3 = {0};
+    data3.NFFT = NFFT_TEST/2 + 1;
+    data3.Nchannel = 3;
+    data3.Nlayer = wdm.NF;
+    data3.T = wdm.NT*wdm.dt;
+    data3.fmin=0;
+    data3.wdm = &wdm;
+    data3.lmax = data3.Nlayer;
+    data3.lmin = 0;
+    initialize_interpolated_analytic_orbits(orbit, data3.T, data3.t0);
+    inst = malloc(sizeof(struct InstrumentModel));
+    initialize_instrument_model_wavelet(orbit, &data3, inst);
+
+    data3.noise = inst->psd;
+
+    testtdi = malloc(sizeof(struct TDI));
+    alloc_tdi(testtdi, data3.Nlayer*wdm.NT, data3.Nchannel);
+    MyAddNoiseWavelet(&data3, testtdi);
+
+    ok = test_whitening_wdm_3ch(testtdi,
+            data3.noise,
+            data3.Nlayer*wdm.NT,
+            &var_tests,
+            "WDM PSD test: InstrumentModel PSD whitens generated noise");
+
+    free_instrument_model(inst);
+    free_tdi(testtdi);
 
     print_test_block_stats(&var_tests);
 
