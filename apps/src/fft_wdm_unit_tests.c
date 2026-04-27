@@ -131,7 +131,7 @@ double chi2_sf(double x, int dof) {
     double z = (pow(x / nu, 1.0/3.0) - (1.0 - 2.0/(9.0*nu))) / sqrt(2.0/(9.0*nu));
     return 0.5 * erfc(z / M_SQRT2);
 }
-bool test_whitening_wdm_3ch(const struct TDI* tdi, const struct Noise* noise, int N, struct UnitTestBlockInfo* testinfo, char* testname)
+bool test_whitening_wdm_3ch(const struct TDI* tdi, const struct Noise* noise, int N, int Nskip, struct UnitTestBlockInfo* testinfo, char* testname)
 {
     // whitening test
     double max_bin = 8.0;
@@ -167,10 +167,14 @@ bool test_whitening_wdm_3ch(const struct TDI* tdi, const struct Noise* noise, in
         int Nactive = 0;
         int counts[NBINS] = {0};
 
-        // note: we skip DC bin to avoid division by 0
-        for (int i=0; i<N; i++) {
-            double asd = sqrt(psd[i]/2);
+        // note: we skip DC bins to avoid division by 0
+        for (int i=Nskip; i<N; i++) {
+            double asd = sqrt(psd[i]);
             wht = data[i] / asd;
+            if isnan(wht) {
+                fprintf(stderr, "Encountered NaN at i=%d, stopping\n", i);
+                break;
+            }
             mean += wht;
             if (wht<min_bin) { counts[0]++; continue; }
             if (wht>max_bin) { counts[NBINS-1]++; continue; }
@@ -180,9 +184,13 @@ bool test_whitening_wdm_3ch(const struct TDI* tdi, const struct Noise* noise, in
             Nactive++;
         }
         mean /= Nactive ;
-        for (int i=0; i<N; i++) {
-            double asd = sqrt(psd[i]/2);
+        for (int i=Nskip; i<N; i++) {
+            double asd = sqrt(psd[i]);
             wht = data[i] / asd;
+            if isnan(wht) {
+                fprintf(stderr, "Encountered NaN at i=%d, stopping\n", i);
+                break;
+            }
             var += (wht - mean)*(wht - mean);
         }
         var /= Nactive;
@@ -642,18 +650,17 @@ int main(int argc, char *argv[])
 
     data2.noise = inst->psd;
 
-    struct TDI* testtdi = malloc(sizeof(struct TDI));
-    alloc_tdi(testtdi, 2*data2.NFFT, data2.Nchannel);
-    MyAddNoise(&data2, testtdi);
+    struct TDI* testtdi_fft = malloc(sizeof(struct TDI));
+    alloc_tdi(testtdi_fft, 2*data2.NFFT, data2.Nchannel);
+    MyAddNoise(&data2, testtdi_fft);
 
-    ok = test_whitening_fft_3ch(testtdi,
+    ok = test_whitening_fft_3ch(testtdi_fft,
             data2.noise,
             data2.NFFT,
             &var_tests,
-            "FFT PSD test: InstrumentModel PSD whitens generated noise");
+            "FFT PSD test: InstrumentModel PSD whitens FFT-generated noise");
 
     free_instrument_model(inst);
-    free_tdi(testtdi);
 
     // test WDM PSD definitions
     struct Data data3 = {0};
@@ -665,25 +672,41 @@ int main(int argc, char *argv[])
     data3.wdm = &wdm;
     data3.lmax = data3.Nlayer;
     data3.lmin = 0;
+    data3.noise = malloc(sizeof(struct Noise));
+    alloc_noise(data3.noise, data3.Nlayer*wdm.NT, data3.Nlayer, data3.Nchannel);
     initialize_interpolated_analytic_orbits(orbit, data3.T, data3.t0);
     inst = malloc(sizeof(struct InstrumentModel));
     initialize_instrument_model_wavelet(orbit, &data3, inst);
+    generate_full_dynamic_covariance_matrix(data3.wdm, inst, NULL, NULL, data3.noise);
 
-    data3.noise = inst->psd;
-
-    testtdi = malloc(sizeof(struct TDI));
+    struct TDI* testtdi = malloc(sizeof(struct TDI));
     alloc_tdi(testtdi, data3.Nlayer*wdm.NT, data3.Nchannel);
     MyAddNoiseWavelet(&data3, testtdi);
 
     ok = test_whitening_wdm_3ch(testtdi,
             data3.noise,
             data3.Nlayer*wdm.NT,
+            wdm.NT,
             &var_tests,
-            "WDM PSD test: InstrumentModel PSD whitens generated noise");
+            "WDM PSD test: InstrumentModel PSD whitens WDM-generated noise");
 
-    free_instrument_model(inst);
+
+    // now try to whiten FFT data with WDM PSD
+    wavelet_transform_freq(&wdm, testtdi_fft->X, testtdi->X);
+    wavelet_transform_freq(&wdm, testtdi_fft->Y, testtdi->Y);
+    wavelet_transform_freq(&wdm, testtdi_fft->Z, testtdi->Z);
+
+
+    ok = test_whitening_wdm_3ch(testtdi,
+            data3.noise,
+            data3.Nlayer*wdm.NT,
+            wdm.NT,
+            &var_tests,
+            "WDM PSD test: InstrumentModel PSD whitens FFT-generated noise");
+
+    free_tdi(testtdi_fft);
     free_tdi(testtdi);
-
+    free_instrument_model(inst);
     print_test_block_stats(&var_tests);
 
     struct UnitTestBlockInfo* all_test_blocks[] = {&fft_tests, &fft_outplace_tests, &wdm_tests, &var_tests};
