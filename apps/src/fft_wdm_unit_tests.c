@@ -677,9 +677,9 @@ int main(int argc, char *argv[])
 
     // Build the WDM PSD that whitens wavelet_transform_freq output by passing
     // each FFT-domain channel PSD through the new convolution helper.
-    dft_psd_to_wdm_psd(&wdm, inst_fft->psd->C[0][0], data3.noise->C[0][0]);
-    dft_psd_to_wdm_psd(&wdm, inst_fft->psd->C[1][1], data3.noise->C[1][1]);
-    dft_psd_to_wdm_psd(&wdm, inst_fft->psd->C[2][2], data3.noise->C[2][2]);
+    stationary_dft_psd_to_wdm_psd(&wdm, inst_fft->psd->C[0][0], data3.noise->C[0][0]);
+    stationary_dft_psd_to_wdm_psd(&wdm, inst_fft->psd->C[1][1], data3.noise->C[1][1]);
+    stationary_dft_psd_to_wdm_psd(&wdm, inst_fft->psd->C[2][2], data3.noise->C[2][2]);
 
     struct TDI* testtdi = malloc(sizeof(struct TDI));
     alloc_tdi(testtdi, data3.Nlayer*wdm.NT, data3.Nchannel);
@@ -728,9 +728,9 @@ int main(int argc, char *argv[])
     // Repeat the FFT->WDM whitening test with the approximate WDM PSD
     // (single-bin lookup at layer center). Looser tolerance because the
     // approximation drops the phif convolution.
-    dft_psd_to_wdm_psd_approx(&wdm, inst_fft->psd->C[0][0], data3.noise->C[0][0]);
-    dft_psd_to_wdm_psd_approx(&wdm, inst_fft->psd->C[1][1], data3.noise->C[1][1]);
-    dft_psd_to_wdm_psd_approx(&wdm, inst_fft->psd->C[2][2], data3.noise->C[2][2]);
+    stationary_dft_psd_to_wdm_psd_approx(&wdm, inst_fft->psd->C[0][0], data3.noise->C[0][0]);
+    stationary_dft_psd_to_wdm_psd_approx(&wdm, inst_fft->psd->C[1][1], data3.noise->C[1][1]);
+    stationary_dft_psd_to_wdm_psd_approx(&wdm, inst_fft->psd->C[2][2], data3.noise->C[2][2]);
 
     ok = test_whitening_wdm_3ch(testtdi,
             data3.noise,

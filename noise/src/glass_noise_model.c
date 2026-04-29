@@ -537,10 +537,8 @@ void generate_instrument_noise_model_wavelet_coarse(struct Wavelets *wdm, struct
 void generate_instrument_noise_model_wavelet(struct Wavelets *wdm, struct Orbit *orbit, struct InstrumentModel *model)
 {
     /*
-     * Sample the instrument noise model on the FFT-bin grid (length ND/2+1,
-     * spacing 1/Tobs), then convolve against phif^2 via dft_psd_to_wdm_layer_var
-     * to populate the per-layer wavelet PSD. Replaces the old df/2-Simpson
-     * approximation, which lacked the wavelet-filter shape.
+     * Sample the instrument model on the FFT grid then convert to WDM
+     * For now we assume instrument model is stationary!
      */
     int NF = wdm->NF;
     int NT = wdm->NT;
@@ -552,6 +550,7 @@ void generate_instrument_noise_model_wavelet(struct Wavelets *wdm, struct Orbit 
     int imin = (int)round(model->psd->f[0]/wdm->df);
     int imax = (int)round(model->psd->f[model->psd->N-1]/wdm->df)+1;
 
+    // TODO: min/max freqs
     // FFT-bin grid covering all bins [0, ND/2]
     struct InstrumentModel *grid = malloc(sizeof(struct InstrumentModel));
     alloc_instrument_model(grid, NFFT, NF, 3);
@@ -568,7 +567,7 @@ void generate_instrument_noise_model_wavelet(struct Wavelets *wdm, struct Orbit 
     double layer_var[NF + 1];
     for(int n=0; n<3; n++)
         for(int m=n; m<3; m++) {
-            dft_psd_to_wdm_layer_var(wdm, grid->psd->C[n][m], layer_var);
+            stationary_dft_psd_to_wdm_layer_var(wdm, grid->psd->C[n][m], layer_var);
             for(int j=imin; j<imax; j++) {
                 model->psd->C[n][m][j-imin] = layer_var[j];
                 model->psd->C[m][n][j-imin] = layer_var[j];
@@ -670,7 +669,8 @@ void generate_galactic_foreground_model_wavelet(struct Wavelets *wdm, struct For
     double layer_var[NF + 1];
     for(int n=0; n<3; n++)
         for(int m=n; m<3; m++) {
-            dft_psd_to_wdm_layer_var(wdm, grid->psd->C[n][m], layer_var);
+            // TODO apply modulation!!!
+            stationary_dft_psd_to_wdm_layer_var(wdm, grid->psd->C[n][m], layer_var);
             for(int j=imin; j<imax; j++) {
                 model->psd->C[n][m][j-imin] = layer_var[j];
                 model->psd->C[m][n][j-imin] = layer_var[j];
@@ -741,10 +741,7 @@ void generate_sgwb_model(struct SGWBModel *model)
 }
 void generate_sgwb_model_wavelet(struct Wavelets* wdm, struct SGWBModel *model)
 {
-    /*
-     * Sample the SGWB PSD on the FFT-bin grid (1/Tobs spacing) and convolve
-     * against phif^2 to get per-layer wavelet variances.
-     */
+    // Like the others: sample in FFT, then smooth over to get wavelet PSD
     int NF = wdm->NF;
     int NT = wdm->NT;
     int ND = NF * NT;
@@ -766,8 +763,7 @@ void generate_sgwb_model_wavelet(struct Wavelets* wdm, struct SGWBModel *model)
 
     generate_sgwb_model(grid);
 
-    // sgwb_powerlaw diverges as 1/f^3 at f=0; zero the DC bin so the
-    // convolution doesn't propagate NaN/inf into low layers.
+    // set DC variance to zero
     for(int n=0; n<3; n++)
         for(int m=0; m<3; m++)
             grid->psd->C[n][m][0] = 0.0;
@@ -775,7 +771,7 @@ void generate_sgwb_model_wavelet(struct Wavelets* wdm, struct SGWBModel *model)
     double layer_var[NF + 1];
     for(int n=0; n<3; n++)
         for(int m=n; m<3; m++) {
-            dft_psd_to_wdm_layer_var(wdm, grid->psd->C[n][m], layer_var);
+            stationary_dft_psd_to_wdm_layer_var(wdm, grid->psd->C[n][m], layer_var);
             for(int j=imin; j<imax; j++) {
                 model->psd->C[n][m][j-imin] = layer_var[j];
                 model->psd->C[m][n][j-imin] = layer_var[j];

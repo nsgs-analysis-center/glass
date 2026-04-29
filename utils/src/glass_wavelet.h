@@ -98,7 +98,8 @@ void wavelet_transform_inverse_freq(struct Wavelets *wdm, double *wdmdata, doubl
 void wavelet_transform_freq_segment(struct Wavelets *wdm, int N, int layer, double *data);
 void wavelet_transform_timefreq_by_layers(struct Wavelets* wdm, int jmin, int Nlayers, double *window, double* timedata);
 void build_wdm_filter_freq(double* phif, int Nf, int Nt, double A, bool forward);
-void stationary_dft_psd_to_wdm_psd(struct Wavelets* wdm, double * window, double * psd, double* wdm_psd);
-void stationary_dft_psd_to_wdm_psd_approx(struct Wavelets* wdm, double * fftfreq, double fftfreq_min, double * psd, int lmin, int Nlayers, double* wdm_psd);
-
+void stationary_dft_psd_to_wdm_psd(struct Wavelets* wdm, double * dft_psd, double * wdm_psd);
+void stationary_dft_psd_to_wdm_psd_approx(struct Wavelets* wdm, double * dft_psd, double * wdm_psd);
+void stationary_dft_psd_to_wdm_layer_var(struct Wavelets* wdm, double * dft_psd, double * layer_var);
+void stationary_dft_psd_to_wdm_layer_var_approx(struct Wavelets* wdm, double * dft_psd, double * layer_var);
 #endif /* glass_wavelet_h */
