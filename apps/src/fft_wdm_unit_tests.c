@@ -24,7 +24,7 @@
 #include <time.h>
 #include <assert.h>
 
-#define NFFT_TEST (1536*10)
+#define NFFT_TEST (1536*30)
 #define NBINS 100
 #define CREATE_DEBUG_FILES (true)
 // Note that for us, NF is essentially harcoded by the choice of WAVELET_DURATION
@@ -199,7 +199,7 @@ bool test_whitening_wdm_3ch(const struct TDI* tdi, const struct Noise* noise, in
         // strictly speaking , let's just test 3sigma CI
         double sample_mean_sigma = sqrtf(1.0/Nactive);
         if (fabs(mean) < 3*sample_mean_sigma ) {
-            printf("\t%s (mean) pass\n", ch_names[ich]);
+            printf("\t%s (mean) pass: |%lg| < %lg\n", ch_names[ich], mean, 3*sample_mean_sigma);
         } else {
             printf("\t%s (mean) fail, inconsistent within 3sigma. Tested |%lf| < %lf\n", ch_names[ich], mean, 3*sample_mean_sigma);
             all_ch_good = false;
@@ -211,9 +211,9 @@ bool test_whitening_wdm_3ch(const struct TDI* tdi, const struct Noise* noise, in
         double chi2_lower = 1.0 - chi2_upper;
         double p = 2.0 * fmin(chi2_upper, chi2_lower);
         if (p >  0.0027) { // equivalent of 3sigma, basically 99.7%
-            printf("\t%s (var) pass\n", ch_names[ich]);
+            printf("\t%s (var) pass: var=%lg p=%lg\n", ch_names[ich], var, p);
         } else {
-            printf("\t%s (var) fail, inconsistent with chi2 distribution at 99.7%% CI. Got var %lf\n", ch_names[ich], var);
+            printf("\t%s (var) fail, inconsistent with chi2 distribution at 99.7%% CI. Got var %lf p=%lg\n", ch_names[ich], var, p);
             all_ch_good = false;
         }
 
@@ -303,7 +303,7 @@ bool test_whitening_fft_3ch(const struct TDI* tdi, const struct Noise* noise, in
         // strictly speaking , let's just test 3sigma CI
         double sample_mean_sigma = sqrtf(1.0/Nactive);
         if (fabs(mean) < 3*sample_mean_sigma ) {
-            printf("\t%s (mean) pass\n", ch_names[ich]);
+            printf("\t%s (mean) pass: |%lg| < %lg\n", ch_names[ich], mean, 3*sample_mean_sigma);
         } else {
             printf("\t%s (mean) fail, inconsistent within 3sigma. Tested |%lf| < %lf\n", ch_names[ich], mean, 3*sample_mean_sigma);
             all_ch_good = false;
@@ -315,9 +315,9 @@ bool test_whitening_fft_3ch(const struct TDI* tdi, const struct Noise* noise, in
         double chi2_lower = 1.0 - chi2_upper;
         double p = 2.0 * fmin(chi2_upper, chi2_lower);
         if (p >  0.0027) { // equivalent of 3sigma, basically 99.7%
-            printf("\t%s (var) pass\n", ch_names[ich]);
+            printf("\t%s (var) pass: var=%lg p=%lg\n", ch_names[ich], var, p);
         } else {
-            printf("\t%s (var) fail, inconsistent with chi2 distribution at 99.7%% CI. Got var %lf\n", ch_names[ich], var);
+            printf("\t%s (var) fail, inconsistent with chi2 distribution at 99.7%% CI. Got var %lf p=%lg\n", ch_names[ich], var, p);
             all_ch_good = false;
         }
 
@@ -361,17 +361,18 @@ int main(int argc, char *argv[])
 
 
     // test what FFT coeffs are
-    double test_data[NFFT_TEST] = {0};
-    double test_data_cx[2*NFFT_TEST] = {0};
+    // These arrays scale with NFFT_TEST. Stash them in BSS so the test can
+    // grow NT without blowing the stack.
+    static double test_data[NFFT_TEST];
+    static double test_data_cx[2*NFFT_TEST];
     test_data[0]    = 1.0;
     test_data_cx[0] = 1.0;
-    double test_fft_data[NFFT_TEST+2] = {0};
-    double test_cx_fft_data[2*NFFT_TEST] = {0};
-    double ref_data[NFFT_TEST] = {0};
-    double ref_data_cx[2*NFFT_TEST] = {0};
-    double ref_fft_data[NFFT_TEST+2] = {0};
-    double ref_cx_fft_data[2*NFFT_TEST] = {0};
-    double test_data_copy[NFFT_TEST] = {0};
+    static double test_fft_data[NFFT_TEST+2];
+    static double test_cx_fft_data[2*NFFT_TEST];
+    static double ref_data[NFFT_TEST];
+    static double ref_data_cx[2*NFFT_TEST];
+    static double ref_fft_data[NFFT_TEST+2];
+    static double ref_cx_fft_data[2*NFFT_TEST];
     // these copies are just for reference, won't be touched
     ref_data[0]  = 1.0;
     ref_data_cx[0]  = 1.0;
@@ -468,7 +469,7 @@ int main(int argc, char *argv[])
     // skip for now, seems hard
 
     // save WDM result before inverse chain overwrites test_data
-    double our_wdm_impulse[NFFT_TEST];
+    static double our_wdm_impulse[NFFT_TEST];
     memcpy(our_wdm_impulse, test_data, NFFT_TEST*sizeof(double));
 
     if (CREATE_DEBUG_FILES)
@@ -499,7 +500,7 @@ int main(int argc, char *argv[])
     // active_wavelet_list
     // wavelet_window_frequency -- probably remove
     // WDM comparison with olitas
-    double olitas_wdm[NFFT_TEST] = {0};
+    static double olitas_wdm[NFFT_TEST];
     FILE* f = fopen("./olitas_wdm_impulse.dat","r");
     if (!f) {
         printf("No Olitas.jl output to compare against, skipping WDM code comparison...");
@@ -522,7 +523,8 @@ int main(int argc, char *argv[])
         // is only used in MBH waveform
         // for now force length Nt
     // take one freq layer of olitas wdm, turn it into FFT
-    double test_wdm_full[NFFT_TEST] = {0};
+    static double test_wdm_full[NFFT_TEST];
+    memset(test_wdm_full, 0, NFFT_TEST*sizeof(double));
     double test_wdm_layer[wdm.NT];
     int test_layer = 5;
     for (int i=0; i<wdm.NT; i++) {
@@ -584,14 +586,14 @@ int main(int argc, char *argv[])
     memset(&test_data, 0, NFFT_TEST*sizeof(double));
     test_data[0] = 1.0;
     // get reference full WDM
-    double ref_wdm[NFFT_TEST];
+    static double ref_wdm[NFFT_TEST];
     memcpy(ref_wdm, test_data, NFFT_TEST*sizeof(double));
     wavelet_transform_timefreq(&wdm, ref_wdm);
     // get full FFT for extracting segments
-    double full_fft[NFFT_TEST+2];
+    static double full_fft[NFFT_TEST+2];
     glass_forward_real_fft_outplace(test_data, full_fft, NFFT_TEST);
     // assemble scalogram layer by layer
-    double assembled_wdm[NFFT_TEST];
+    static double assembled_wdm[NFFT_TEST];
     memset(assembled_wdm, 0, NFFT_TEST*sizeof(double));
     for (int m = 0; m <= wdm.NF; m++) {
         int seg_center = m * wdm.NT / 2;
@@ -645,10 +647,10 @@ int main(int argc, char *argv[])
     data2.fmin=0;
     struct Orbit *orbit = malloc(sizeof(struct Orbit));
     initialize_interpolated_analytic_orbits(orbit, data2.T, data2.t0);
-    struct InstrumentModel *inst = malloc(sizeof(struct InstrumentModel));
-    initialize_instrument_model(orbit, &data2, inst);
+    struct InstrumentModel *inst_fft = malloc(sizeof(struct InstrumentModel));
+    initialize_instrument_model(orbit, &data2, inst_fft);
 
-    data2.noise = inst->psd;
+    data2.noise = inst_fft->psd;
 
     struct TDI* testtdi_fft = malloc(sizeof(struct TDI));
     alloc_tdi(testtdi_fft, 2*data2.NFFT, data2.Nchannel);
@@ -659,8 +661,6 @@ int main(int argc, char *argv[])
             data2.NFFT,
             &var_tests,
             "FFT PSD test: InstrumentModel PSD whitens FFT-generated noise");
-
-    free_instrument_model(inst);
 
     // test WDM PSD definitions
     struct Data data3 = {0};
@@ -674,10 +674,12 @@ int main(int argc, char *argv[])
     data3.lmin = 0;
     data3.noise = malloc(sizeof(struct Noise));
     alloc_noise(data3.noise, data3.Nlayer*wdm.NT, data3.Nlayer, data3.Nchannel);
-    initialize_interpolated_analytic_orbits(orbit, data3.T, data3.t0);
-    inst = malloc(sizeof(struct InstrumentModel));
-    initialize_instrument_model_wavelet(orbit, &data3, inst);
-    generate_full_dynamic_covariance_matrix(data3.wdm, inst, NULL, NULL, data3.noise);
+
+    // Build the WDM PSD that whitens wavelet_transform_freq output by passing
+    // each FFT-domain channel PSD through the new convolution helper.
+    dft_psd_to_wdm_psd(&wdm, inst_fft->psd->C[0][0], data3.noise->C[0][0]);
+    dft_psd_to_wdm_psd(&wdm, inst_fft->psd->C[1][1], data3.noise->C[1][1]);
+    dft_psd_to_wdm_psd(&wdm, inst_fft->psd->C[2][2], data3.noise->C[2][2]);
 
     struct TDI* testtdi = malloc(sizeof(struct TDI));
     alloc_tdi(testtdi, data3.Nlayer*wdm.NT, data3.Nchannel);
@@ -704,9 +706,42 @@ int main(int argc, char *argv[])
             &var_tests,
             "WDM PSD test: InstrumentModel PSD whitens FFT-generated noise");
 
+    // Same FFT->WDM whitening test, but build data3.noise via the production
+    // initialize_instrument_model_wavelet + generate_full_dynamic_covariance_matrix
+    // path. This exercises the retooled generate_instrument_noise_model_wavelet
+    // end to end.
+    {
+        struct InstrumentModel *inst_w = malloc(sizeof(struct InstrumentModel));
+        initialize_instrument_model_wavelet(orbit, &data3, inst_w);
+        generate_full_dynamic_covariance_matrix(data3.wdm, inst_w, NULL, NULL, data3.noise);
+
+        ok = test_whitening_wdm_3ch(testtdi,
+                data3.noise,
+                data3.Nlayer*wdm.NT,
+                wdm.NT,
+                &var_tests,
+                "WDM PSD test (model path): InstrumentModel PSD whitens FFT-generated noise");
+
+        free_instrument_model(inst_w);
+    }
+
+    // Repeat the FFT->WDM whitening test with the approximate WDM PSD
+    // (single-bin lookup at layer center). Looser tolerance because the
+    // approximation drops the phif convolution.
+    dft_psd_to_wdm_psd_approx(&wdm, inst_fft->psd->C[0][0], data3.noise->C[0][0]);
+    dft_psd_to_wdm_psd_approx(&wdm, inst_fft->psd->C[1][1], data3.noise->C[1][1]);
+    dft_psd_to_wdm_psd_approx(&wdm, inst_fft->psd->C[2][2], data3.noise->C[2][2]);
+
+    ok = test_whitening_wdm_3ch(testtdi,
+            data3.noise,
+            data3.Nlayer*wdm.NT,
+            wdm.NT,
+            &var_tests,
+            "WDM PSD test (approx): InstrumentModel PSD whitens FFT-generated noise");
+
     free_tdi(testtdi_fft);
     free_tdi(testtdi);
-    free_instrument_model(inst);
+    free_instrument_model(inst_fft);
     print_test_block_stats(&var_tests);
 
     struct UnitTestBlockInfo* all_test_blocks[] = {&fft_tests, &fft_outplace_tests, &wdm_tests, &var_tests};

@@ -536,62 +536,44 @@ void generate_instrument_noise_model_wavelet_coarse(struct Wavelets *wdm, struct
 
 void generate_instrument_noise_model_wavelet(struct Wavelets *wdm, struct Orbit *orbit, struct InstrumentModel *model)
 {
+    /*
+     * Sample the instrument noise model on the FFT-bin grid (length ND/2+1,
+     * spacing 1/Tobs), then convolve against phif^2 via dft_psd_to_wdm_layer_var
+     * to populate the per-layer wavelet PSD. Replaces the old df/2-Simpson
+     * approximation, which lacked the wavelet-filter shape.
+     */
+    int NF = wdm->NF;
+    int NT = wdm->NT;
+    int ND = NF * NT;
+    int NFFT = ND/2 + 1;
+    double Tobs = NT * wdm->dt;
 
-    /* 
-    oversampled frequency grid 
-    */
-    struct InstrumentModel *grid = malloc(sizeof(struct InstrumentModel));
-
-    // active layers
+    // active layers (model->psd->C[i][j][n] holds layer imin+n)
     int imin = (int)round(model->psd->f[0]/wdm->df);
     int imax = (int)round(model->psd->f[model->psd->N-1]/wdm->df)+1;
 
-    // initialize data models
-    // NOTE: originally the grid went over every frequency layer, even ones we don't use
-    alloc_instrument_model(grid, 2*(imax-imin) + 2, imax-imin, 3);
-    /* Basic idea here is to resample at df/2, with one extra sample on each end
-     *    model:         0 ------- 1 ------- 2 ------- 3 ------- ... --------- N
-     *    grid:   -0.5 - 0 - 0.5 - 1 - 1.5 - 2 - 2.5 - 3 - 3.5 - ... - N-0.5 - N - N+0.5 
-     */
-
-    // set up psd frequency grid
-    double grid_fmin = imin*wdm->df - wdm->df/2.0;
-    for(size_t n=0; n<grid->psd->N; n++)
-        grid->psd->f[n] = grid_fmin + wdm->df/2.0*n;
-
-    // initialize noise levels
+    // FFT-bin grid covering all bins [0, ND/2]
+    struct InstrumentModel *grid = malloc(sizeof(struct InstrumentModel));
+    alloc_instrument_model(grid, NFFT, NF, 3);
+    for(int n=0; n<NFFT; n++)
+        grid->psd->f[n] = (double)n / Tobs;
     for(int i=0; i<grid->Nlink; i++)
     {
         grid->soms[i] = model->soms[i];
         grid->sacc[i] = model->sacc[i];
     }
+    generate_instrument_noise_model(orbit, grid);
 
-    // get noise covariance matrix for initial parameters
-    generate_instrument_noise_model(orbit,grid);
-    
-    /*
-    integrate instrument noise over each frequency layer
-    */
-    double ***C     = model->psd->C;
-    double ***Cgrid = grid->psd->C;
-    for(int i=imin; i<imax; i++)
-    {
-        int j = 2*(i-imin) + 1;
-        for(int n=0; n<3; n++)
-            for(int m=n; m<3; m++) {
-                // TODO: fix formula? spacing is df!
-                C[n][m][i-imin] = simpson_integration_3(Cgrid[n][m][j-1],Cgrid[n][m][j],Cgrid[n][m][j+1],1.0);
+    // Convolve to wavelet layer variances and pull out the active range
+    double layer_var[NF + 1];
+    for(int n=0; n<3; n++)
+        for(int m=n; m<3; m++) {
+            dft_psd_to_wdm_layer_var(wdm, grid->psd->C[n][m], layer_var);
+            for(int j=imin; j<imax; j++) {
+                model->psd->C[n][m][j-imin] = layer_var[j];
+                model->psd->C[m][n][j-imin] = layer_var[j];
             }
-    }
-
-    //NOTE: normalization fudge factor (and symmetrization)
-    for(int i=0; i<model->psd->N; i++)
-        for(int n=0; n<3; n++)
-            for(int m=n; m<3; m++) {
-                // TODO: normalization check here
-                C[n][m][i]/=8.;
-                C[m][n][i] = C[n][m][i];
-            }
+        }
 
     free_instrument_model(grid);
 }
@@ -642,28 +624,25 @@ void generate_galactic_foreground_model(struct ForegroundModel *model)
 
 void generate_galactic_foreground_model_wavelet(struct Wavelets *wdm, struct ForegroundModel *model)
 {
-    /* 
-    oversampled frequency grid 
-    */
-    struct ForegroundModel *grid = malloc(sizeof(struct ForegroundModel));
+    /*
+     * Sample the foreground PSD on the FFT-bin grid (1/Tobs spacing) and
+     * convolve against phif^2 to get per-layer wavelet variances.
+     */
+    int NF = wdm->NF;
+    int NT = wdm->NT;
+    int ND = NF * NT;
+    int NFFT = ND/2 + 1;
+    double Tobs = NT * wdm->dt;
 
-    // active layers
     int imin = (int)round(model->psd->f[0]/wdm->df);
     int imax = (int)round(model->psd->f[model->psd->N-1]/wdm->df)+1;
 
-    // initialize data models
-    alloc_foreground_model(grid, 2*(imax-imin) + 2, imax-imin, 3);
-    /* Basic idea here is to resample at df/2, with one extra sample on each end
-     *    model:         0 ------- 1 ------- 2 ------- 3 ------- ... --------- N
-     *    grid:   -0.5 - 0 - 0.5 - 1 - 1.5 - 2 - 2.5 - 3 - 3.5 - ... - N-0.5 - N - N+0.5 
-     */
+    struct ForegroundModel *grid = malloc(sizeof(struct ForegroundModel));
+    alloc_foreground_model(grid, NFFT, NF, 3);
+    for(int n=0; n<NFFT; n++)
+        grid->psd->f[n] = (double)n / Tobs;
 
-    // set up psd frequency grid
-    double grid_fmin = imin*wdm->df - wdm->df/2.0;
-    for(size_t n=0; n<grid->psd->N; n++)
-        grid->psd->f[n] = grid_fmin + wdm->df/2.0*n;
-
-    // initialize foreground parameters levels
+    // copy foreground parameters
     map_array_to_foreground_params(model);
     grid->Tobs  = model->Tobs;
     grid->Amp   = model->Amp;
@@ -673,38 +652,30 @@ void generate_galactic_foreground_model_wavelet(struct Wavelets *wdm, struct For
     grid->f2    = model->f2;
     map_foreground_params_to_array(grid);
 
-    // get noise covariance matrix for initial parameters
     generate_galactic_foreground_model(grid);
 
-    /*
-    integrate foreground over each frequency layer
-    */
-    double ***C     = model->psd->C;
-    double ***Cgrid = grid->psd->C;
+    // galaxy_foreground diverges at f=0; zero that bin so it can't propagate
+    // through the convolution.
+    for(int n=0; n<3; n++)
+        for(int m=0; m<3; m++)
+            grid->psd->C[n][m][0] = 0.0;
 
-    for(int i=imin; i<imax; i++)
-    {
-        int j = 2*(i-imin) + 1;
-        for(int n=0; n<3; n++)
-            for(int m=n; m<3; m++)
-                C[n][m][i-imin] = simpson_integration_3(Cgrid[n][m][j-1],Cgrid[n][m][j],Cgrid[n][m][j+1],1.0);
-    }
+    // Undo the isotropic -1/2 baked into generate_galactic_foreground_model
+    // off-diagonals before convolving (modulation(t) is applied later).
+    for(int n=0; n<3; n++)
+        for(int m=n+1; m<3; m++)
+            for(int k=0; k<NFFT; k++)
+                grid->psd->C[n][m][k] *= -2.0;
 
-    //NOTE: undo isotropc -1/2 on covariance hardcoded in generate_galactic_foreground_model()
-    // modulation(t) will be applied to PSDs later
-    for(int i=0; i<model->psd->N; i++)
-        for(int n=0; n<3; n++)
-            for(int m=n; m<3; m++)
-                if(n!=m) C[n][m][i]*=-2.;
-
-
-    //NOTE: normalization fudge factor
-    for(int i=0; i<model->psd->N; i++)
-        for(int n=0; n<3; n++)
-            for(int m=n; m<3; m++) {
-                C[n][m][i]/=8.;
-                C[m][n][i] = C[n][m][i];
+    double layer_var[NF + 1];
+    for(int n=0; n<3; n++)
+        for(int m=n; m<3; m++) {
+            dft_psd_to_wdm_layer_var(wdm, grid->psd->C[n][m], layer_var);
+            for(int j=imin; j<imax; j++) {
+                model->psd->C[n][m][j-imin] = layer_var[j];
+                model->psd->C[m][n][j-imin] = layer_var[j];
             }
+        }
 
     free_foreground_model(grid);
 }
@@ -770,57 +741,47 @@ void generate_sgwb_model(struct SGWBModel *model)
 }
 void generate_sgwb_model_wavelet(struct Wavelets* wdm, struct SGWBModel *model)
 {
-    /* 
-    oversampled frequency grid 
-    */
-    struct SGWBModel *grid = malloc(sizeof(struct SGWBModel));
-    // active layers
+    /*
+     * Sample the SGWB PSD on the FFT-bin grid (1/Tobs spacing) and convolve
+     * against phif^2 to get per-layer wavelet variances.
+     */
+    int NF = wdm->NF;
+    int NT = wdm->NT;
+    int ND = NF * NT;
+    int NFFT = ND/2 + 1;
+    double Tobs = NT * wdm->dt;
+
     int imin = (int)round(model->psd->f[0]/wdm->df);
     int imax = (int)round(model->psd->f[model->psd->N-1]/wdm->df)+1;
 
-    // initialize data models
-    alloc_sgwb_model(grid, 2*(imax-imin) + 2, imax-imin, 3, model->SGWB_type);
-    /* Basic idea here is to resample at df/2, with one extra sample on each end
-     *    model:         0 ------- 1 ------- 2 ------- 3 ------- ... --------- N
-     *    grid:   -0.5 - 0 - 0.5 - 1 - 1.5 - 2 - 2.5 - 3 - 3.5 - ... - N-0.5 - N - N+0.5 
-     */
+    struct SGWBModel *grid = malloc(sizeof(struct SGWBModel));
+    alloc_sgwb_model(grid, NFFT, NF, 3, model->SGWB_type);
+    for(int n=0; n<NFFT; n++)
+        grid->psd->f[n] = (double)n / Tobs;
 
-    // set up psd frequency grid
-    double grid_fmin = imin*wdm->df - wdm->df/2.0;
-    for(size_t n=0; n<grid->psd->N; n++)
-        grid->psd->f[n] = grid_fmin + wdm->df/2.0*n;
-
-    // intialize grid parameter levels
     grid->Nparams = model->Nparams;
     grid->Tobs = model->Tobs;
     for (int i=0; i<model->Nparams; i++)
-        grid->params[i] = model->params[i]; 
+        grid->params[i] = model->params[i];
 
-    // get noise covariance matrix for initial parameters
     generate_sgwb_model(grid);
 
-    /*
-    integrate SGWB over each frequency layer
-    */
-    double ***C     = model->psd->C;
-    double ***Cgrid = grid->psd->C;
-    for(int i=imin; i<imax; i++)
-    {
-        int j = 2*(i-imin) + 1;
-        for(int n=0; n<3; n++)
-            for(int m=n; m<3; m++) {
-                C[n][m][i-imin] = simpson_integration_3(Cgrid[n][m][j-1],Cgrid[n][m][j],Cgrid[n][m][j+1],1.0);
-            }
-    }
+    // sgwb_powerlaw diverges as 1/f^3 at f=0; zero the DC bin so the
+    // convolution doesn't propagate NaN/inf into low layers.
+    for(int n=0; n<3; n++)
+        for(int m=0; m<3; m++)
+            grid->psd->C[n][m][0] = 0.0;
 
-    // TODO: don't think we need this???
-    //NOTE: normalization fudge factor
-    for(int i=0; i<model->psd->N; i++)
-        for(int n=0; n<3; n++)
-            for(int m=n; m<3; m++) {
-                C[n][m][i]/=8.;
-                C[m][n][i] = C[n][m][i];
+    double layer_var[NF + 1];
+    for(int n=0; n<3; n++)
+        for(int m=n; m<3; m++) {
+            dft_psd_to_wdm_layer_var(wdm, grid->psd->C[n][m], layer_var);
+            for(int j=imin; j<imax; j++) {
+                model->psd->C[n][m][j-imin] = layer_var[j];
+                model->psd->C[m][n][j-imin] = layer_var[j];
             }
+        }
+
     free_sgwb_model(grid);
 }
 
