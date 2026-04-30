@@ -96,15 +96,37 @@ void print_noise_model(struct Noise *noise, char filename[])
 void print_whitened_data(struct Data *data, struct Noise *noise, char filename[])
 {
     FILE *fptr = fopen(filename,"w");
-    for(int i=0; i<noise->N; i++)
+    if (!strcmp(data->basis,"wavelet"))
     {
-        fprintf(fptr,"%lg ",noise->f[i]);
-        fprintf(fptr,"%lg %lg ",data->tdi->X[2*i]/sqrt(noise->C[0][0][i]),data->tdi->X[2*i+1]/sqrt(noise->C[0][0][i]));
-        fprintf(fptr,"%lg %lg ",data->tdi->Y[2*i]/sqrt(noise->C[1][1][i]),data->tdi->Y[2*i+1]/sqrt(noise->C[1][1][i]));
-        fprintf(fptr,"%lg %lg ",data->tdi->Z[2*i]/sqrt(noise->C[2][2][i]),data->tdi->Z[2*i+1]/sqrt(noise->C[2][2][i]));
-        fprintf(fptr,"\n");
+        struct Wavelets *wdm = data->wdm;
+        int k;
+        for (int i=0; i<wdm->NT; i++)
+        {
+            double t = i*wdm->dt;
+            for (int j=data->lmin; j<data->lmax; j++)
+            {
+                double f = j*wdm->df;
+                wavelet_pixel_to_index(wdm, i, j, &k);
+                k -= wdm->kmin;
+                double wX = data->dwt->X[k] / sqrt(noise->C[0][0][k]);
+                double wY = data->dwt->Y[k] / sqrt(noise->C[1][1][k]);
+                double wZ = data->dwt->Z[k] / sqrt(noise->C[2][2][k]);
+                fprintf(fptr,"%lg %lg %lg %lg %lg\n", t, f, wX, wY, wZ);
+            }
+            fprintf(fptr,"\n");
+        }
     }
-        
+    else
+    {
+        for(int i=0; i<noise->N; i++)
+        {
+            fprintf(fptr,"%lg ",noise->f[i]);
+            fprintf(fptr,"%lg %lg ",data->tdi->X[2*i]/sqrt(noise->C[0][0][i]),data->tdi->X[2*i+1]/sqrt(noise->C[0][0][i]));
+            fprintf(fptr,"%lg %lg ",data->tdi->Y[2*i]/sqrt(noise->C[1][1][i]),data->tdi->Y[2*i+1]/sqrt(noise->C[1][1][i]));
+            fprintf(fptr,"%lg %lg ",data->tdi->Z[2*i]/sqrt(noise->C[2][2][i]),data->tdi->Z[2*i+1]/sqrt(noise->C[2][2][i]));
+            fprintf(fptr,"\n");
+        }
+    }
     fclose(fptr);
 }
 
