@@ -19,6 +19,7 @@ lldb -- build/apps/src/noise_wavelet_mcmc \
         --fmax 8e-3 \
         --duration $((7680*338)) \
         --stationary \
+        --sgwb-template 0 \
         --conf-noise \
         --sim-noise
 #        --threads 1 \

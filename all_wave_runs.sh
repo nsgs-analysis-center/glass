@@ -3,6 +3,7 @@
 set +e
 
 NSTEPS=10
+DURATION=$((7680*338*3))
 
 # noise only
 RUNDIR=wdmruns/stat-noise
@@ -14,7 +15,7 @@ nice -n 15 build/apps/src/noise_wavelet_mcmc \
         --cheat \
         --fmin 5e-4 \
         --fmax 8e-3 \
-        --duration $((7680*338*12)) \
+        --duration $DURATION \
         --stationary \
         --rundir $RUNDIR \
         --sim-noise
@@ -31,7 +32,7 @@ nice -n 15 build/apps/src/noise_wavelet_mcmc \
         --cheat \
         --fmin 5e-4 \
         --fmax 8e-3 \
-        --duration $((7680*338*12)) \
+        --duration $DURATION \
         --stationary \
         --conf-noise \
         --rundir $RUNDIR \
@@ -49,7 +50,7 @@ nice -n 15 build/apps/src/noise_wavelet_mcmc \
         --cheat \
         --fmin 5e-4 \
         --fmax 8e-3 \
-        --duration $((7680*338*12)) \
+        --duration $DURATION \
         --conf-noise \
         --rundir $RUNDIR \
         --sim-noise
@@ -65,7 +66,7 @@ nice -n 15 build/apps/src/noise_wavelet_mcmc \
         --cheat \
         --fmin 5e-4 \
         --fmax 8e-3 \
-        --duration $((7680*338*12)) \
+        --duration $DURATION \
         --stationary \
         --conf-noise \
         --sgwb-template 0 \
@@ -83,7 +84,7 @@ nice -n 15 build/apps/src/noise_wavelet_mcmc \
         --cheat \
         --fmin 5e-4 \
         --fmax 8e-3 \
-        --duration $((7680*338*12)) \
+        --duration $DURATION \
         --conf-noise \
         --sgwb-template 0 \
         --rundir $RUNDIR \
