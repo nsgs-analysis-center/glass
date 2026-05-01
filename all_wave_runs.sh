@@ -2,8 +2,8 @@
 # don't exit if a command errors
 set +e
 
-NSTEPS=10
-DURATION=$((7680*338*3))
+NSTEPS=2000
+DURATION=$((7680*338*12))
 
 # noise only
 RUNDIR=wdmruns/stat-noise
@@ -56,6 +56,7 @@ nice -n 15 build/apps/src/noise_wavelet_mcmc \
         --sim-noise
 
 rsync -avz --progress wdmruns desktop:/mnt/storage/research/
+
 # noise + conf + sgwb stationary
 RUNDIR=wdmruns/stat-noise-conf-pl
 mkdir -p $RUNDIR
