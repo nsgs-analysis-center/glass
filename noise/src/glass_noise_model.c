@@ -723,6 +723,16 @@ void generate_sgwb_model(struct SGWBModel *model)
                 exit(-3);
                 break;
             case 3:
+                if (f == 0.0) {
+                    // TODO better zero check
+                    model->psd->C[0][0][n] = 0.0;
+                    model->psd->C[1][1][n] = 0.0;
+                    model->psd->C[2][2][n] = 0.0;
+                    model->psd->C[0][1][n] = model->psd->C[1][0][n] = 0.0;
+                    model->psd->C[0][2][n] = model->psd->C[2][0][n] = 0.0;
+                    model->psd->C[1][2][n] = model->psd->C[2][1][n] = 0.0;
+                    continue;
+                }
                 logf = log(f);
                 Rxx =  exp(spline_interpolation(model->R->spline_logRXX, logf));
                 Ryy =  exp(spline_interpolation(model->R->spline_logRYY, logf));

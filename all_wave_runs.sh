@@ -2,19 +2,21 @@
 # don't exit if a command errors
 set +e
 
-NSTEPS=10
+NSTEPS=2000
+DURATION=$((7680*338*12))
+NCH=24
 
 # noise only
 RUNDIR=wdmruns/stat-noise
 mkdir -p $RUNDIR
 nice -n 15 build/apps/src/noise_wavelet_mcmc \
         --steps $NSTEPS \
-        --chains 12 \
-        --threads 12 \
+        --chains $NCH \
+        --threads $NCH \
         --cheat \
         --fmin 5e-4 \
         --fmax 8e-3 \
-        --duration $((7680*338*12)) \
+        --duration $DURATION \
         --stationary \
         --rundir $RUNDIR \
         --sim-noise
@@ -26,46 +28,48 @@ RUNDIR=wdmruns/stat-noise-conf
 mkdir -p $RUNDIR
 nice -n 15 build/apps/src/noise_wavelet_mcmc \
         --steps $NSTEPS \
-        --chains 12 \
-        --threads 12 \
+        --chains $NCH \
+        --threads $NCH \
         --cheat \
         --fmin 5e-4 \
         --fmax 8e-3 \
-        --duration $((7680*338*12)) \
+        --duration $DURATION \
         --stationary \
         --conf-noise \
         --rundir $RUNDIR \
         --sim-noise
 
 rsync -avz --progress wdmruns desktop:/mnt/storage/research/
+exit
 
 # noise + conf non-stationary
 RUNDIR=wdmruns/noise-conf
 mkdir -p $RUNDIR
 nice -n 15 build/apps/src/noise_wavelet_mcmc \
         --steps $NSTEPS \
-        --chains 12 \
-        --threads 12 \
+        --chains $NCH \
+        --threads $NCH \
         --cheat \
         --fmin 5e-4 \
         --fmax 8e-3 \
-        --duration $((7680*338*12)) \
+        --duration $DURATION \
         --conf-noise \
         --rundir $RUNDIR \
         --sim-noise
 
 rsync -avz --progress wdmruns desktop:/mnt/storage/research/
+
 # noise + conf + sgwb stationary
 RUNDIR=wdmruns/stat-noise-conf-pl
 mkdir -p $RUNDIR
 nice -n 15 build/apps/src/noise_wavelet_mcmc \
         --steps $NSTEPS \
-        --chains 12 \
-        --threads 12 \
+        --chains $NCH \
+        --threads $NCH \
         --cheat \
         --fmin 5e-4 \
         --fmax 8e-3 \
-        --duration $((7680*338*12)) \
+        --duration $DURATION \
         --stationary \
         --conf-noise \
         --sgwb-template 0 \
@@ -78,12 +82,12 @@ RUNDIR=wdmruns/noise-conf-pl
 mkdir -p $RUNDIR
 nice -n 15 build/apps/src/noise_wavelet_mcmc \
         --steps $NSTEPS \
-        --chains 12 \
-        --threads 12 \
+        --chains $NCH \
+        --threads $NCH \
         --cheat \
         --fmin 5e-4 \
         --fmax 8e-3 \
-        --duration $((7680*338*12)) \
+        --duration $DURATION \
         --conf-noise \
         --sgwb-template 0 \
         --rundir $RUNDIR \
