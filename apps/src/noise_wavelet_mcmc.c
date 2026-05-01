@@ -69,8 +69,9 @@ int write_fft_data(double df, int NFFT, double* data, char* fname) {
     return 0;
 }
 
-int write_wdm_data(struct Wavelets* wdm, double* data, char* fname) {
+int write_wdm_data(struct Data* d, double* data, char* fname) {
     FILE *fptr = NULL;
+    struct Wavelets* wdm = d->wdm;
     fptr = fopen(fname,"w");
     if (!fptr) {
         fprintf(stderr, "Couldn't open %s for writing!\n", fname);
@@ -79,7 +80,7 @@ int write_wdm_data(struct Wavelets* wdm, double* data, char* fname) {
     int k;
     for (int i=0; i<wdm->NT; i++) {
         double t = i*wdm->dt;
-        for (int j=0; j<wdm->NF; j++) {
+        for (int j=d->lmin; j < d->lmax; j++) {
             double f = j*wdm->df;
             wavelet_pixel_to_index(wdm, i, j, &k);
             fprintf(fptr,"%lg ",t);
@@ -167,10 +168,7 @@ int main(int argc, char *argv[])
     if(flags->strainData)
         ReadData(data,orbit,flags);
     else if(flags->simNoise) {
-#if 0
-        __builtin_debugtrap();
-        data->lmin=0;
-        data->lmax=data->wdm->NF-1;
+#if 1
         // inject some noise
         struct InstrumentModel inst_inj = {0};
         initialize_instrument_model_wavelet(orbit, data, &inst_inj);
@@ -193,8 +191,8 @@ int main(int argc, char *argv[])
 
         //AddNoiseWavelet(data,data->tdi);
         MyAddNoiseWavelet(data,data->tdi);
-        write_wdm_data(data->wdm, data->tdi->X, "./debug_wdm_noise.dat");
-        write_wdm_data(data->wdm, data->noise->C[0][0], "./debug_wdm_C00.dat");
+        write_wdm_data(data, data->tdi->X, "./debug_wdm_noise.dat");
+        write_wdm_data(data, data->noise->C[0][0], "./debug_wdm_C00.dat");
 #else
 
         // HACK: generate noise in FFT domain and transform to WDM
@@ -263,7 +261,7 @@ int main(int argc, char *argv[])
     }
 
     /* Store DFT copy of simulated data */
-    // TODO: is this right?
+    // TODO: fix below
     data->qmin = data->lmin;
     if(!flags->strainData) {
         // data->dft->X is sized for the active FFT band (2*data->NFFT doubles),
@@ -286,13 +284,11 @@ int main(int argc, char *argv[])
     /* print various data products for plotting */
     print_data(data, flags);
 
-    // okay, for now we're in the very weird situation of not trying to fit the foreground or instrument params, **only** the SGWB params
 
     // For now, we are not going to have full wavelet scaleograms stored everywhere!
     // we'll treat these as outer products of the spectrum and modulation
     // the modulation will be constant for everything except the confusion noise for now
     // TODO: eventually, allow for slow frequency-dependent modulations in the instrument model
-
 
     /* Initialize Instrument Noise Model */
     printf("   ...initialize instrument noise model\n");
@@ -325,8 +321,6 @@ int main(int argc, char *argv[])
         // see above note. this is frequency-axis only
         inst_model[ic] = malloc(sizeof(struct InstrumentModel));
         inst_trial[ic] = malloc(sizeof(struct InstrumentModel));
-        // the only difference between this function and
-        // initialize_instrument_model is that this internally integrates over a finer frequency grid
         initialize_instrument_model_wavelet(orbit, data, inst_model[ic]);
         initialize_instrument_model_wavelet(orbit, data, inst_trial[ic]);
     }
@@ -418,17 +412,12 @@ int main(int argc, char *argv[])
     int NC = chain->NC;
     
     // TODO improve paralellization
-    //#pragma omp parallel num_threads(flags->threads)
-    //{
+    #pragma omp parallel num_threads(flags->threads)
+    {
         int threadID;
+        threadID = omp_get_thread_num();
         
-        //Save individual thread number
-        threadID = 0;//omp_get_thread_num();
-        
-        //Only one thread runs this section
-        if(threadID==0)  numThreads = 1;//omp_get_num_threads();
-        
-        //#pragma omp barrier
+        if(threadID==0)  numThreads = omp_get_num_threads();
         
         /* The MCMC loop */
         for(; step<flags->NMCMC;)
@@ -454,40 +443,22 @@ int main(int argc, char *argv[])
                     if(flags->sgwbTemplate>=0) noise_sgwb_model_mcmc_wavelet_dumb(data, inst_model_ptr, conf_model_ptr, sgwb_model_ptr, sgwb_trial_ptr, psd_ptr, chain, flags, ic);
                     // TODO: the logLs aren't tracked well at all here. We should probably refactor to have some kind of WaveletNoise struct that can handle all these components...
                 }
-            }// end (parallel) loop over chains
+            }// end loop over chains
             
             //Next section is single threaded. Every thread must get here before continuing
             
-            //#pragma omp barrier
+            #pragma omp barrier
             
             if(threadID==0)
             {
-                // TODO fix this to be the model-agnostic stochastic component struct once we make it
-                //noise_ptmcmc(inst_model, chain, flags);
+                // TODO fix this to track logL better
+                noise_ptmcmc(inst_model, chain, flags);
+                if(flags->confNoise) for (int ic=0; ic<chain->NC; ic++) conf_model[chain->index[ic]]->logL = inst_model[chain->index[ic]]->logL;
+                if(flags->sgwbTemplate>=0) for (int ic=0; ic<chain->NC; ic++) sgwb_model[chain->index[ic]]->logL = inst_model[chain->index[ic]]->logL;
                 
-                if(flags->NMCMC >= 100 && step%(flags->NMCMC/100)==0)printf("noise_wavelet_mcmc at step %i\n",step);
-
-                // print chain files
-                fprintf(noiseChainFile,"%i %.12g ",step,inst_model[chain->index[0]]->logL);
-                print_instrument_state(inst_model[chain->index[0]], noiseChainFile);
-                fprintf(noiseChainFile,"\n");
-
-                if(flags->confNoise)
-                {
-                    fprintf(foregroundChainFile,"%i %.12g ", step, conf_model[chain->index[0]]->logL);
-                    print_foreground_state(conf_model[chain->index[0]], foregroundChainFile);
-                    fprintf(foregroundChainFile,"\n");
-                }
-
-                if(flags->sgwbTemplate>=0)
-                {
-                    fprintf(sgwbChainFile,"%i %.12g ", step, sgwb_model[chain->index[0]]->logL);
-                    print_sgwb_state(sgwb_model[chain->index[0]], sgwbChainFile);
-                    fprintf(sgwbChainFile, "\n");
-                }
-
                 if(flags->NMCMC >= 100 && step%(flags->NMCMC/100)==0)
                 {
+                    printf("noise_wavelet_mcmc at step %i\n",step);
                     generate_instrument_noise_model_wavelet(data->wdm, orbit, inst_model[chain->index[0]]);
                     sprintf(filename,"%s/current_instrument_noise_model.dat",data->dataDir);
                     print_noise_model(inst_model[chain->index[0]]->psd, filename);
@@ -527,16 +498,33 @@ int main(int argc, char *argv[])
                 }
                 */
 
+                fprintf(noiseChainFile,"%i %.12g ",step,inst_model[chain->index[0]]->logL);
+                print_instrument_state(inst_model[chain->index[0]], noiseChainFile);
+                fprintf(noiseChainFile,"\n");
+
+                if(flags->confNoise)
+                {
+                    fprintf(foregroundChainFile,"%i %.12g ",step,conf_model[chain->index[0]]->logL);
+                    print_foreground_state(conf_model[chain->index[0]], foregroundChainFile);
+                    fprintf(foregroundChainFile,"\n");
+                }
+                if(flags->sgwbTemplate>=0)
+                {
+                    fprintf(sgwbChainFile,"%i %.12g ",step,sgwb_model[chain->index[0]]->logL);
+                    print_sgwb_state(sgwb_model[chain->index[0]], sgwbChainFile);
+                    fprintf(sgwbChainFile,"\n");
+                }
+
                 step++;
-                
-                
+
+
             }
             //Can't continue MCMC until single thread is finished
-            //#pragma omp barrier
+            #pragma omp barrier
             
         }// end of MCMC loop
         
-    //}// End of parallelization
+    }// End of parallelization
     
     fclose(noiseChainFile);
     if(flags->confNoise)fclose(foregroundChainFile);
