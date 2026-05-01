@@ -114,6 +114,7 @@ void noise_ptmcmc(struct InstrumentModel **model, struct Chain *chain, struct Fl
     }
 }
 
+
 // TODO: this is log-uniform not uniform!
 static double uniform_frequency_draw(double fmin, double fmax, unsigned int *r)
 {
@@ -960,7 +961,10 @@ void noise_sgwb_model_mcmc_wavelet_dumb(struct Data *data, struct InstrumentMode
         }
     }
     generate_sgwb_model_wavelet(data->wdm, model_y);
-    generate_full_dynamic_covariance_matrix(data->wdm, noise, galaxy, model_y, psd);
+    if (flags->stationary)
+        generate_full_stationary_covariance_matrix(data->wdm, noise, galaxy, model_y, psd);
+    else
+        generate_full_dynamic_covariance_matrix(data->wdm, noise, galaxy, model_y, psd);
     invert_noise_covariance_matrix(psd);
     // DEBUG note: this seems to work just fine, same as injection...
     if (debug_inj > 0) {
@@ -1163,7 +1167,10 @@ void noise_instrument_model_mcmc_wavelet(struct Orbit *orbit, struct Data *data,
         if(logPy > -INFINITY && !flags->prior)
         {
             generate_instrument_noise_model_wavelet(data->wdm, orbit, model_y);
-            generate_full_dynamic_covariance_matrix(data->wdm, model_y, galaxy, sgwb, psd);
+            if (flags->stationary)
+                generate_full_stationary_covariance_matrix(data->wdm, model_y, galaxy, sgwb, psd);
+            else
+                generate_full_dynamic_covariance_matrix(data->wdm, model_y, galaxy, sgwb, psd);
             invert_noise_covariance_matrix(psd);
             
             model_y->logL = my_noise_log_likelihood_wavelet(data, psd);
@@ -1307,7 +1314,10 @@ void noise_foreground_model_mcmc_wavelet(struct Data *data, struct InstrumentMod
         {
             map_array_to_foreground_params(model_y);
             generate_galactic_foreground_model_wavelet(data->wdm, model_y);
-            generate_full_dynamic_covariance_matrix(data->wdm, noise, model_y, sgwb, psd);
+            if (flags->stationary)
+                generate_full_stationary_covariance_matrix(data->wdm, noise, model_y, sgwb, psd);
+            else
+                generate_full_dynamic_covariance_matrix(data->wdm, noise, model_y, sgwb, psd);
             invert_noise_covariance_matrix(psd);
             
             model_y->logL = my_noise_log_likelihood_wavelet(data, psd);
@@ -1420,7 +1430,10 @@ void noise_sgwb_model_mcmc_wavelet(struct Data *data, struct InstrumentModel *no
             generate_sgwb_model_wavelet(data->wdm, model_y);
             
             //add other stochastic contributions
-            generate_full_dynamic_covariance_matrix(data->wdm, noise, galaxy, model_y, psd);
+            if (flags->stationary)
+                generate_full_stationary_covariance_matrix(data->wdm, noise, galaxy, model_y, psd);
+            else
+                generate_full_dynamic_covariance_matrix(data->wdm, noise, galaxy, model_y, psd);
             invert_noise_covariance_matrix(psd);
             
             model_y->logL = my_noise_log_likelihood_wavelet(data, psd);

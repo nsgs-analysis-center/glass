@@ -83,6 +83,7 @@ int write_wdm_data(struct Data* d, double* data, char* fname) {
         for (int j=d->lmin; j < d->lmax; j++) {
             double f = j*wdm->df;
             wavelet_pixel_to_index(wdm, i, j, &k);
+            k -= wdm->kmin;
             fprintf(fptr,"%lg ",t);
             fprintf(fptr,"%lg ",f);
             fprintf(fptr,"%lg",data[k]);
@@ -105,8 +106,6 @@ int main(int argc, char *argv[])
     print_LISA_ASCII_art(stdout);
     print_version(stdout);
     if(argc==1) print_usage();
-
-    bool stationary_test = false;
 
     /* Allocate data structures */
     struct Data *data   = malloc(sizeof(struct Data));
@@ -185,12 +184,23 @@ int main(int argc, char *argv[])
             sgwb_ptr = &sgwb_inj;
             initialize_sgwb_model_wavelet(orbit, data, sgwb_ptr, flags->sgwbTemplate);
         }
-        generate_full_dynamic_covariance_matrix(data->wdm, &inst_inj, conf_ptr, sgwb_ptr, data->noise);
+        if (flags->stationary)
+            generate_full_stationary_covariance_matrix(data->wdm, &inst_inj, conf_ptr, sgwb_ptr, data->noise);
+        else
+            generate_full_dynamic_covariance_matrix(data->wdm, &inst_inj, conf_ptr, sgwb_ptr, data->noise);
         // alloc tdi data
         alloc_tdi(data->tdi, data->N, 3);
 
         //AddNoiseWavelet(data,data->tdi);
         MyAddNoiseWavelet(data,data->tdi);
+
+        // mirror noise into dwt so the wavelet-domain state is consistent
+        size_t band_bytes = (size_t)data->N * sizeof(double);
+        memcpy(data->dwt->X, data->tdi->X, band_bytes);
+        memcpy(data->dwt->Y, data->tdi->Y, band_bytes);
+        memcpy(data->dwt->Z, data->tdi->Z, band_bytes);
+
+        //__builtin_debugtrap();
         write_wdm_data(data, data->tdi->X, "./debug_wdm_noise.dat");
         write_wdm_data(data, data->noise->C[0][0], "./debug_wdm_C00.dat");
 #else
@@ -265,20 +275,31 @@ int main(int argc, char *argv[])
     data->qmin = data->lmin;
     if(!flags->strainData) {
         // data->dft->X is sized for the active FFT band (2*data->NFFT doubles),
-        // but wavelet_transform_inverse_freq writes a full ND+2. Use scratch
-        // and copy out the active FFT bins [qmin, qmin+NFFT).
+        // but wavelet_transform_inverse_freq writes a full ND+2. Likewise it
+        // *reads* a full NF*NT scalogram, while data->dwt is only sized for the
+        // active band. Route input and output through full-size scratch buffers
+        // and copy the active slices in/out.
         int ND = data->wdm->NF * data->wdm->NT;
-        double *full_fft = malloc((ND + 2) * sizeof(double));
+        double *full_fft  = malloc((ND + 2) * sizeof(double));
+        double *full_wave = calloc(ND, sizeof(double));
+        size_t band_bytes = (size_t)data->N * sizeof(double);
+        size_t band_off   = (size_t)data->lmin * data->wdm->NT;
         size_t copy_bytes = 2 * (size_t)data->NFFT * sizeof(double);
         size_t fft_off    = 2 * (size_t)data->qmin;
 
-        wavelet_transform_inverse_freq(data->wdm, data->dwt->X, full_fft);
+        memcpy(full_wave + band_off, data->dwt->X, band_bytes);
+        wavelet_transform_inverse_freq(data->wdm, full_wave, full_fft);
         memcpy(data->dft->X, full_fft + fft_off, copy_bytes);
-        wavelet_transform_inverse_freq(data->wdm, data->dwt->Y, full_fft);
+
+        memcpy(full_wave + band_off, data->dwt->Y, band_bytes);
+        wavelet_transform_inverse_freq(data->wdm, full_wave, full_fft);
         memcpy(data->dft->Y, full_fft + fft_off, copy_bytes);
-        wavelet_transform_inverse_freq(data->wdm, data->dwt->Z, full_fft);
+
+        memcpy(full_wave + band_off, data->dwt->Z, band_bytes);
+        wavelet_transform_inverse_freq(data->wdm, full_wave, full_fft);
         memcpy(data->dft->Z, full_fft + fft_off, copy_bytes);
         free(full_fft);
+        free(full_wave);
     }
     
     /* print various data products for plotting */
@@ -297,8 +318,7 @@ int main(int argc, char *argv[])
     struct InstrumentModel **inst_trial = malloc(chain->NC*sizeof(struct InstrumentModel *));
     for(int ic=0; ic<chain->NC; ic++)
     {
-        // okay, so this is wavelet-basis! time and freq pixels both here
-        scaleogram[ic] = malloc(sizeof(struct Noise)); // not a "deep" alloc
+        scaleogram[ic] = malloc(sizeof(struct Noise));
 
         // see above note, we'll save the current scaleogram from all contributions here
         // but the individual models will only have spectrum x modulation
@@ -366,10 +386,15 @@ int main(int argc, char *argv[])
 
 
     /* Combine noise components to form covariance matrix */
-    // TODO need stationary flag
     for(int ic=0; ic<chain->NC; ic++)
     {
-        generate_full_dynamic_covariance_matrix(data->wdm, inst_model[ic], conf_model[ic], sgwb_model[ic], scaleogram[ic]);
+        if (flags->stationary) {
+            generate_full_stationary_covariance_matrix(data->wdm, inst_model[ic], conf_model[ic], sgwb_model[ic], scaleogram[ic]);
+        }
+        else {
+            generate_full_dynamic_covariance_matrix(data->wdm, inst_model[ic], conf_model[ic], sgwb_model[ic], scaleogram[ic]);
+        }
+
 
         /* get initial likelihoods */
         // TODO does every component need a logL?
@@ -407,17 +432,14 @@ int main(int argc, char *argv[])
         if (sgwbChainFile == NULL) {fprintf(stderr, "Filesystem error, couldn't open %s for writing\n", filename); exit(-1);}
     }
     
-    int numThreads;
     int step = 0;
     int NC = chain->NC;
-    
+
     // TODO improve paralellization
     #pragma omp parallel num_threads(flags->threads)
     {
-        int threadID;
-        threadID = omp_get_thread_num();
-        
-        if(threadID==0)  numThreads = omp_get_num_threads();
+        int threadID  = omp_get_thread_num();
+        int numThreads = omp_get_num_threads();
         
         /* The MCMC loop */
         for(; step<flags->NMCMC;)
@@ -453,8 +475,6 @@ int main(int argc, char *argv[])
             {
                 // TODO fix this to track logL better
                 noise_ptmcmc(inst_model, chain, flags);
-                if(flags->confNoise) for (int ic=0; ic<chain->NC; ic++) conf_model[chain->index[ic]]->logL = inst_model[chain->index[ic]]->logL;
-                if(flags->sgwbTemplate>=0) for (int ic=0; ic<chain->NC; ic++) sgwb_model[chain->index[ic]]->logL = inst_model[chain->index[ic]]->logL;
                 
                 if(flags->NMCMC >= 100 && step%(flags->NMCMC/100)==0)
                 {
@@ -546,14 +566,19 @@ int main(int argc, char *argv[])
         sprintf(filename,"%s/final_sgwb_noise_model.dat",data->dataDir);
         print_noise_model(sgwb_model[chain->index[0]]->psd, filename);
     }
-    generate_full_dynamic_covariance_matrix(data->wdm, inst_model[chain->index[0]], conf_model[chain->index[0]], sgwb_model[chain->index[0]], scaleogram[chain->index[0]]);
+    if (flags->stationary)
+        generate_full_stationary_covariance_matrix(data->wdm, inst_model[chain->index[0]], conf_model[chain->index[0]], sgwb_model[chain->index[0]], scaleogram[chain->index[0]]);
+    else
+        generate_full_dynamic_covariance_matrix(data->wdm, inst_model[chain->index[0]], conf_model[chain->index[0]], sgwb_model[chain->index[0]], scaleogram[chain->index[0]]);
     if(flags->confNoise || flags->sgwbTemplate>=0)
     {
         sprintf(filename,"%s/final_full_noise_model.dat",data->dataDir);
         print_noise_model_dynamic(data, scaleogram[chain->index[0]], filename);
     }
     
-    print_noise_reconstruction(data, flags);
+
+    // TODO this hasn't been adapted for WDM
+    //print_noise_reconstruction(data, flags);
 
     sprintf(filename,"%s/whitened_data.dat",data->dataDir);
     // this was here, but it was already added??

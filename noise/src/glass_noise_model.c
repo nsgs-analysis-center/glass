@@ -567,7 +567,8 @@ void generate_instrument_noise_model_wavelet(struct Wavelets *wdm, struct Orbit 
     double layer_var[NF + 1];
     for(int n=0; n<3; n++)
         for(int m=n; m<3; m++) {
-            stationary_dft_psd_to_wdm_layer_var(wdm, grid->psd->C[n][m], layer_var);
+            // TODO: flag to control if we use full or approx wPSD
+            stationary_dft_psd_to_wdm_layer_var_approx(wdm, grid->psd->C[n][m], layer_var);
             for(int j=imin; j<imax; j++) {
                 model->psd->C[n][m][j-imin] = layer_var[j];
                 model->psd->C[m][n][j-imin] = layer_var[j];
@@ -669,8 +670,9 @@ void generate_galactic_foreground_model_wavelet(struct Wavelets *wdm, struct For
     double layer_var[NF + 1];
     for(int n=0; n<3; n++)
         for(int m=n; m<3; m++) {
-            // TODO apply modulation!!!
-            stationary_dft_psd_to_wdm_layer_var(wdm, grid->psd->C[n][m], layer_var);
+            // TODO select approx vs full wPSD
+            // note modulation happens in generate_full_dynamic_covariance_matrix
+            stationary_dft_psd_to_wdm_layer_var_approx(wdm, grid->psd->C[n][m], layer_var);
             for(int j=imin; j<imax; j++) {
                 model->psd->C[n][m][j-imin] = layer_var[j];
                 model->psd->C[m][n][j-imin] = layer_var[j];
@@ -771,7 +773,8 @@ void generate_sgwb_model_wavelet(struct Wavelets* wdm, struct SGWBModel *model)
     double layer_var[NF + 1];
     for(int n=0; n<3; n++)
         for(int m=n; m<3; m++) {
-            stationary_dft_psd_to_wdm_layer_var(wdm, grid->psd->C[n][m], layer_var);
+            // TODO: when to select approx vs not here
+            stationary_dft_psd_to_wdm_layer_var_approx(wdm, grid->psd->C[n][m], layer_var);
             for(int j=imin; j<imax; j++) {
                 model->psd->C[n][m][j-imin] = layer_var[j];
                 model->psd->C[m][n][j-imin] = layer_var[j];
@@ -848,7 +851,7 @@ void generate_full_dynamic_covariance_matrix(struct Wavelets *wdm, struct Instru
     } //loop over time slices
 }
 
-static void generate_full_stationary_covariance_matrix(struct Wavelets *wdm, struct InstrumentModel *inst, struct ForegroundModel *conf, struct SGWBModel *sgwb, struct Noise *full)
+void generate_full_stationary_covariance_matrix(struct Wavelets *wdm, struct InstrumentModel *inst, struct ForegroundModel *conf, struct SGWBModel *sgwb, struct Noise *full)
 {
     int k;
     int jmin=(int)round(inst->psd->f[0]/wdm->df);
@@ -871,20 +874,24 @@ static void generate_full_stationary_covariance_matrix(struct Wavelets *wdm, str
             full->C[1][2][k] = inst->psd->C[1][2][j-jmin];
 
             //modulated galactic foreground
-            full->C[0][0][k] += conf->psd->C[0][0][j-jmin];
-            full->C[1][1][k] += conf->psd->C[1][1][j-jmin];
-            full->C[2][2][k] += conf->psd->C[2][2][j-jmin];
-            full->C[0][1][k] -= conf->psd->C[0][1][j-jmin]/2.;
-            full->C[0][2][k] -= conf->psd->C[0][2][j-jmin]/2.;
-            full->C[1][2][k] -= conf->psd->C[1][2][j-jmin]/2.; // 2 here is baked in response
+            if (conf) {
+                full->C[0][0][k] += conf->psd->C[0][0][j-jmin];
+                full->C[1][1][k] += conf->psd->C[1][1][j-jmin];
+                full->C[2][2][k] += conf->psd->C[2][2][j-jmin];
+                full->C[0][1][k] -= conf->psd->C[0][1][j-jmin]/2.;
+                full->C[0][2][k] -= conf->psd->C[0][2][j-jmin]/2.;
+                full->C[1][2][k] -= conf->psd->C[1][2][j-jmin]/2.; // 2 here is baked in response
+            }
 
             //stationary stochastic background
-            full->C[0][0][k] += sgwb->psd->C[0][0][j-jmin];
-            full->C[1][1][k] += sgwb->psd->C[1][1][j-jmin];
-            full->C[2][2][k] += sgwb->psd->C[2][2][j-jmin];
-            full->C[0][1][k] += sgwb->psd->C[0][1][j-jmin];
-            full->C[0][2][k] += sgwb->psd->C[0][2][j-jmin];
-            full->C[1][2][k] += sgwb->psd->C[1][2][j-jmin];
+            if (sgwb) {
+                full->C[0][0][k] += sgwb->psd->C[0][0][j-jmin];
+                full->C[1][1][k] += sgwb->psd->C[1][1][j-jmin];
+                full->C[2][2][k] += sgwb->psd->C[2][2][j-jmin];
+                full->C[0][1][k] += sgwb->psd->C[0][1][j-jmin];
+                full->C[0][2][k] += sgwb->psd->C[0][2][j-jmin];
+                full->C[1][2][k] += sgwb->psd->C[1][2][j-jmin];
+            }
 
             //noise covariance matrix is symmetric
             full->C[1][0][k] = full->C[0][1][k];
