@@ -3,15 +3,16 @@
 set +e
 
 NSTEPS=2000
-DURATION=$((7680*338*6))
+DURATION=$((7680*338*12))
+NCH=24
 
 # noise only
 RUNDIR=wdmruns/stat-noise
 mkdir -p $RUNDIR
 nice -n 15 build/apps/src/noise_wavelet_mcmc \
         --steps $NSTEPS \
-        --chains 6 \
-        --threads 6 \
+        --chains $NCH \
+        --threads $NCH \
         --cheat \
         --fmin 5e-4 \
         --fmax 8e-3 \
@@ -27,8 +28,8 @@ RUNDIR=wdmruns/stat-noise-conf
 mkdir -p $RUNDIR
 nice -n 15 build/apps/src/noise_wavelet_mcmc \
         --steps $NSTEPS \
-        --chains 6 \
-        --threads 6 \
+        --chains $NCH \
+        --threads $NCH \
         --cheat \
         --fmin 5e-4 \
         --fmax 8e-3 \
@@ -39,14 +40,15 @@ nice -n 15 build/apps/src/noise_wavelet_mcmc \
         --sim-noise
 
 rsync -avz --progress wdmruns desktop:/mnt/storage/research/
+exit
 
 # noise + conf non-stationary
 RUNDIR=wdmruns/noise-conf
 mkdir -p $RUNDIR
 nice -n 15 build/apps/src/noise_wavelet_mcmc \
         --steps $NSTEPS \
-        --chains 6 \
-        --threads 6 \
+        --chains $NCH \
+        --threads $NCH \
         --cheat \
         --fmin 5e-4 \
         --fmax 8e-3 \
@@ -62,8 +64,8 @@ RUNDIR=wdmruns/stat-noise-conf-pl
 mkdir -p $RUNDIR
 nice -n 15 build/apps/src/noise_wavelet_mcmc \
         --steps $NSTEPS \
-        --chains 6 \
-        --threads 6 \
+        --chains $NCH \
+        --threads $NCH \
         --cheat \
         --fmin 5e-4 \
         --fmax 8e-3 \
@@ -80,8 +82,8 @@ RUNDIR=wdmruns/noise-conf-pl
 mkdir -p $RUNDIR
 nice -n 15 build/apps/src/noise_wavelet_mcmc \
         --steps $NSTEPS \
-        --chains 6 \
-        --threads 6 \
+        --chains $NCH \
+        --threads $NCH \
         --cheat \
         --fmin 5e-4 \
         --fmax 8e-3 \
