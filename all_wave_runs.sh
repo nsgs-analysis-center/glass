@@ -3,59 +3,60 @@
 set +e
 
 NSTEPS=2000
-DURATION=$((7680*338*6))
+DURATION=$((7680*338*12))
 
-# noise only
-RUNDIR=wdmruns/stat-noise
-mkdir -p $RUNDIR
-nice -n 15 build/apps/src/noise_wavelet_mcmc \
-        --steps $NSTEPS \
-        --chains 6 \
-        --threads 6 \
-        --cheat \
-        --fmin 5e-4 \
-        --fmax 8e-3 \
-        --duration $DURATION \
-        --stationary \
-        --rundir $RUNDIR \
-        --sim-noise
-
-rsync -avz --progress wdmruns desktop:/mnt/storage/research/
-
-# noise + conf stationary
-RUNDIR=wdmruns/stat-noise-conf
-mkdir -p $RUNDIR
-nice -n 15 build/apps/src/noise_wavelet_mcmc \
-        --steps $NSTEPS \
-        --chains 6 \
-        --threads 6 \
-        --cheat \
-        --fmin 5e-4 \
-        --fmax 8e-3 \
-        --duration $DURATION \
-        --stationary \
-        --conf-noise \
-        --rundir $RUNDIR \
-        --sim-noise
-
-rsync -avz --progress wdmruns desktop:/mnt/storage/research/
+#
+## noise only
+#RUNDIR=wdmruns/stat-noise
+#mkdir -p $RUNDIR
+#nice -n 15 build/apps/src/noise_wavelet_mcmc \
+#        --steps $NSTEPS \
+#        --chains 6 \
+#        --threads 6 \
+#        --cheat \
+#        --fmin 5e-4 \
+#        --fmax 8e-3 \
+#        --duration $DURATION \
+#        --stationary \
+#        --rundir $RUNDIR \
+#        --sim-noise
+#
+#rsync -avz --progress wdmruns desktop:/mnt/storage/research/
+#
+## noise + conf stationary
+#RUNDIR=wdmruns/stat-noise-conf
+#mkdir -p $RUNDIR
+#nice -n 15 build/apps/src/noise_wavelet_mcmc \
+#        --steps $NSTEPS \
+#        --chains 6 \
+#        --threads 6 \
+#        --cheat \
+#        --fmin 5e-4 \
+#        --fmax 8e-3 \
+#        --duration $DURATION \
+#        --stationary \
+#        --conf-noise \
+#        --rundir $RUNDIR \
+#        --sim-noise
+#
+#rsync -avz --progress wdmruns desktop:/mnt/storage/research/
 
 # noise + conf non-stationary
-RUNDIR=wdmruns/noise-conf
-mkdir -p $RUNDIR
-nice -n 15 build/apps/src/noise_wavelet_mcmc \
-        --steps $NSTEPS \
-        --chains 6 \
-        --threads 6 \
-        --cheat \
-        --fmin 5e-4 \
-        --fmax 8e-3 \
-        --duration $DURATION \
-        --conf-noise \
-        --rundir $RUNDIR \
-        --sim-noise
-
-rsync -avz --progress wdmruns desktop:/mnt/storage/research/
+#RUNDIR=wdmruns/noise-conf
+#mkdir -p $RUNDIR
+#nice -n 15 build/apps/src/noise_wavelet_mcmc \
+#        --steps $NSTEPS \
+#        --chains 6 \
+#        --threads 6 \
+#        --cheat \
+#        --fmin 5e-4 \
+#        --fmax 8e-3 \
+#        --duration $DURATION \
+#        --conf-noise \
+#        --rundir $RUNDIR \
+#        --sim-noise
+#
+#rsync -avz --progress wdmruns desktop:/mnt/storage/research/
 
 # noise + conf + sgwb stationary
 RUNDIR=wdmruns/stat-noise-conf-pl
