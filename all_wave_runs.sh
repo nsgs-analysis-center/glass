@@ -4,6 +4,7 @@ set +e
 
 NSTEPS=2000
 DURATION=$((7680*338*12))
+NCH=6
 
 #
 ## noise only
