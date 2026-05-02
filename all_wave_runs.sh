@@ -63,8 +63,8 @@ RUNDIR=wdmruns/stat-noise-conf-pl
 mkdir -p $RUNDIR
 nice -n 15 build/apps/src/noise_wavelet_mcmc \
         --steps $NSTEPS \
-        --chains 6 \
-        --threads 6 \
+        --chains $NCH \
+        --threads $NCH \
         --cheat \
         --fmin 5e-4 \
         --fmax 8e-3 \
@@ -81,8 +81,8 @@ RUNDIR=wdmruns/noise-conf-pl
 mkdir -p $RUNDIR
 nice -n 15 build/apps/src/noise_wavelet_mcmc \
         --steps $NSTEPS \
-        --chains 6 \
-        --threads 6 \
+        --chains $NCH \
+        --threads $NCH \
         --cheat \
         --fmin 5e-4 \
         --fmax 8e-3 \

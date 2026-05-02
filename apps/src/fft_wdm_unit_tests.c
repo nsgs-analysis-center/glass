@@ -171,7 +171,7 @@ bool test_whitening_wdm_3ch(const struct TDI* tdi, const struct Noise* noise, in
         for (int i=Nskip; i<N; i++) {
             double asd = sqrt(psd[i]);
             wht = data[i] / asd;
-            if isnan(wht) {
+            if (isnan(wht)) {
                 fprintf(stderr, "Encountered NaN at i=%d, stopping\n", i);
                 break;
             }
@@ -187,7 +187,7 @@ bool test_whitening_wdm_3ch(const struct TDI* tdi, const struct Noise* noise, in
         for (int i=Nskip; i<N; i++) {
             double asd = sqrt(psd[i]);
             wht = data[i] / asd;
-            if isnan(wht) {
+            if (isnan(wht)) {
                 fprintf(stderr, "Encountered NaN at i=%d, stopping\n", i);
                 break;
             }
