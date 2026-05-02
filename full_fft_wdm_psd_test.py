@@ -3,6 +3,7 @@ from WDMWaveletTransforms.wavelet_transforms import (
     transform_wavelet_freq,
     transform_wavelet_freq_time,
     transform_wavelet_time,
+    inverse_wavelet_freq,
     phitilde_vec_norm
 )
 import matplotlib.pyplot as plt
@@ -234,8 +235,72 @@ def stat_test(plots=True):
         print(f"Stdev (exact PSD):       {np.std(whitened_exact):.6f}")
         print(f"Stdev (reference N(0,1)):{np.std(reference):.6f}")
         print()
+def inner_product_test(plots=True):
+    WAVELET_DURATION = 7680
+    NF = 1536
+    NT = 338
+    ND = NT*NF
+    NFFT = ND/2 + 1
+    Tobs = NT*WAVELET_DURATION
+    dt = WAVELET_DURATION / NF
+    DeltaF = 1/(2*dt*NF)
+    DeltaT = WAVELET_DURATION
+    # we need to generate this data in WDM actually
+    t = np.arange(NT) * WAVELET_DURATION
+    f = np.arange(NF) * DeltaF
+
+    fcenter = f + DeltaF/2
+    tcenter = t + DeltaT/2
+
+    f_dft = np.arange(NFFT) * 1/Tobs
+    testwdmpsd_approx = np.zeros((NT,NF))
+    for i, ti in enumerate(tcenter):
+        testwdmpsd_approx[i,:] = testpsdfunc(fcenter)/ (2*dt)
+
+    testpsd = testpsdfunc(f_dft)
+    psdfft = testpsd
+    testwdmpsd_fullf = wdm_psd(testpsd, NF, NT, dt) 
+
+    datawdm = np.random.randn(*testwdmpsd_fullf.shape) * np.sqrt(testwdmpsd_fullf)
+
+    fsin = fcenter[NF//2]
+    fullt = np.arange(0,NF*NT*dt, dt)
+    signal = 1e-12*np.sin(2*np.pi*fsin*fullt)
+    signalwdm = transform_wavelet_freq_time(signal, NF, NT)
+    signalfft = np.fft.rfft(signal)
+
+    datawdm += signalwdm
+    datafft = inverse_wavelet_freq(datawdm, NF, NT)
+
+    # fourier inner product: DFT*dt * DFT * dt / Sn * df
+    # WDM inner product: ? Michael is using DWT*DWT / Sn_layer * df
+    # in general, loglike = -0.5 * <d-h|d-h> + const
+    # and SNR is <d|h>/sqrt(<h|h>)
+    df = 1/Tobs
+    inner_prod_wdm = np.sum(datawdm*signalwdm / testwdmpsd_fullf) / np.sum(np.sqrt(signalwdm*signalwdm / testwdmpsd_fullf))
+    emin = int(fsin / df) - 100
+    emax = int(fsin / df) + 100
+    inner_prod_fft = np.sum(signalfft[emin:emax]*datafft[emin:emax].conj() / psdfft[emin:emax]) / np.sum(signalfft[emin:emax]*signalfft[emin:emax].conj() / psdfft[emin:emax])
+    usual_inner_prod_fft = 4*df*np.sum((signalfft[emin:emax]*dt)*(datafft[emin:emax]*dt).conj() / psdfft[emin:emax]).real
+    print("Inner products:")
+    print(f"\tUsual formula FFT:\n\t{usual_inner_prod_fft}")
+    print(f"\tMy formula FFT:\n\t{inner_prod_fft}")
+    print(f"\tMy formula WDM:\n\t{inner_prod_wdm}")
+    if plots:
+        plt.imshow(np.abs(datawdm.T), aspect='auto', origin='lower',extent=(t[0],t[-1],f[0],f[-1]), norm='log')
+        plt.colorbar()
+        plt.title("WDM stationary data, noise+signal (|w_nm|)")
+        plt.savefig("signal_wdm_data.png")
+        plt.show()
+        plt.loglog(f_dft[1:], np.abs(datafft[1:])) 
+        plt.loglog(f_dft[1:], np.sqrt(testpsd[1:]*ND/(2*dt)))
+        plt.title("FFT stationary data, noise+signal (ASD)")
+        plt.savefig("signal_fft_data.png")
+        plt.show()
+
 
 if __name__ == '__main__':
-    stat_test()
-    nonstat_test()
+    #stat_test()
+    #nonstat_test()
+    inner_product_test()
 
