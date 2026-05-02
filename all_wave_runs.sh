@@ -12,8 +12,8 @@ NCH=6
 #mkdir -p $RUNDIR
 #nice -n 15 build/apps/src/noise_wavelet_mcmc \
 #        --steps $NSTEPS \
-#        --chains 6 \
-#        --threads 6 \
+#        --chains $NCH \
+#        --threads $NCH \
 #        --cheat \
 #        --fmin 5e-4 \
 #        --fmax 8e-3 \
@@ -29,8 +29,8 @@ NCH=6
 #mkdir -p $RUNDIR
 #nice -n 15 build/apps/src/noise_wavelet_mcmc \
 #        --steps $NSTEPS \
-#        --chains 6 \
-#        --threads 6 \
+#        --chains $NCH \
+#        --threads $NCH \
 #        --cheat \
 #        --fmin 5e-4 \
 #        --fmax 8e-3 \
@@ -42,13 +42,13 @@ NCH=6
 #
 #rsync -avz --progress wdmruns desktop:/mnt/storage/research/
 
-# noise + conf non-stationary
+## noise + conf non-stationary
 #RUNDIR=wdmruns/noise-conf
 #mkdir -p $RUNDIR
 #nice -n 15 build/apps/src/noise_wavelet_mcmc \
 #        --steps $NSTEPS \
-#        --chains 6 \
-#        --threads 6 \
+#        --chains $NCH \
+#        --threads $NCH \
 #        --cheat \
 #        --fmin 5e-4 \
 #        --fmax 8e-3 \

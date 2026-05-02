@@ -16,14 +16,15 @@ foreach(policy
 endforeach()
 
 # Set compiler
-#set(CMAKE_C_COMPILER mpicc)
-set(CMAKE_C_COMPILER /opt/homebrew/Cellar/llvm/22.1.3/bin/clang )
+set(CMAKE_C_COMPILER mpicc)
+#set(CMAKE_C_COMPILER /opt/homebrew/Cellar/llvm/22.1.3/bin/clang )
 
 project(glass VERSION 2.0.0 LANGUAGES C)
 
 # External packages
 find_package(LAPACK REQUIRED)
-#set(LAPACK_LIBRARIES lapacke gfortran ${LAPACK_LIBRARIES})
+find_library(LAPACKE_LIB NAMES lapacke REQUIRED)
+set(LAPACK_LIBRARIES ${LAPACKE_LIB} ${LAPACK_LIBRARIES})
 #find_package(OpenBLAS REQUIRED)
 find_package(BLAS REQUIRED)
 find_package(OpenMP REQUIRED)
