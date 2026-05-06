@@ -267,7 +267,18 @@ void initialize_galaxy_modulation(struct GalaxyModulation *gm, struct Wavelets *
             
     gm->alpha_0  = (t0/YEAR)*PI2;   //initial angle of orbit
     gm->alphamax = ((t0+Tobs)/YEAR)*PI2; // angle through which orbit completes
-    
+
+    // mark per-Q modulation cache as empty
+    gm->Q_cached = 0;
+    gm->Nt_cached = 0;
+    gm->Nt_alloc = 0;
+    gm->cache_XX = NULL;
+    gm->cache_YY = NULL;
+    gm->cache_ZZ = NULL;
+    gm->cache_XY = NULL;
+    gm->cache_XZ = NULL;
+    gm->cache_YZ = NULL;
+
     gm->N = (int)((Tobs/YEAR)*100.0);  // numer of samples
     
     gm->t = double_vector(gm->N);
@@ -736,6 +747,9 @@ void galaxy_modulation(struct GalaxyModulation *gm, double *params)
     initialize_cubic_spline(gm->XZ_spline, gm->t, xz, SPLINE_EVEN_SAMPLED);
     initialize_cubic_spline(gm->YZ_spline, gm->t, yz, SPLINE_EVEN_SAMPLED);
 
+    // splines moved; downstream cache is stale
+    gm->Q_cached = 0;
+
     FILE *out = fopen("modulation.dat", "w");
     for(int i=0; i<gm->N; i++)
     {
@@ -753,6 +767,38 @@ void galaxy_modulation(struct GalaxyModulation *gm, double *params)
     free_double_vector(zz);
     free_double_vector(xy);
     free_double_vector(xz);
-    free_double_vector(yz);   
+    free_double_vector(yz);
+}
+
+void galaxy_modulation_cache_for_Q(struct GalaxyModulation *gm, struct Wavelets *wdm, int Q)
+{
+    int Nt = wdm->NT / Q;
+    if (gm->Q_cached == Q && gm->Nt_cached == Nt) return;
+
+    if (Nt > gm->Nt_alloc) {
+        free(gm->cache_XX); free(gm->cache_YY); free(gm->cache_ZZ);
+        free(gm->cache_XY); free(gm->cache_XZ); free(gm->cache_YZ);
+        gm->cache_XX = malloc(Nt * sizeof(double));
+        gm->cache_YY = malloc(Nt * sizeof(double));
+        gm->cache_ZZ = malloc(Nt * sizeof(double));
+        gm->cache_XY = malloc(Nt * sizeof(double));
+        gm->cache_XZ = malloc(Nt * sizeof(double));
+        gm->cache_YZ = malloc(Nt * sizeof(double));
+        gm->Nt_alloc = Nt;
+    }
+
+    double half_step = (Q - 1) * 0.5;
+    for (int q = 0; q < Nt; q++) {
+        double t = (q * Q + half_step) * wdm->dt;
+        gm->cache_XX[q] = spline_interpolation(gm->XX_spline, t);
+        gm->cache_YY[q] = spline_interpolation(gm->YY_spline, t);
+        gm->cache_ZZ[q] = spline_interpolation(gm->ZZ_spline, t);
+        gm->cache_XY[q] = spline_interpolation(gm->XY_spline, t);
+        gm->cache_XZ[q] = spline_interpolation(gm->XZ_spline, t);
+        gm->cache_YZ[q] = spline_interpolation(gm->YZ_spline, t);
+    }
+
+    gm->Q_cached = Q;
+    gm->Nt_cached = Nt;
 }
 

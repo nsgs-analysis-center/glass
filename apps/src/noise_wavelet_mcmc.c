@@ -184,7 +184,7 @@ int main(int argc, char *argv[])
             sgwb_ptr = &sgwb_inj;
             initialize_sgwb_model_wavelet(orbit, data, sgwb_ptr, flags->sgwbTemplate);
         }
-        if (flags->stationary)
+        if (flags->stationaryConf)
             generate_full_stationary_covariance_matrix(data->wdm, &inst_inj, conf_ptr, sgwb_ptr, data->noise);
         else
             generate_full_dynamic_covariance_matrix(data->wdm, &inst_inj, conf_ptr, sgwb_ptr, data->noise);

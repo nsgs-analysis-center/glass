@@ -385,8 +385,14 @@ double wavelet_nwip(const double *a, const double *b, const double *invC, const 
 }
 
 int even_sampled_search(double *array, int nmin, int nmax, double x) {
+    // Bug history: an earlier refactor dropped the array[0] offset, so any
+    // spline whose x-axis didn't start at 0 (e.g. logf-spaced SGWB response,
+    // padded modulation t) returned wildly wrong indices and gave NaN logL.
     double dx = array[1] - array[0];
-    return (int)floor(x/dx);
+    int n = (int)floor((x - array[0]) / dx);
+    if (n < nmin) n = nmin;
+    if (n > nmax - 1) n = nmax - 1;
+    return n;
 }
 double snr(struct Source *source, struct Noise *noise)
 {

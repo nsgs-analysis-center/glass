@@ -170,7 +170,9 @@ struct Flags
     int NVB;        //!<number of known binaries for `vb_mcmc`
     int DMAX;       //!<`[--sources=INT; default=10]`: max number of sources
     int simNoise;   //!<`[--sim-noise; default=FALSE]`: simulate random noise realization and add to data
-    int stationary; //!<`[--stationary; default=FALSE]`: use stationary noise model in wavelet domain
+    int stationary; //!<`[--stationary; default=FALSE]`: use stationary noise model in wavelet-domain analysis (likelihood)
+    int stationaryConf; //!<`[--stationary-conf; default=FALSE]`: inject confusion noise as stationary (no time modulation). Independent of `stationary` (which controls the analysis model).
+    int coarseQ;    //!<`[--coarse-Q=INT; default=1]`: coarse-graining factor along wavelet time axis. Must divide wdm->NT. Q=1 disables coarse-graining.
     int fixSky;     //!<`[--fix-sky; default=FALSE]`: hold sky location fixed to injection parameters.  Set to `TRUE` if Flags::knownSource=`TRUE`.
     int fixFdot;
     int fixFreq;    //!<`[--fix-freq; default=FALSE]`: hold GW frequency fixed to injection parameters

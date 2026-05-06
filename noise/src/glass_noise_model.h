@@ -50,7 +50,13 @@ struct InstrumentModel
     double *soms;      //!< optical metrology system noise parameters
     double *sacc;      //!< acceleration noise parameters
     struct Noise *psd; //!< power and cross spectral densities
-    
+
+    //!< Reusable scratch model on the FFT-bin grid; populated lazily by
+    //!< generate_instrument_noise_model_wavelet and reused across calls to
+    //!< avoid ~NFFT-sized malloc/free churn in the MCMC inner loop. NULL
+    //!< until the first wavelet-domain generate; freed by free_instrument_model.
+    struct InstrumentModel *grid_cache;
+
     /** @name Link level noise parameters */
      ///@{
     double sacc12;
@@ -75,6 +81,9 @@ struct ForegroundModel
     double *sgal;      //!< galactic foreground parameters
     double logL;       //!< log Likelihood of model
     struct Noise *psd; //!< power and cross spectral densities
+
+    //!< Reusable scratch model on the FFT-bin grid (see InstrumentModel::grid_cache).
+    struct ForegroundModel *grid_cache;
 
     /** @name galactic foreground parameters from Digman & Cornish 10.3847/1538-4357/ac9139*/
      ///@{
@@ -109,6 +118,9 @@ struct SGWBModel
     struct Noise *psd; //!< power and cross spectral densities
     struct SGWBResponse *R; //!< response of the instrument to the isotropic SGWB
     SGWB_t SGWB_type;  //!< which SGWB template is used
+
+    //!< Reusable scratch model on the FFT-bin grid (see InstrumentModel::grid_cache).
+    struct SGWBModel *grid_cache;
 };
 
 /**
@@ -229,6 +241,23 @@ void generate_full_dynamic_covariance_matrix(struct Wavelets *wdm, struct Instru
 void generate_full_stationary_covariance_matrix(struct Wavelets *wdm, struct InstrumentModel *inst, struct ForegroundModel *conf, struct SGWBModel *sgwb, struct Noise *full);
 
 /**
+ \brief Coarse-grained covariance generators for the WDM time-axis Welch/Bartlett method.
+
+ The coarse `Noise` struct must be allocated with `Nlayer*Ncoarse` pixels, where
+ `Ncoarse = wdm->NT / Q`. Pixel index is `k = q + (j-jmin)*Ncoarse`.
+ Foreground modulation (dynamic only) is sampled at the coarse-cell midpoint.
+ */
+void generate_full_dynamic_covariance_matrix_coarse(struct Wavelets *wdm, int Q, struct InstrumentModel *inst, struct ForegroundModel *conf, struct SGWBModel *sgwb, struct Noise *coarse);
+void generate_full_stationary_covariance_matrix_coarse(struct Wavelets *wdm, int Q, struct InstrumentModel *inst, struct ForegroundModel *conf, struct SGWBModel *sgwb, struct Noise *coarse);
+
+/**
+ \brief Build the six channel-pair sufficient statistics P^{(ij)}_{mq} from the
+ wavelet-domain data for use in the coarse-grained likelihood. Each output
+ array has length `Nlayer * Ncoarse` and is indexed by `k = q + j*Ncoarse`.
+ */
+void coarse_grain_wavelet_data(struct Data *data, int Q, double *Pxx, double *Pyy, double *Pzz, double *Pxy, double *Pxz, double *Pyz);
+
+/**
 \brief Compute spline model only where interpolant changes
  
  Interpolates spline points only in the vicinity of `new_knot`
@@ -246,6 +275,18 @@ double noise_log_likelihood(struct Data *data, struct Noise *noise);
 double my_noise_log_likelihood(struct Data *data, struct Noise *noise);
 double noise_log_likelihood_wavelet(struct Data *data, struct Noise *noise);
 double my_noise_log_likelihood_wavelet(struct Data *data, struct Noise *noise);
+
+/**
+ \brief Welch/Bartlett-like coarse-grained wavelet-domain log-likelihood.
+
+ Uses the multivariate Gaussian sufficient-statistics form:
+   logL = -Q/2 sum_{m,q} [ tr(invC_{mq} * P_{mq}) + log det C_{mq} ] - (3 N_full / 2) log(2 pi)
+ where N_full = Nlayer * NT is the original full-grid pixel count.
+
+ Reduces algebraically to `my_noise_log_likelihood_wavelet` when the per-pixel
+ covariance is constant in each window of Q time pixels (e.g. stationary noise).
+ */
+double my_noise_log_likelihood_wavelet_coarse(struct Data *data, struct Noise *coarse_noise, double *Pxx, double *Pyy, double *Pzz, double *Pxy, double *Pxz, double *Pyz, int Q);
 
 /**
  \brief Change in log likelihood for noise model.

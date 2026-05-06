@@ -77,4 +77,17 @@ void noise_sgwb_model_mcmc(struct Data *data, struct InstrumentModel *noise, str
 void noise_sgwb_model_mcmc_wavelet(struct Data *data, struct InstrumentModel *noise, struct ForegroundModel *galaxy, struct SGWBModel *model, struct SGWBModel *trial, struct Noise *psd, struct Chain *chain, struct Flags *flags, int ic);
 
 void noise_sgwb_model_mcmc_wavelet_dumb(struct Data *data, struct InstrumentModel *noise, struct ForegroundModel *galaxy, struct SGWBModel *model, struct SGWBModel *trial, struct Noise *psd, struct Chain *chain, struct Flags *flags, int ic);
+
+/**
+ \brief Coarse-grained wavelet-domain MCMC update routines (Welch/Bartlett-like).
+
+ Identical to their non-coarse counterparts but operate on a coarse `Noise` of
+ size `Nlayer*Ncoarse` (where `Ncoarse = wdm->NT/Q`) and use the coarse
+ covariance generator + likelihood. Caller is responsible for filling the six
+ pre-computed channel-pair sufficient statistic arrays `Pxx..Pyz` once via
+ `coarse_grain_wavelet_data` and passing them through.
+ */
+void noise_instrument_model_mcmc_wavelet_coarse(struct Orbit *orbit, struct Data *data, struct InstrumentModel *model, struct InstrumentModel *trial, struct ForegroundModel *galaxy, struct SGWBModel *sgwb, struct Noise *psd, double *Pxx, double *Pyy, double *Pzz, double *Pxy, double *Pxz, double *Pyz, int Q, struct Chain *chain, struct Flags *flags, int ic);
+void noise_foreground_model_mcmc_wavelet_coarse(struct Data *data, struct InstrumentModel *noise, struct ForegroundModel *model, struct ForegroundModel *trial, struct SGWBModel *sgwb, struct Noise *psd, double *Pxx, double *Pyy, double *Pzz, double *Pxy, double *Pxz, double *Pyz, int Q, struct Chain *chain, struct Flags *flags, int ic);
+void noise_sgwb_model_mcmc_wavelet_dumb_coarse(struct Data *data, struct InstrumentModel *noise, struct ForegroundModel *galaxy, struct SGWBModel *model, struct SGWBModel *trial, struct Noise *psd, double *Pxx, double *Pyy, double *Pzz, double *Pxy, double *Pxz, double *Pyz, int Q, struct Chain *chain, struct Flags *flags, int ic);
 #endif /* glass_noise_sampler_h */
