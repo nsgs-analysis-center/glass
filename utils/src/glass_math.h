@@ -359,6 +359,17 @@ double simpson_integration_3(double f0, double f1, double f2, double h);
 double simpson_integration_5(double f0, double f1, double f2, double f3, double f4, double h);
 
 /**
+\brief Complementary error function
+
+ In-house implementation (Abramowitz & Stegun 7.1.26) so we don't depend on
+ GSL for the SGWB templates. Maximum absolute error ~1.5e-7 for all real x.
+
+ @param x argument
+ @return \f$ \mathrm{erfc}(x) = 1 - \mathrm{erf}(x) \f$
+ */
+double glass_erfc(double x);
+
+/**
 \brief wrapper for qsort() specific to integer arrays
 */
 void integer_sort(int *x, int N);

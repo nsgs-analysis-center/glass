@@ -702,13 +702,44 @@ void generate_galactic_foreground_model_wavelet(struct Wavelets *wdm, struct For
 }
 
 
-_Static_assert(SGWB_TEMPLATE_COUNT == 1, "Did you add an SGWB template? Implement its form in frequency in a new function here");
+_Static_assert(SGWB_TEMPLATE_COUNT == 2, "Did you add an SGWB template? Implement its form in frequency in a new function here");
 inline double sgwb_powerlaw(double f, const double* params) {
     static double fref = 25.0;
     double A     = pow(10.0,params[0]);
     double alpha = params[1];
     double prefactor = Hscale / (f*f*f);
     return prefactor*A*pow(f/fref,alpha);
+}
+
+// Pi & Sasaki, JCAP 2020 (arXiv:2005.12306), wide-Delta limit, eq. (3.29).
+// Falls back to the asymptotic numerical value (3.33) for D >= 9 where the
+// closed-form expression suffers from catastrophic cancellation.
+inline double sgwb_lognormal(double f, const double* params) {
+    double A     = pow(10.0,params[0]);
+    double fstar = pow(10.0,params[1]);
+    double D     = pow(10.0,params[2]);
+    double prefactor = Hscale / (f*f*f);
+    double ft = f/fstar;
+    if (D < 9.0) {
+        double logft = log(ft);
+        double logK  = logft + 1.5*D*D;
+        double sqrtpi = sqrt(M_PI);
+        double half_log32 = 0.5*log(1.5);
+        double D2 = D*D;
+        double t1 = 4.0/5.0/sqrtpi * ft*ft*ft * exp(9.0*D2/4.0) / D
+                    * ((logK*logK + 0.5*D2) * glass_erfc((logK + half_log32)/D)
+                       - D/sqrtpi * exp(-(logK + half_log32)*(logK + half_log32)/D2)
+                         * (logK - half_log32));
+        double t2 = 0.0659/D2 * ft*ft * exp(D2)
+                    * exp(-(logft + D2 - 0.5*log(4.0/3.0))*(logft + D2 - 0.5*log(4.0/3.0))/D2);
+        double t3 = (1.0/3.0) * sqrt(2.0)/sqrtpi * pow(ft,-4) * exp(8.0*D2) / D
+                    * exp(-logft*logft/(2.0*D2))
+                    * glass_erfc((4.0*D2 - logft + log(4.0))/(D*sqrt(2.0)));
+        return prefactor * cgOr0 * A*A * (t1 + t2 + t3);
+    } else {
+        // Numerical asymptote from Pi & Sasaki eq. (3.33).
+        return prefactor * cgOr0 * A*A * 0.783/1e3;
+    }
 }
 
 void generate_sgwb_model(struct SGWBModel *model)
@@ -721,10 +752,13 @@ void generate_sgwb_model(struct SGWBModel *model)
     {
         f = model->psd->f[n];
         
-        _Static_assert(SGWB_TEMPLATE_COUNT == 1, "Did you add an SGWB template? Edit this switch case, it needs to be exhaustive.");
+        _Static_assert(SGWB_TEMPLATE_COUNT == 2, "Did you add an SGWB template? Edit this switch case, it needs to be exhaustive.");
         switch(model->SGWB_type) {
             case SGWB_TEMPLATE_POWERLAW:
                 Sgw = sgwb_powerlaw(f,model->params);
+                break;
+            case SGWB_TEMPLATE_LOGNORMAL:
+                Sgw = sgwb_lognormal(f,model->params);
                 break;
             default:
                 fprintf(stderr,"Unimplemented SGWB type?\n\tTemplate index: %d\n\tTemplate name: %s\n",model->SGWB_type,SGWB_TEMPLATE_NAMES[model->SGWB_type]);
@@ -1159,6 +1193,18 @@ double my_noise_log_likelihood_wavelet(struct Data *data, struct Noise *noise) {
     return logL;
 }
 
+// This is the exact fine-grid multivariate Gaussian log-likelihood summed over
+// the Q fine pixels in each coarse window, rewritten with the within-window
+// sample (cross-)covariance P_{ab,mq} = (1/Q) sum_{i in q} w_{a,mi} w_{b,mi}
+// as a Wishart sufficient statistic -- not a Gaussian-on-P or CLT
+// approximation. The note (Sec. "Welch and Bartlett-like coarse-graining")
+// presents the equivalent Gamma form for the diagonal/scalar case (the note's
+// S_m plays the role of the diagonal of C here). For inference, P_{ab,mq} is
+// observed data (fixed during MCMC), and the Gamma form differs from this one
+// only by terms that are functions of the data and Q -- ((Q/2-1)log P,
+// log Gamma(Q/2), log(2/Q)) -- which are constants w.r.t. the model
+// parameters and so don't affect the posterior. The only approximation is
+// that C is constant within each coarse window, which is shared by both forms.
 double my_noise_log_likelihood_wavelet_coarse(struct Data *data, struct Noise *coarse_noise, double *Pxx, double *Pyy, double *Pzz, double *Pxy, double *Pxz, double *Pyz, int Q)
 {
     const double log2pi = log(2*M_PI);
@@ -1406,7 +1452,7 @@ void initialize_foreground_model(struct Orbit *orbit, struct Data *data, struct 
 }
 
 void default_sgwb_injection(double* params, const SGWB_t SGWB_type) {
-    _Static_assert(SGWB_TEMPLATE_COUNT == 1, "Did you add an SGWB template? Edit this switch case, it needs to be exhaustive.");
+    _Static_assert(SGWB_TEMPLATE_COUNT == 2, "Did you add an SGWB template? Edit this switch case, it needs to be exhaustive.");
     // set default values
     switch (SGWB_type) {
         case SGWB_TEMPLATE_POWERLAW:
@@ -1415,6 +1461,12 @@ void default_sgwb_injection(double* params, const SGWB_t SGWB_type) {
             params[0] = -16.0;
             params[1] = 2./3.;
             //params[1] = 0.0;
+            break;
+        case SGWB_TEMPLATE_LOGNORMAL:
+            // log10 A, log10 fstar [Hz], log10 Delta
+            params[0] = -2.0;
+            params[1] = -2.5;
+            params[2] = 0.0;
             break;
         default:
             fprintf(stderr,"need default values for SGWB type: %s", SGWB_TEMPLATE_NAMES[SGWB_type]);

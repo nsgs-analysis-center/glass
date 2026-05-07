@@ -81,6 +81,10 @@
 #define H0 (70*3.24078e-20)
 #define Hscale (3*H0*H0 / (4*M_PI*M_PI))
 
+//! c_g * Omega_{r,0} (radiation degrees-of-freedom factor times present-day
+//! radiation energy density) used in scalar-induced SGWB templates.
+#define cgOr0 (1.6e-5/(0.7*0.7))
+
 //! Velocity of the Earth around the Sun (relative to CLIGHT)
 #define VEARTH 0.00010103671
 

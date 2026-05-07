@@ -792,7 +792,7 @@ void noise_sgwb_model_mcmc(struct Data *data, struct InstrumentModel *noise, str
     }
     
     
-    _Static_assert(SGWB_TEMPLATE_COUNT == 1, "Did you add an SGWB template? Edit this switch case, it needs to be exhaustive.");
+    _Static_assert(SGWB_TEMPLATE_COUNT == 2, "Did you add an SGWB template? Edit this switch case, it needs to be exhaustive.");
     switch (model_x->SGWB_type) {
         case SGWB_TEMPLATE_POWERLAW:
             //log(A_p)
@@ -803,6 +803,23 @@ void noise_sgwb_model_mcmc(struct Data *data, struct InstrumentModel *noise, str
             prior[1][0] = -3.0;
             prior[1][1] =  1.0;
             correlation_matrix[0][1] = correlation_matrix[1][0] = 0.0;
+            break;
+        case SGWB_TEMPLATE_LOGNORMAL:
+            //log10 A
+            prior[0][0] = -5.0;
+            prior[0][1] =  0.0;
+
+            //log10 fstar [Hz]
+            prior[1][0] = -5.0;
+            prior[1][1] =  0.0;
+
+            //log10 Delta
+            prior[2][0] = -2.0;
+            prior[2][1] =  1.0;
+
+            correlation_matrix[0][1] = correlation_matrix[1][0] = 0.0;
+            correlation_matrix[0][2] = correlation_matrix[2][0] = 0.0;
+            correlation_matrix[1][2] = correlation_matrix[2][1] = 0.0;
             break;
         default:
             fprintf(stderr, "SGWB %s has no defined priors! Add them in noise_sgwb_model_mcmc", SGWB_TEMPLATE_NAMES[model_x->SGWB_type]);

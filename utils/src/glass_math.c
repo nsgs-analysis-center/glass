@@ -1323,5 +1323,17 @@ void extract_amplitude_and_phase(int Ns, double *As, double *Dphi, double *M, do
     
     free_double_vector(flip);
     free_double_vector(pjump);
-    
+
+}
+
+double glass_erfc(double x)
+{
+    // Abramowitz & Stegun 7.1.26 applied to erfc directly so we keep precision
+    // for large positive x (where 1 - erf cancels). Reflection handles x < 0.
+    double ax = fabs(x);
+    double t = 1.0 / (1.0 + 0.3275911 * ax);
+    double poly = ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t
+                    - 0.284496736) * t + 0.254829592) * t;
+    double y = poly * exp(-ax * ax);
+    return (x < 0.0) ? (2.0 - y) : y;
 }
