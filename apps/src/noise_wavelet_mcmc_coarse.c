@@ -300,6 +300,9 @@ int main(int argc, char *argv[])
         if (conf_model[ic]) conf_model[ic]->logL = logL;
     }
 
+    sprintf(filename,"%s/full_noise_model.dat",data->dataDir);
+    print_noise_model_dynamic_coarse(data, coarse_scaleogram[0], Q, filename);
+
     printf("\n==== Noise Wavelet MCMC (Coarse) Sampler ====\n");
 
     sprintf(filename,"%s/noise_chain.dat",chain->chainDir);

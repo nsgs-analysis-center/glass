@@ -702,7 +702,7 @@ void generate_galactic_foreground_model_wavelet(struct Wavelets *wdm, struct For
 }
 
 
-_Static_assert(SGWB_TEMPLATE_COUNT == 2, "Did you add an SGWB template? Implement its form in frequency in a new function here");
+_Static_assert(SGWB_TEMPLATE_COUNT == 3, "Did you add an SGWB template? Implement its form in frequency in a new function here");
 inline double sgwb_powerlaw(double f, const double* params) {
     static double fref = 25.0;
     double A     = pow(10.0,params[0]);
@@ -742,6 +742,21 @@ inline double sgwb_lognormal(double f, const double* params) {
     }
 }
 
+inline double sgwb_phase_transition(double f, const double* params) {
+    double rb = params[0];
+    double b  = params[1];
+    double Ap = pow(10.0,params[2]);
+    double fp = pow(10.0,params[3]);
+    double rb4 = rb*rb*rb*rb;
+    double m = (9*rb4+b)/(rb4+1);
+    double s = f/fp;
+    double s4 = s*s*s*s;
+    double s9 = s4*s4*s;
+    double M = s9 * pow((1+rb4)/(rb4+s4),(9-b)/4) * pow((b+4)/(b+4-m + m*s*s),(b+4)/2);
+    double prefactor = Hscale / (f*f*f);
+    return Ap*M*prefactor;
+}
+
 void generate_sgwb_model(struct SGWBModel *model)
 {
     double f;
@@ -752,13 +767,16 @@ void generate_sgwb_model(struct SGWBModel *model)
     {
         f = model->psd->f[n];
         
-        _Static_assert(SGWB_TEMPLATE_COUNT == 2, "Did you add an SGWB template? Edit this switch case, it needs to be exhaustive.");
+        _Static_assert(SGWB_TEMPLATE_COUNT == 3, "Did you add an SGWB template? Edit this switch case, it needs to be exhaustive.");
         switch(model->SGWB_type) {
             case SGWB_TEMPLATE_POWERLAW:
                 Sgw = sgwb_powerlaw(f,model->params);
                 break;
             case SGWB_TEMPLATE_LOGNORMAL:
                 Sgw = sgwb_lognormal(f,model->params);
+                break;
+            case SGWB_TEMPLATE_PHASE_TRANSITION:
+                Sgw = sgwb_phase_transition(f,model->params);
                 break;
             default:
                 fprintf(stderr,"Unimplemented SGWB type?\n\tTemplate index: %d\n\tTemplate name: %s\n",model->SGWB_type,SGWB_TEMPLATE_NAMES[model->SGWB_type]);
@@ -1452,21 +1470,29 @@ void initialize_foreground_model(struct Orbit *orbit, struct Data *data, struct 
 }
 
 void default_sgwb_injection(double* params, const SGWB_t SGWB_type) {
-    _Static_assert(SGWB_TEMPLATE_COUNT == 2, "Did you add an SGWB template? Edit this switch case, it needs to be exhaustive.");
+    _Static_assert(SGWB_TEMPLATE_COUNT == 3, "Did you add an SGWB template? Edit this switch case, it needs to be exhaustive.");
     // set default values
     switch (SGWB_type) {
         case SGWB_TEMPLATE_POWERLAW:
             //params[0] = -21.0;
-            //params[0] = -8.45;
-            params[0] = -16.0;
+            params[0] = -8.45;
+            //params[0] = -16.0;
             params[1] = 2./3.;
             //params[1] = 0.0;
             break;
         case SGWB_TEMPLATE_LOGNORMAL:
             // log10 A, log10 fstar [Hz], log10 Delta
-            params[0] = -2.0;
+            params[0] = -5.0;
+            //params[0] = -2.5;
             params[1] = -2.5;
             params[2] = 0.0;
+            break;
+        case SGWB_TEMPLATE_PHASE_TRANSITION:
+            // rb, b, log10 Ap, log10 fp [Hz]
+            params[0] = 1.0;
+            params[1] = 1.0;
+            params[2] = -18.0;
+            params[3] = -2.5;
             break;
         default:
             fprintf(stderr,"need default values for SGWB type: %s", SGWB_TEMPLATE_NAMES[SGWB_type]);

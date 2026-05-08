@@ -73,6 +73,37 @@ void print_noise_model_dynamic(struct Data *data, struct Noise *noise, char file
     fclose(fptr);
 }
 
+void print_noise_model_dynamic_coarse(struct Data *data, struct Noise *coarse, int Q, char filename[])
+{
+    struct Wavelets* wdm = data->wdm;
+    FILE *fptr = fopen(filename,"w");
+    if (!fptr) {
+        fprintf(stderr, "Unable to open file for writing! %s\n", filename);
+        exit(-1);
+    }
+    int Ncoarse = wdm->NT / Q;
+    int jmin=(int)round(coarse->f[0]/wdm->df);
+    int jmax=(int)round(coarse->f[coarse->N-1]/wdm->df)+1;
+    for(int q=0; q<Ncoarse; q++)
+    {
+        double t = (double)q*wdm->dt*Q;
+        for(int j=jmin; j<jmax; j++)
+        {
+            double f = j*wdm->df;
+            int k = q + (j-jmin)*Ncoarse;
+            fprintf(fptr,"%lg ",t);
+            fprintf(fptr,"%lg ",f);
+            for(size_t m=0; m<coarse->Nchannel; m++)
+                fprintf(fptr,"%lg ",coarse->C[m][m][k]);
+            fprintf(fptr,"%lg ",coarse->C[0][1][k]);
+            fprintf(fptr,"%lg ",coarse->C[0][2][k]);
+            fprintf(fptr,"%lg ",coarse->C[1][2][k]);
+            fprintf(fptr,"\n");
+        }
+    }
+    fclose(fptr);
+}
+
 void print_noise_model(struct Noise *noise, char filename[])
 {
     FILE *fptr = fopen(filename,"w");

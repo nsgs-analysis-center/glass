@@ -48,6 +48,7 @@ void print_sgwb_state(struct SGWBModel *model, FILE *fptr);
  */
 void print_noise_model(struct Noise *noise, char filename[]);
 void print_noise_model_dynamic(struct Data* data, struct Noise *noise, char filename[]);
+void print_noise_model_dynamic_coarse(struct Data* data, struct Noise *coarse, int Q, char filename[]);
 
 /**
  \brief Print data whitened by modeled variance to file named `filename`

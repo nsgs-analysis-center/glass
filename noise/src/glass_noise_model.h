@@ -100,11 +100,12 @@ struct ForegroundModel
 typedef enum {
     SGWB_TEMPLATE_POWERLAW,
     SGWB_TEMPLATE_LOGNORMAL,
+    SGWB_TEMPLATE_PHASE_TRANSITION,
     SGWB_TEMPLATE_COUNT // leave this here, counts length of enum
 } SGWB_t;
 // note that if this array ever becomes extremely large, maybe swap to extern
-static const char* SGWB_TEMPLATE_NAMES[SGWB_TEMPLATE_COUNT] = {"powerlaw", "lognormal"};
-static const int SGWB_TEMPLATE_NPARAMS[SGWB_TEMPLATE_COUNT] = {2, 3};
+static const char* SGWB_TEMPLATE_NAMES[SGWB_TEMPLATE_COUNT] = {"powerlaw", "lognormal", "phase_transition"};
+static const int SGWB_TEMPLATE_NPARAMS[SGWB_TEMPLATE_COUNT] = {2, 3, 4};
 _Static_assert(sizeof(SGWB_TEMPLATE_NAMES)/sizeof(SGWB_TEMPLATE_NAMES[0]) == SGWB_TEMPLATE_COUNT,
         "Did you add an SGWB template but not its name?");
 _Static_assert(sizeof(SGWB_TEMPLATE_NPARAMS)/sizeof(SGWB_TEMPLATE_NPARAMS[0]) == SGWB_TEMPLATE_COUNT,
@@ -339,6 +340,15 @@ double sgwb_powerlaw(double f, const double* params);
 double sgwb_lognormal(double f, const double* params);
 
 /**
+ \brief functional form for a first-order phase transition SGWB
+
+ Broken power-law shape \f$M(f/f_p)\f$ with peak amplitude \f$A_p\f$ and peak
+ frequency \f$f_p\f$. Parameters are \f$r_b\f$, \f$b\f$,
+ \f$\log_{10} A_p\f$, \f$\log_{10} f_p\f$.
+ */
+double sgwb_phase_transition(double f, const double* params);
+
+/**
  \brief default injection values for an SGWB
  */
 void default_sgwb_injection(double* params, SGWB_t SGWB_type);
@@ -348,7 +358,7 @@ void default_sgwb_injection(double* params, SGWB_t SGWB_type);
  */
 
 
-_Static_assert(SGWB_TEMPLATE_COUNT == 2, "Did you add an SGWB template? Add a default prior here.");
+_Static_assert(SGWB_TEMPLATE_COUNT == 3, "Did you add an SGWB template? Add a default prior here.");
 static const double default_powerlaw_prior[][2] = {
     // log Ap
     { -22.0, -7.0},
@@ -363,10 +373,21 @@ static const double default_lognormal_prior[][2] = {
     // log10 Delta
     { -2.0, 1.0},
 };
-_Static_assert(SGWB_TEMPLATE_COUNT == 2, "Did you add an SGWB template? Edit this list of default priors, it needs to be exhaustive.");
+static const double default_phase_transition_prior[][2] = {
+    // rb
+    { 0.1, 10.0},
+    // b
+    { 0.0, 8.0},
+    // log10 Ap
+    { -22.0, -4.0},
+    // log10 fp [Hz]
+    { -5.0, 0.0},
+};
+_Static_assert(SGWB_TEMPLATE_COUNT == 3, "Did you add an SGWB template? Edit this list of default priors, it needs to be exhaustive.");
 static const double (*default_sgwb_priors[SGWB_TEMPLATE_COUNT])[2] = {
     [SGWB_TEMPLATE_POWERLAW] = default_powerlaw_prior,
-    [SGWB_TEMPLATE_LOGNORMAL] = default_lognormal_prior
+    [SGWB_TEMPLATE_LOGNORMAL] = default_lognormal_prior,
+    [SGWB_TEMPLATE_PHASE_TRANSITION] = default_phase_transition_prior
 };
 
 

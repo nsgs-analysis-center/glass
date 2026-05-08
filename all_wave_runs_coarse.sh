@@ -64,39 +64,39 @@ COARSE_Q=13
 #rsync -avz --progress wdmruns-coarse desktop:/mnt/storage/research/
 
 # noise + conf + sgwb stationary
-RUNDIR=wdmruns-coarse/stat-noise-conf-pl
-mkdir -p $RUNDIR
-nice -n 15 build/apps/src/noise_wavelet_mcmc_coarse \
-        --steps $NSTEPS \
-        --chains $NCH \
-        --threads $NCH \
-        --cheat \
-        --fmin 5e-4 \
-        --fmax 8e-3 \
-        --duration $DURATION \
-        --stationary \
-        --conf-noise \
-        --sgwb-template 0 \
-        --coarse-Q $COARSE_Q \
-        --rundir $RUNDIR \
-        --sim-noise
-#        --stationary-conf \
-
-RUNDIR=wdmruns-coarse/noise-conf-pl-169
-mkdir -p $RUNDIR
-nice -n 15 build/apps/src/noise_wavelet_mcmc_coarse \
-        --steps $NSTEPS \
-        --chains $NCH \
-        --threads $NCH \
-        --cheat \
-        --fmin 5e-4 \
-        --fmax 8e-3 \
-        --duration $DURATION \
-        --conf-noise \
-        --sgwb-template 0 \
-        --coarse-Q 169 \
-        --rundir $RUNDIR \
-        --sim-noise
+#RUNDIR=wdmruns-coarse/stat-noise-conf-pl
+#mkdir -p $RUNDIR
+#nice -n 15 build/apps/src/noise_wavelet_mcmc_coarse \
+#        --steps $NSTEPS \
+#        --chains $NCH \
+#        --threads $NCH \
+#        --cheat \
+#        --fmin 5e-4 \
+#        --fmax 8e-3 \
+#        --duration $DURATION \
+#        --stationary \
+#        --conf-noise \
+#        --sgwb-template 0 \
+#        --coarse-Q $COARSE_Q \
+#        --rundir $RUNDIR \
+#        --sim-noise
+##        --stationary-conf \
+#
+#RUNDIR=wdmruns-coarse/noise-conf-pl-169
+#mkdir -p $RUNDIR
+#nice -n 15 build/apps/src/noise_wavelet_mcmc_coarse \
+#        --steps $NSTEPS \
+#        --chains $NCH \
+#        --threads $NCH \
+#        --cheat \
+#        --fmin 5e-4 \
+#        --fmax 8e-3 \
+#        --duration $DURATION \
+#        --conf-noise \
+#        --sgwb-template 0 \
+#        --coarse-Q 169 \
+#        --rundir $RUNDIR \
+#        --sim-noise
 #        --stationary-conf \
 #rsync -avz --progress wdmruns-coarse desktop:/mnt/storage/research/
 # noise + conf + sgwb non-stationary
@@ -117,3 +117,103 @@ nice -n 15 build/apps/src/noise_wavelet_mcmc_coarse \
 #        --sim-noise
 #
 #rsync -avz --progress wdmruns-coarse desktop:/mnt/storage/research/
+#RUNDIR=wdmruns-coarse/stat-noise-conf-ln
+#mkdir -p $RUNDIR
+#nice -n 15 build/apps/src/noise_wavelet_mcmc_coarse \
+#        --steps $NSTEPS \
+#        --chains $NCH \
+#        --threads $NCH \
+#        --cheat \
+#        --fmin 5e-4 \
+#        --fmax 8e-3 \
+#        --duration $DURATION \
+#        --stationary \
+#        --conf-noise \
+#        --sgwb-template 1 \
+#        --coarse-Q $COARSE_Q \
+#        --rundir $RUNDIR \
+#        --sim-noise
+##        --stationary-conf \
+#
+#RUNDIR=wdmruns-coarse/noise-conf-ln-169
+#mkdir -p $RUNDIR
+#nice -n 15 build/apps/src/noise_wavelet_mcmc_coarse \
+#        --steps $NSTEPS \
+#        --chains $NCH \
+#        --threads $NCH \
+#        --cheat \
+#        --fmin 5e-4 \
+#        --fmax 8e-3 \
+#        --duration $DURATION \
+#        --conf-noise \
+#        --sgwb-template 1 \
+#        --coarse-Q 169 \
+#        --rundir $RUNDIR \
+#        --sim-noise
+
+#RUNDIR=wdmruns-coarse/stat-noise-conf-pt
+#mkdir -p $RUNDIR
+#nice -n 15 build/apps/src/noise_wavelet_mcmc_coarse \
+#        --steps $NSTEPS \
+#        --chains $NCH \
+#        --threads $NCH \
+#        --cheat \
+#        --fmin 5e-4 \
+#        --fmax 8e-3 \
+#        --duration $DURATION \
+#        --stationary \
+#        --conf-noise \
+#        --sgwb-template 2 \
+#        --coarse-Q $COARSE_Q \
+#        --rundir $RUNDIR \
+#        --sim-noise
+##        --stationary-conf \
+#
+#RUNDIR=wdmruns-coarse/noise-conf-pt-169
+#mkdir -p $RUNDIR
+#nice -n 15 build/apps/src/noise_wavelet_mcmc_coarse \
+#        --steps $NSTEPS \
+#        --chains $NCH \
+#        --threads $NCH \
+#        --cheat \
+#        --fmin 5e-4 \
+#        --fmax 8e-3 \
+#        --duration $DURATION \
+#        --conf-noise \
+#        --sgwb-template 2 \
+#        --coarse-Q 169 \
+#        --rundir $RUNDIR \
+#        --sim-noise
+RUNDIR=wdmruns-coarse/stat-noise-conf-pl-detection
+mkdir -p $RUNDIR
+nice -n 15 build/apps/src/noise_wavelet_mcmc_coarse \
+        --steps $NSTEPS \
+        --chains $NCH \
+        --threads $NCH \
+        --cheat \
+        --fmin 5e-4 \
+        --fmax 8e-3 \
+        --duration $DURATION \
+        --stationary \
+        --conf-noise \
+        --sgwb-template 0 \
+        --coarse-Q $COARSE_Q \
+        --rundir $RUNDIR \
+        --sim-noise
+#        --stationary-conf \
+
+RUNDIR=wdmruns-coarse/noise-conf-pl-169-detection
+mkdir -p $RUNDIR
+nice -n 15 build/apps/src/noise_wavelet_mcmc_coarse \
+        --steps $NSTEPS \
+        --chains $NCH \
+        --threads $NCH \
+        --cheat \
+        --fmin 5e-4 \
+        --fmax 8e-3 \
+        --duration $DURATION \
+        --conf-noise \
+        --sgwb-template 0 \
+        --coarse-Q 169 \
+        --rundir $RUNDIR \
+        --sim-noise
