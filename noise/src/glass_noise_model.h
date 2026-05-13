@@ -253,11 +253,39 @@ void generate_full_dynamic_covariance_matrix_coarse(struct Wavelets *wdm, int Q,
 void generate_full_stationary_covariance_matrix_coarse(struct Wavelets *wdm, int Q, struct InstrumentModel *inst, struct ForegroundModel *conf, struct SGWBModel *sgwb, struct Noise *coarse);
 
 /**
- \brief Build the six channel-pair sufficient statistics P^{(ij)}_{mq} from the
- wavelet-domain data for use in the coarse-grained likelihood. Each output
- array has length `Nlayer * Ncoarse` and is indexed by `k = q + j*Ncoarse`.
+ \brief Sufficient statistics for the Welch/Bartlett-like coarse-grained likelihood.
+
+ The six P^{(ij)}_{mq} arrays are the per-coarse-cell sample covariances
+ (1/Q) sum_{i in cell q} w_{a,mi} w_{b,mi}. Each array has length
+ `Nlayer * Ncoarse` (Ncoarse = NT/Q), indexed by `k = q + j*Ncoarse`.
+
+ Lifetime contract: populated once via `coarse_grain_wavelet_data` after data
+ injection / read and treated as read-only thereafter. Const-qualified pointer
+ fields let multiple MCMC threads share a single instance safely. The owner
+ (allocator) must keep non-const handles internally; downstream code passes
+ `const struct CoarseStats *`.
  */
-void coarse_grain_wavelet_data(struct Data *data, int Q, double *Pxx, double *Pyy, double *Pzz, double *Pxy, double *Pxz, double *Pyz);
+struct CoarseStats
+{
+    const double *Pxx;
+    const double *Pyy;
+    const double *Pzz;
+    const double *Pxy;
+    const double *Pxz;
+    const double *Pyz;
+    int Q;
+    int Ncoarse;
+    int Nlayer;
+};
+
+void alloc_coarse_stats(struct CoarseStats *s, int Nlayer, int Q, int NT);
+void free_coarse_stats(struct CoarseStats *s);
+
+/**
+ \brief Build the six channel-pair sufficient statistics P^{(ij)}_{mq} from the
+ wavelet-domain data into `stats` (which must already be allocated for this Q).
+ */
+void coarse_grain_wavelet_data(struct Data *data, struct CoarseStats *stats);
 
 /**
 \brief Compute spline model only where interpolant changes
@@ -288,7 +316,7 @@ double my_noise_log_likelihood_wavelet(struct Data *data, struct Noise *noise);
  Reduces algebraically to `my_noise_log_likelihood_wavelet` when the per-pixel
  covariance is constant in each window of Q time pixels (e.g. stationary noise).
  */
-double my_noise_log_likelihood_wavelet_coarse(struct Data *data, struct Noise *coarse_noise, double *Pxx, double *Pyy, double *Pzz, double *Pxy, double *Pxz, double *Pyz, int Q);
+double my_noise_log_likelihood_wavelet_coarse(struct Data *data, struct Noise *coarse_noise, const struct CoarseStats *stats);
 
 /**
  \brief Change in log likelihood for noise model.

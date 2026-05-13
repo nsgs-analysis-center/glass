@@ -888,116 +888,18 @@ void generate_full_covariance_matrix(struct Noise *full, struct Noise *component
 }
 
 
+// Q=1 is the degenerate (full-resolution) case of the coarse path: Ncoarse=NT,
+// k = q + jrel*NT, which equals wavelet_pixel_to_index(i, lmin+jrel) - kmin.
+// The full-res LL (my_noise_log_likelihood_wavelet) reads noise->C[k] via that
+// same linearization, so this delegation is layout-equivalent.
 void generate_full_dynamic_covariance_matrix(struct Wavelets *wdm, struct InstrumentModel *inst, struct ForegroundModel *conf, struct SGWBModel *sgwb, struct Noise *full)
 {
-    int k;
-    int jmin=(int)round(inst->psd->f[0]/wdm->df);
-    int jmax=(int)round(inst->psd->f[inst->psd->N-1]/wdm->df)+1;
-
-    if (conf) galaxy_modulation_cache_for_Q(conf->modulation, wdm, 1);
-
-    for(int i=0; i<wdm->NT; i++)
-    {
-        double mxx=0, myy=0, mzz=0, mxy=0, mxz=0, myz=0;
-        if (conf) {
-            mxx = conf->modulation->cache_XX[i];
-            myy = conf->modulation->cache_YY[i];
-            mzz = conf->modulation->cache_ZZ[i];
-            mxy = conf->modulation->cache_XY[i];
-            mxz = conf->modulation->cache_XZ[i];
-            myz = conf->modulation->cache_YZ[i];
-        }
-        for(int j=jmin; j<jmax; j++)
-        {
-            wavelet_pixel_to_index(wdm,i,j,&k);
-
-            k-=wdm->kmin;
-
-            //stationary instrument noise
-            full->C[0][0][k] = inst->psd->C[0][0][j-jmin];
-            full->C[1][1][k] = inst->psd->C[1][1][j-jmin];
-            full->C[2][2][k] = inst->psd->C[2][2][j-jmin];
-            full->C[0][1][k] = inst->psd->C[0][1][j-jmin];
-            full->C[0][2][k] = inst->psd->C[0][2][j-jmin];
-            full->C[1][2][k] = inst->psd->C[1][2][j-jmin];
-
-            //modulated galactic foreground
-            if (conf) { // this is NULL when confusion is disabled
-                full->C[0][0][k] += conf->psd->C[0][0][j-jmin]*mxx;
-                full->C[1][1][k] += conf->psd->C[1][1][j-jmin]*myy;
-                full->C[2][2][k] += conf->psd->C[2][2][j-jmin]*mzz;
-                full->C[0][1][k] += conf->psd->C[0][1][j-jmin]*mxy;
-                full->C[0][2][k] += conf->psd->C[0][2][j-jmin]*mxz;
-                full->C[1][2][k] += conf->psd->C[1][2][j-jmin]*myz;
-            }
-
-
-            //stationary stochastic background
-            if (sgwb) { // this is NULL when sgwb is disabled
-                full->C[0][0][k] += sgwb->psd->C[0][0][j-jmin];
-                full->C[1][1][k] += sgwb->psd->C[1][1][j-jmin];
-                full->C[2][2][k] += sgwb->psd->C[2][2][j-jmin];
-                full->C[0][1][k] += sgwb->psd->C[0][1][j-jmin];
-                full->C[0][2][k] += sgwb->psd->C[0][2][j-jmin];
-                full->C[1][2][k] += sgwb->psd->C[1][2][j-jmin];
-            }
-
-            //noise covariance matrix is symmetric
-            full->C[1][0][k] = full->C[0][1][k];
-            full->C[2][0][k] = full->C[0][2][k];
-            full->C[2][1][k] = full->C[1][2][k];
-        } //loop over frequency layers
-    } //loop over time slices
+    generate_full_dynamic_covariance_matrix_coarse(wdm, 1, inst, conf, sgwb, full);
 }
 
 void generate_full_stationary_covariance_matrix(struct Wavelets *wdm, struct InstrumentModel *inst, struct ForegroundModel *conf, struct SGWBModel *sgwb, struct Noise *full)
 {
-    int k;
-    int jmin=(int)round(inst->psd->f[0]/wdm->df);
-    int jmax=(int)round(inst->psd->f[inst->psd->N-1]/wdm->df)+1;
-
-    for(int i=0; i<wdm->NT; i++)
-    {
-        for(int j=jmin; j<jmax; j++)
-        {
-            wavelet_pixel_to_index(wdm,i,j,&k);
-
-            k-=wdm->kmin;
-
-            //stationary instrument noise
-            full->C[0][0][k] = inst->psd->C[0][0][j-jmin];
-            full->C[1][1][k] = inst->psd->C[1][1][j-jmin];
-            full->C[2][2][k] = inst->psd->C[2][2][j-jmin];
-            full->C[0][1][k] = inst->psd->C[0][1][j-jmin];
-            full->C[0][2][k] = inst->psd->C[0][2][j-jmin];
-            full->C[1][2][k] = inst->psd->C[1][2][j-jmin];
-
-            //modulated galactic foreground
-            if (conf) {
-                full->C[0][0][k] += conf->psd->C[0][0][j-jmin];
-                full->C[1][1][k] += conf->psd->C[1][1][j-jmin];
-                full->C[2][2][k] += conf->psd->C[2][2][j-jmin];
-                full->C[0][1][k] -= conf->psd->C[0][1][j-jmin]/2.;
-                full->C[0][2][k] -= conf->psd->C[0][2][j-jmin]/2.;
-                full->C[1][2][k] -= conf->psd->C[1][2][j-jmin]/2.; // 2 here is baked in response
-            }
-
-            //stationary stochastic background
-            if (sgwb) {
-                full->C[0][0][k] += sgwb->psd->C[0][0][j-jmin];
-                full->C[1][1][k] += sgwb->psd->C[1][1][j-jmin];
-                full->C[2][2][k] += sgwb->psd->C[2][2][j-jmin];
-                full->C[0][1][k] += sgwb->psd->C[0][1][j-jmin];
-                full->C[0][2][k] += sgwb->psd->C[0][2][j-jmin];
-                full->C[1][2][k] += sgwb->psd->C[1][2][j-jmin];
-            }
-
-            //noise covariance matrix is symmetric
-            full->C[1][0][k] = full->C[0][1][k];
-            full->C[2][0][k] = full->C[0][2][k];
-            full->C[2][1][k] = full->C[1][2][k];
-        }// loop over frequency layers
-    }// loop over time slices
+    generate_full_stationary_covariance_matrix_coarse(wdm, 1, inst, conf, sgwb, full);
 }
 
 void generate_full_dynamic_covariance_matrix_coarse(struct Wavelets *wdm, int Q, struct InstrumentModel *inst, struct ForegroundModel *conf, struct SGWBModel *sgwb, struct Noise *coarse)
@@ -1008,47 +910,52 @@ void generate_full_dynamic_covariance_matrix_coarse(struct Wavelets *wdm, int Q,
 
     if (conf) galaxy_modulation_cache_for_Q(conf->modulation, wdm, Q);
 
-    for(int q=0; q<Ncoarse; q++)
+    // j outer, q inner: writes to coarse->C[a][b][k] are contiguous in q.
+    // Layout-equivalent to the full-res wavelet_pixel_to_index linearization
+    // when Q=1 (Ncoarse=NT, so k = q + jrel*NT = i + jrel*NT).
+    for(int j=jmin; j<jmax; j++)
     {
-        double mxx=0, myy=0, mzz=0, mxy=0, mxz=0, myz=0;
-        if (conf) {
-            mxx = conf->modulation->cache_XX[q];
-            myy = conf->modulation->cache_YY[q];
-            mzz = conf->modulation->cache_ZZ[q];
-            mxy = conf->modulation->cache_XY[q];
-            mxz = conf->modulation->cache_XZ[q];
-            myz = conf->modulation->cache_YZ[q];
-        }
-        for(int j=jmin; j<jmax; j++)
+        int jrel = j - jmin;
+        for(int q=0; q<Ncoarse; q++)
         {
-            int k = q + (j-jmin)*Ncoarse;
+            double mxx=0, myy=0, mzz=0, mxy=0, mxz=0, myz=0;
+            if (conf) {
+                mxx = conf->modulation->cache_XX[q];
+                myy = conf->modulation->cache_YY[q];
+                mzz = conf->modulation->cache_ZZ[q];
+                mxy = conf->modulation->cache_XY[q];
+                mxz = conf->modulation->cache_XZ[q];
+                myz = conf->modulation->cache_YZ[q];
+            }
+
+            int k = q + jrel*Ncoarse;
 
             //stationary instrument noise
-            coarse->C[0][0][k] = inst->psd->C[0][0][j-jmin];
-            coarse->C[1][1][k] = inst->psd->C[1][1][j-jmin];
-            coarse->C[2][2][k] = inst->psd->C[2][2][j-jmin];
-            coarse->C[0][1][k] = inst->psd->C[0][1][j-jmin];
-            coarse->C[0][2][k] = inst->psd->C[0][2][j-jmin];
-            coarse->C[1][2][k] = inst->psd->C[1][2][j-jmin];
+            coarse->C[0][0][k] = inst->psd->C[0][0][jrel];
+            coarse->C[1][1][k] = inst->psd->C[1][1][jrel];
+            coarse->C[2][2][k] = inst->psd->C[2][2][jrel];
+            coarse->C[0][1][k] = inst->psd->C[0][1][jrel];
+            coarse->C[0][2][k] = inst->psd->C[0][2][jrel];
+            coarse->C[1][2][k] = inst->psd->C[1][2][jrel];
 
             //modulated galactic foreground (sampled at coarse-cell midpoint)
             if (conf) {
-                coarse->C[0][0][k] += conf->psd->C[0][0][j-jmin]*mxx;
-                coarse->C[1][1][k] += conf->psd->C[1][1][j-jmin]*myy;
-                coarse->C[2][2][k] += conf->psd->C[2][2][j-jmin]*mzz;
-                coarse->C[0][1][k] += conf->psd->C[0][1][j-jmin]*mxy;
-                coarse->C[0][2][k] += conf->psd->C[0][2][j-jmin]*mxz;
-                coarse->C[1][2][k] += conf->psd->C[1][2][j-jmin]*myz;
+                coarse->C[0][0][k] += conf->psd->C[0][0][jrel]*mxx;
+                coarse->C[1][1][k] += conf->psd->C[1][1][jrel]*myy;
+                coarse->C[2][2][k] += conf->psd->C[2][2][jrel]*mzz;
+                coarse->C[0][1][k] += conf->psd->C[0][1][jrel]*mxy;
+                coarse->C[0][2][k] += conf->psd->C[0][2][jrel]*mxz;
+                coarse->C[1][2][k] += conf->psd->C[1][2][jrel]*myz;
             }
 
             //stationary stochastic background
             if (sgwb) {
-                coarse->C[0][0][k] += sgwb->psd->C[0][0][j-jmin];
-                coarse->C[1][1][k] += sgwb->psd->C[1][1][j-jmin];
-                coarse->C[2][2][k] += sgwb->psd->C[2][2][j-jmin];
-                coarse->C[0][1][k] += sgwb->psd->C[0][1][j-jmin];
-                coarse->C[0][2][k] += sgwb->psd->C[0][2][j-jmin];
-                coarse->C[1][2][k] += sgwb->psd->C[1][2][j-jmin];
+                coarse->C[0][0][k] += sgwb->psd->C[0][0][jrel];
+                coarse->C[1][1][k] += sgwb->psd->C[1][1][jrel];
+                coarse->C[2][2][k] += sgwb->psd->C[2][2][jrel];
+                coarse->C[0][1][k] += sgwb->psd->C[0][1][jrel];
+                coarse->C[0][2][k] += sgwb->psd->C[0][2][jrel];
+                coarse->C[1][2][k] += sgwb->psd->C[1][2][jrel];
             }
 
             coarse->C[1][0][k] = coarse->C[0][1][k];
@@ -1064,37 +971,39 @@ void generate_full_stationary_covariance_matrix_coarse(struct Wavelets *wdm, int
     int jmax=(int)round(inst->psd->f[inst->psd->N-1]/wdm->df)+1;
     int Ncoarse = wdm->NT / Q;
 
-    for(int q=0; q<Ncoarse; q++)
+    // j outer, q inner for contiguous writes. See dynamic variant above.
+    for(int j=jmin; j<jmax; j++)
     {
-        for(int j=jmin; j<jmax; j++)
+        int jrel = j - jmin;
+        for(int q=0; q<Ncoarse; q++)
         {
-            int k = q + (j-jmin)*Ncoarse;
+            int k = q + jrel*Ncoarse;
 
-            coarse->C[0][0][k] = inst->psd->C[0][0][j-jmin];
-            coarse->C[1][1][k] = inst->psd->C[1][1][j-jmin];
-            coarse->C[2][2][k] = inst->psd->C[2][2][j-jmin];
-            coarse->C[0][1][k] = inst->psd->C[0][1][j-jmin];
-            coarse->C[0][2][k] = inst->psd->C[0][2][j-jmin];
-            coarse->C[1][2][k] = inst->psd->C[1][2][j-jmin];
+            coarse->C[0][0][k] = inst->psd->C[0][0][jrel];
+            coarse->C[1][1][k] = inst->psd->C[1][1][jrel];
+            coarse->C[2][2][k] = inst->psd->C[2][2][jrel];
+            coarse->C[0][1][k] = inst->psd->C[0][1][jrel];
+            coarse->C[0][2][k] = inst->psd->C[0][2][jrel];
+            coarse->C[1][2][k] = inst->psd->C[1][2][jrel];
 
             // mirror the stationary-path foreground convention from
             // generate_full_stationary_covariance_matrix
             if (conf) {
-                coarse->C[0][0][k] += conf->psd->C[0][0][j-jmin];
-                coarse->C[1][1][k] += conf->psd->C[1][1][j-jmin];
-                coarse->C[2][2][k] += conf->psd->C[2][2][j-jmin];
-                coarse->C[0][1][k] -= conf->psd->C[0][1][j-jmin]/2.;
-                coarse->C[0][2][k] -= conf->psd->C[0][2][j-jmin]/2.;
-                coarse->C[1][2][k] -= conf->psd->C[1][2][j-jmin]/2.;
+                coarse->C[0][0][k] += conf->psd->C[0][0][jrel];
+                coarse->C[1][1][k] += conf->psd->C[1][1][jrel];
+                coarse->C[2][2][k] += conf->psd->C[2][2][jrel];
+                coarse->C[0][1][k] -= conf->psd->C[0][1][jrel]/2.;
+                coarse->C[0][2][k] -= conf->psd->C[0][2][jrel]/2.;
+                coarse->C[1][2][k] -= conf->psd->C[1][2][jrel]/2.;
             }
 
             if (sgwb) {
-                coarse->C[0][0][k] += sgwb->psd->C[0][0][j-jmin];
-                coarse->C[1][1][k] += sgwb->psd->C[1][1][j-jmin];
-                coarse->C[2][2][k] += sgwb->psd->C[2][2][j-jmin];
-                coarse->C[0][1][k] += sgwb->psd->C[0][1][j-jmin];
-                coarse->C[0][2][k] += sgwb->psd->C[0][2][j-jmin];
-                coarse->C[1][2][k] += sgwb->psd->C[1][2][j-jmin];
+                coarse->C[0][0][k] += sgwb->psd->C[0][0][jrel];
+                coarse->C[1][1][k] += sgwb->psd->C[1][1][jrel];
+                coarse->C[2][2][k] += sgwb->psd->C[2][2][jrel];
+                coarse->C[0][1][k] += sgwb->psd->C[0][1][jrel];
+                coarse->C[0][2][k] += sgwb->psd->C[0][2][jrel];
+                coarse->C[1][2][k] += sgwb->psd->C[1][2][jrel];
             }
 
             coarse->C[1][0][k] = coarse->C[0][1][k];
@@ -1104,13 +1013,46 @@ void generate_full_stationary_covariance_matrix_coarse(struct Wavelets *wdm, int
     }
 }
 
-void coarse_grain_wavelet_data(struct Data *data, int Q, double *Pxx, double *Pyy, double *Pzz, double *Pxy, double *Pxz, double *Pyz)
+void alloc_coarse_stats(struct CoarseStats *s, int Nlayer, int Q, int NT)
+{
+    int Ncoarse = NT / Q;
+    size_t Pdim = (size_t)Nlayer * (size_t)Ncoarse;
+    // Allocate via non-const handles, expose as const through the struct.
+    double *Pxx = malloc(Pdim*sizeof(double));
+    double *Pyy = malloc(Pdim*sizeof(double));
+    double *Pzz = malloc(Pdim*sizeof(double));
+    double *Pxy = malloc(Pdim*sizeof(double));
+    double *Pxz = malloc(Pdim*sizeof(double));
+    double *Pyz = malloc(Pdim*sizeof(double));
+    s->Pxx = Pxx; s->Pyy = Pyy; s->Pzz = Pzz;
+    s->Pxy = Pxy; s->Pxz = Pxz; s->Pyz = Pyz;
+    s->Q = Q;
+    s->Ncoarse = Ncoarse;
+    s->Nlayer = Nlayer;
+}
+
+void free_coarse_stats(struct CoarseStats *s)
+{
+    free((void*)s->Pxx); free((void*)s->Pyy); free((void*)s->Pzz);
+    free((void*)s->Pxy); free((void*)s->Pxz); free((void*)s->Pyz);
+    s->Pxx = s->Pyy = s->Pzz = NULL;
+    s->Pxy = s->Pxz = s->Pyz = NULL;
+}
+
+void coarse_grain_wavelet_data(struct Data *data, struct CoarseStats *stats)
 {
     struct Wavelets *wdm = data->wdm;
     struct TDI *tdi = data->tdi;
-    int NT = wdm->NT;
-    int Ncoarse = NT / Q;
+    int Q = stats->Q;
+    int Ncoarse = stats->Ncoarse;
     double invQ = 1.0/(double)Q;
+    // Populator owns mutable views of the arrays it allocated.
+    double *Pxx = (double*)stats->Pxx;
+    double *Pyy = (double*)stats->Pyy;
+    double *Pzz = (double*)stats->Pzz;
+    double *Pxy = (double*)stats->Pxy;
+    double *Pxz = (double*)stats->Pxz;
+    double *Pyz = (double*)stats->Pyz;
 
     for(int j=data->lmin; j<data->lmax; j++)
     {
@@ -1188,63 +1130,95 @@ static inline double wavelet_nwip_linear(const double* __restrict a, const doubl
     return arg;
 }
 
+// Per-pixel multivariate Gaussian log-likelihood contribution. Q absorbs the
+// Welch sufficient-statistic weighting: Q=1 is the standard Gaussian (one fine
+// pixel = one degree of freedom); Q>1 is the Wishart sufficient-statistic form
+// with the in-cell sample (cross-)covariances P_ab as observed data. The
+// off-diagonal factor of 2 is baked into the inv_xy/inv_xz/inv_yz weights.
+//
+// Documentation note (was inline below): the exact fine-grid multivariate
+// Gaussian log-likelihood summed over the Q fine pixels in each coarse window
+// rewrites as the Wishart form with P_{ab,mq} = (1/Q) sum_{i in cell q}
+// w_{a,mi} w_{b,mi} -- not a Gaussian-on-P or CLT approximation. The note
+// (Sec. "Welch and Bartlett-like coarse-graining") presents the equivalent
+// Gamma form for the diagonal/scalar case. For inference, P_{ab,mq} is fixed
+// data, and the Gamma form differs only by data-and-Q terms ((Q/2-1)log P,
+// log Gamma(Q/2), log(2/Q)) that are constants w.r.t. the model and don't
+// affect the posterior. The only approximation is that C is constant within
+// each coarse window; this is shared by both forms (and is exact at Q=1).
+static inline double per_pixel_logL_contribution(
+        double Qd,
+        double pxx, double pyy, double pzz,
+        double pxy, double pxz, double pyz,
+        double inv_xx, double inv_yy, double inv_zz,
+        double inv_xy, double inv_xz, double inv_yz,
+        double logdetC)
+{
+    double s = 0.0;
+    s -= 0.5*Qd*inv_xx*pxx;
+    s -= 0.5*Qd*inv_yy*pyy;
+    s -= 0.5*Qd*inv_zz*pzz;
+    s -=     Qd*inv_xy*pxy;
+    s -=     Qd*inv_xz*pxz;
+    s -=     Qd*inv_yz*pyz;
+    s -= 0.5*Qd*logdetC;
+    return s;
+}
+
 double my_noise_log_likelihood_wavelet(struct Data *data, struct Noise *noise) {
     struct TDI *tdi = data->tdi;
     const double log2pi = log(2*M_PI);
+    int NT = data->wdm->NT;
+    int Nlayer = data->Nlayer;
     double logL = 0.0;
+    // j outer / i inner so k = i + j*NT increments by 1 in the inner loop
+    // (matches the column-major wavelet layout, equivalent to
+    // wavelet_pixel_to_index(i, lmin+j) - kmin).
     #pragma omp simd reduction(+:logL)
-    for (int i=0; i<data->wdm->NT; i++)
-        for (int j=data->lmin; j<data->lmax; j++) {
-            int k;
-            wavelet_pixel_to_index(data->wdm,i,j,&k);
-            k -= data->wdm->kmin;
-            logL -= 0.5*tdi->X[k]*tdi->X[k]*noise->invC[0][0][k];
-            logL -= 0.5*tdi->Y[k]*tdi->Y[k]*noise->invC[1][1][k];
-            logL -= 0.5*tdi->Z[k]*tdi->Z[k]*noise->invC[2][2][k];
-            logL -=     tdi->X[k]*tdi->Y[k]*noise->invC[0][1][k];
-            logL -=     tdi->X[k]*tdi->Z[k]*noise->invC[0][2][k];
-            logL -=     tdi->Y[k]*tdi->Z[k]*noise->invC[1][2][k];
-            logL -= 0.5*noise->logdetC[k];
+    for (int j=0; j<Nlayer; j++) {
+        for (int i=0; i<NT; i++) {
+            int k = i + j*NT;
+            double wx = tdi->X[k];
+            double wy = tdi->Y[k];
+            double wz = tdi->Z[k];
+            logL += per_pixel_logL_contribution(1.0,
+                    wx*wx, wy*wy, wz*wz,
+                    wx*wy, wx*wz, wy*wz,
+                    noise->invC[0][0][k], noise->invC[1][1][k], noise->invC[2][2][k],
+                    noise->invC[0][1][k], noise->invC[0][2][k], noise->invC[1][2][k],
+                    noise->logdetC[k]);
+        }
     }
     logL -= 0.5 * 3 * data->N * log2pi;
 
     return logL;
 }
 
-// This is the exact fine-grid multivariate Gaussian log-likelihood summed over
-// the Q fine pixels in each coarse window, rewritten with the within-window
-// sample (cross-)covariance P_{ab,mq} = (1/Q) sum_{i in q} w_{a,mi} w_{b,mi}
-// as a Wishart sufficient statistic -- not a Gaussian-on-P or CLT
-// approximation. The note (Sec. "Welch and Bartlett-like coarse-graining")
-// presents the equivalent Gamma form for the diagonal/scalar case (the note's
-// S_m plays the role of the diagonal of C here). For inference, P_{ab,mq} is
-// observed data (fixed during MCMC), and the Gamma form differs from this one
-// only by terms that are functions of the data and Q -- ((Q/2-1)log P,
-// log Gamma(Q/2), log(2/Q)) -- which are constants w.r.t. the model
-// parameters and so don't affect the posterior. The only approximation is
-// that C is constant within each coarse window, which is shared by both forms.
-double my_noise_log_likelihood_wavelet_coarse(struct Data *data, struct Noise *coarse_noise, double *Pxx, double *Pyy, double *Pzz, double *Pxy, double *Pxz, double *Pyz, int Q)
+double my_noise_log_likelihood_wavelet_coarse(struct Data *data, struct Noise *coarse_noise, const struct CoarseStats *stats)
 {
     const double log2pi = log(2*M_PI);
     int Nlayer = data->Nlayer;
-    int Ncoarse = data->wdm->NT / Q;
-    double Qd = (double)Q;
+    int Ncoarse = stats->Ncoarse;
+    double Qd = (double)stats->Q;
+    const double *Pxx = stats->Pxx;
+    const double *Pyy = stats->Pyy;
+    const double *Pzz = stats->Pzz;
+    const double *Pxy = stats->Pxy;
+    const double *Pxz = stats->Pxz;
+    const double *Pyz = stats->Pyz;
     double logL = 0.0;
     #pragma omp simd reduction(+:logL)
-    for (int j=0; j<Nlayer; j++)
-        for (int q=0; q<Ncoarse; q++)
-        {
+    for (int j=0; j<Nlayer; j++) {
+        for (int q=0; q<Ncoarse; q++) {
             int k = q + j*Ncoarse;
-            // -Q/2 * tr(invC * P) with the off-diagonal factor of 2 absorbed
-            // (mirrors the diagonal/off-diagonal split in my_noise_log_likelihood_wavelet)
-            logL -= 0.5*Qd*coarse_noise->invC[0][0][k]*Pxx[k];
-            logL -= 0.5*Qd*coarse_noise->invC[1][1][k]*Pyy[k];
-            logL -= 0.5*Qd*coarse_noise->invC[2][2][k]*Pzz[k];
-            logL -=     Qd*coarse_noise->invC[0][1][k]*Pxy[k];
-            logL -=     Qd*coarse_noise->invC[0][2][k]*Pxz[k];
-            logL -=     Qd*coarse_noise->invC[1][2][k]*Pyz[k];
-            logL -= 0.5*Qd*coarse_noise->logdetC[k];
+            logL += per_pixel_logL_contribution(Qd,
+                    Pxx[k], Pyy[k], Pzz[k],
+                    Pxy[k], Pxz[k], Pyz[k],
+                    coarse_noise->invC[0][0][k], coarse_noise->invC[1][1][k], coarse_noise->invC[2][2][k],
+                    coarse_noise->invC[0][1][k], coarse_noise->invC[0][2][k], coarse_noise->invC[1][2][k],
+                    coarse_noise->logdetC[k]);
         }
+    }
     // constant uses the original full-grid pixel count (each fine pixel is a
     // Gaussian degree of freedom); data->N == Nlayer * NT
     logL -= 0.5 * 3 * data->N * log2pi;

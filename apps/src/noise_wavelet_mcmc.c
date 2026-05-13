@@ -29,7 +29,7 @@ static void print_usage()
 {
     print_glass_usage();
     fprintf(stdout,"EXAMPLE:\n");
-    fprintf(stdout,"noise_wavelet_mcmc --sim-noise --conf-noise --sgwb-template 0 --duration 7864320 --fmin 1e-4 --fmax 8e-3\n");
+    fprintf(stdout,"noise_wavelet_mcmc --sim-noise --conf-noise --sgwb-template 0 --duration 7864320 --fmin 1e-4 --fmax 8e-3 [--coarse-Q 4]\n");
     fprintf(stdout,"\n");
     exit(0);
 }
@@ -84,6 +84,30 @@ int write_wdm_data(struct Data* d, double* data, char* fname) {
             double f = j*wdm->df;
             wavelet_pixel_to_index(wdm, i, j, &k);
             k -= wdm->kmin;
+            fprintf(fptr,"%lg ",t);
+            fprintf(fptr,"%lg ",f);
+            fprintf(fptr,"%lg",data[k]);
+            fprintf(fptr,"\n");
+        }
+    }
+    fclose(fptr);
+    return 0;
+}
+
+int write_coarse_wdm_data(struct Data* d, double* data, char* fname, int Q) {
+    FILE *fptr = NULL;
+    struct Wavelets* wdm = d->wdm;
+    fptr = fopen(fname,"w");
+    if (!fptr) {
+        fprintf(stderr, "Couldn't open %s for writing!\n", fname);
+        return 1;
+    }
+    int Ncoarse = wdm->NT / Q;
+    for (int q=0; q<Ncoarse; q++) {
+        double t = q*wdm->dt*Q;
+        for (int j=d->lmin; j < d->lmax; j++) {
+            double f = j*wdm->df;
+            int k = q + (j-d->lmin)*Ncoarse;
             fprintf(fptr,"%lg ",t);
             fprintf(fptr,"%lg ",f);
             fprintf(fptr,"%lg",data[k]);
@@ -159,6 +183,28 @@ int main(int argc, char *argv[])
         fprintf(stderr, "Currently, cannot handle odd length NF or NT wdm basis!\n");
         exit(-1);
     }
+
+    /* WDM time-axis coarse-graining factor Q (1 = full resolution). */
+    int Q = flags->coarseQ;
+    if (Q < 1) {
+        fprintf(stderr, "--coarse-Q must be >= 1, got %d\n", Q);
+        exit(-1);
+    }
+    if (data->wdm->NT % Q != 0) {
+        fprintf(stderr, "--coarse-Q=%d must divide wdm->NT=%d\n", Q, data->wdm->NT);
+        exit(-1);
+    }
+    // Stationary covariance is time-invariant; any Ncoarse>1 just replicates
+    // identical entries through the cov build, 3x3 inverter, and LL. Collapse
+    // to Ncoarse=1 (Q=NT) for stationary runs.
+    if (flags->stationary && Q != data->wdm->NT) {
+        printf("[stationary] overriding --coarse-Q=%d to NT=%d (stationary covariance does not vary in time; finer Q is redundant work)\n", Q, data->wdm->NT);
+        Q = data->wdm->NT;
+    }
+    int Ncoarse = data->wdm->NT / Q;
+    printf("coarse-graining: Q=%d, NT=%d -> Ncoarse=%d\n", Q, data->wdm->NT, Ncoarse);
+    printf("active band: lmin=%d, lmax=%d, Nlayer=%d, total coarse pixels=%d\n",
+            data->lmin, data->lmax, data->Nlayer, data->Nlayer*Ncoarse);
 
     /* Initialize chain structure and files */
     initialize_chain(chain, flags, &data->cseed, "w");
@@ -305,6 +351,20 @@ int main(int argc, char *argv[])
     /* print various data products for plotting */
     print_data(data, flags);
 
+    /* Precompute sufficient statistics for the unified likelihood path.
+     * Q=1: Pij[k] = X[k]*Y[k] etc. (one fine pixel per "cell"), so the coarse
+     * LL evaluates to the standard wavelet-domain Gaussian.
+     * Q>1: Welch/Bartlett-like average of Q fine pixels per coarse cell.
+     * Built once after data injection; shared read-only across MCMC threads.
+     */
+    struct CoarseStats stats;
+    alloc_coarse_stats(&stats, data->Nlayer, Q, data->wdm->NT);
+    coarse_grain_wavelet_data(data, &stats);
+    if (Q > 1) {
+        sprintf(filename,"%s/coarse_Pxx.dat", data->dataDir);
+        write_coarse_wdm_data(data, (double*)stats.Pxx, filename, Q);
+    }
+
 
     // For now, we are not going to have full wavelet scaleograms stored everywhere!
     // we'll treat these as outer products of the spectrum and modulation
@@ -322,21 +382,14 @@ int main(int argc, char *argv[])
 
         // see above note, we'll save the current scaleogram from all contributions here
         // but the individual models will only have spectrum x modulation
-        alloc_noise(scaleogram[ic], data->Nlayer*data->wdm->NT, data->Nlayer, data->Nchannel);
+        // Coarse layout: k = q + jrel*Ncoarse, Nlayer*Ncoarse total slots.
+        // At Q=1, Ncoarse=NT and this reduces to the full-resolution indexing.
+        alloc_noise(scaleogram[ic], data->Nlayer*Ncoarse, data->Nlayer, data->Nchannel);
 
-        // initialize a few extra pieces of the scaleograms
         scaleogram[ic]->kmin = data->wdm->kmin;
-        // TODO: allocing all this memory and filling it with things we already know feels dumb
-        // maybe we should just compute the scaleograms as needed
-        // scaleogram is sized for the active band only (Nlayer * NT slots),
-        // indexed by (k - wdm->kmin). Iterate j over [0, Nlayer), not [0, NF).
-        int k;
-        for (size_t i = 0; i < data->wdm->NT; i++)
-            for (size_t j=0; j < data->Nlayer; j++) {
-                wavelet_pixel_to_index(data->wdm, i, data->lmin + j, &k);
-                k -= data->wdm->kmin;
-                scaleogram[ic]->f[k] = (data->lmin + j)*data->wdm->df;
-            }
+        for (size_t j=0; j < (size_t)data->Nlayer; j++)
+            for (size_t q=0; q < (size_t)Ncoarse; q++)
+                scaleogram[ic]->f[q + j*Ncoarse] = (data->lmin + j)*data->wdm->df;
 
         // see above note. this is frequency-axis only
         inst_model[ic] = malloc(sizeof(struct InstrumentModel));
@@ -388,27 +441,23 @@ int main(int argc, char *argv[])
     /* Combine noise components to form covariance matrix */
     for(int ic=0; ic<chain->NC; ic++)
     {
-        if (flags->stationary) {
-            generate_full_stationary_covariance_matrix(data->wdm, inst_model[ic], conf_model[ic], sgwb_model[ic], scaleogram[ic]);
-        }
-        else {
-            generate_full_dynamic_covariance_matrix(data->wdm, inst_model[ic], conf_model[ic], sgwb_model[ic], scaleogram[ic]);
-        }
-
+        if (flags->stationary)
+            generate_full_stationary_covariance_matrix_coarse(data->wdm, Q, inst_model[ic], conf_model[ic], sgwb_model[ic], scaleogram[ic]);
+        else
+            generate_full_dynamic_covariance_matrix_coarse(data->wdm, Q, inst_model[ic], conf_model[ic], sgwb_model[ic], scaleogram[ic]);
 
         /* get initial likelihoods */
-        // TODO does every component need a logL?
         invert_noise_covariance_matrix(scaleogram[ic]);
-        double logL = my_noise_log_likelihood_wavelet(data, scaleogram[ic]);
+        double logL = my_noise_log_likelihood_wavelet_coarse(data, scaleogram[ic], &stats);
         inst_model[ic]->logL = logL;
         if (sgwb_model[ic])
             sgwb_model[ic]->logL = logL;
-        if (conf_model[ic]) 
+        if (conf_model[ic])
             conf_model[ic]->logL = logL;
     }
 
     sprintf(filename,"%s/full_noise_model.dat",data->dataDir);
-    print_noise_model_dynamic(data, scaleogram[0], filename);
+    print_noise_model_dynamic_coarse(data, scaleogram[0], Q, filename);
 
     //MCMC
     printf("\n==== Noise Wavelet MCMC Sampler ====\n");
@@ -459,10 +508,10 @@ int main(int argc, char *argv[])
 
                 for(int mc=0; mc<10; mc++)
                 {
-                    noise_instrument_model_mcmc_wavelet(orbit, data, inst_model_ptr, inst_trial_ptr, conf_model_ptr, sgwb_model_ptr, psd_ptr, chain, flags, ic);
+                    noise_instrument_model_mcmc_wavelet(orbit, data, inst_model_ptr, inst_trial_ptr, conf_model_ptr, sgwb_model_ptr, psd_ptr, &stats, chain, flags, ic);
                     // Note that we do not sample over the galaxy's modulation, only its spectral shape
-                    if(flags->confNoise) noise_foreground_model_mcmc_wavelet(data, inst_model_ptr, conf_model_ptr, conf_trial_ptr, sgwb_model_ptr, psd_ptr, chain, flags, ic);
-                    if(flags->sgwbTemplate>=0) noise_sgwb_model_mcmc_wavelet_dumb(data, inst_model_ptr, conf_model_ptr, sgwb_model_ptr, sgwb_trial_ptr, psd_ptr, chain, flags, ic);
+                    if(flags->confNoise) noise_foreground_model_mcmc_wavelet(data, inst_model_ptr, conf_model_ptr, conf_trial_ptr, sgwb_model_ptr, psd_ptr, &stats, chain, flags, ic);
+                    if(flags->sgwbTemplate>=0) noise_sgwb_model_mcmc_wavelet_dumb(data, inst_model_ptr, conf_model_ptr, sgwb_model_ptr, sgwb_trial_ptr, psd_ptr, &stats, chain, flags, ic);
                     // TODO: the logLs aren't tracked well at all here. We should probably refactor to have some kind of WaveletNoise struct that can handle all these components...
                 }
             }// end loop over chains
@@ -567,29 +616,34 @@ int main(int argc, char *argv[])
         print_noise_model(sgwb_model[chain->index[0]]->psd, filename);
     }
     if (flags->stationary)
-        generate_full_stationary_covariance_matrix(data->wdm, inst_model[chain->index[0]], conf_model[chain->index[0]], sgwb_model[chain->index[0]], scaleogram[chain->index[0]]);
+        generate_full_stationary_covariance_matrix_coarse(data->wdm, Q, inst_model[chain->index[0]], conf_model[chain->index[0]], sgwb_model[chain->index[0]], scaleogram[chain->index[0]]);
     else
-        generate_full_dynamic_covariance_matrix(data->wdm, inst_model[chain->index[0]], conf_model[chain->index[0]], sgwb_model[chain->index[0]], scaleogram[chain->index[0]]);
+        generate_full_dynamic_covariance_matrix_coarse(data->wdm, Q, inst_model[chain->index[0]], conf_model[chain->index[0]], sgwb_model[chain->index[0]], scaleogram[chain->index[0]]);
     if(flags->confNoise || flags->sgwbTemplate>=0)
     {
         sprintf(filename,"%s/final_full_noise_model.dat",data->dataDir);
-        print_noise_model_dynamic(data, scaleogram[chain->index[0]], filename);
+        print_noise_model_dynamic_coarse(data, scaleogram[chain->index[0]], Q, filename);
     }
-    
+
 
     // TODO this hasn't been adapted for WDM
     //print_noise_reconstruction(data, flags);
 
-    sprintf(filename,"%s/whitened_data.dat",data->dataDir);
-    // this was here, but it was already added??
-    //if(flags->confNoise)generate_full_covariance_matrix(inst_model[chain->index[0]]->psd,conf_model[chain->index[0]]->psd, data->Nchannel);
-    print_whitened_data(data, scaleogram[chain->index[0]], filename);
+    // print_whitened_data indexes scaleogram with the full-resolution
+    // wavelet_pixel_to_index, so it is only valid at Q=1.
+    if (Q == 1)
+    {
+        sprintf(filename,"%s/whitened_data.dat",data->dataDir);
+        print_whitened_data(data, scaleogram[chain->index[0]], filename);
+    }
 
     
+    free_coarse_stats(&stats);
+
     //print total run time
     stop = time(NULL);
-    
+
     printf(" ELAPSED TIME = %g seconds\n",(double)(stop-start));
-    
+
     return 0;
 }

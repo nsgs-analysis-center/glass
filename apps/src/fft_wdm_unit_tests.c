@@ -337,6 +337,76 @@ bool test_whitening_fft_3ch(const struct TDI* tdi, const struct Noise* noise, in
     }
 }
 
+/* Q-sweep regression helper for the WDM coarse-graining likelihood checks.
+ *
+ * Builds C_full via the supplied full-resolution covariance generator and
+ * computes the reference logL_full once. Then for each Q in Q_list (skipping
+ * any Q that doesn't divide NT) it builds C_coarse via the coarse generator,
+ * coarse-grains the data into the six P_ij sufficient statistics, and
+ * compares logL_coarse against logL_full.
+ *
+ * Pass: rel_err < tol_rel OR abs_err < tol_abs. Tight tolerances catch dropped
+ * factors of Q or 2 in the LL refactor; looser tolerances are appropriate for
+ * scenarios where C_full and C_coarse differ at Q>1 (e.g. smoothly varying
+ * modulation sampled at fine pixels vs cell midpoints).
+ */
+static void run_coarse_logL_q_sweep(
+    const char *scenario_name,
+    struct Data *data,
+    void (*build_full_cov)(struct Wavelets *, struct InstrumentModel *, struct ForegroundModel *, struct SGWBModel *, struct Noise *),
+    void (*build_coarse_cov)(struct Wavelets *, int, struct InstrumentModel *, struct ForegroundModel *, struct SGWBModel *, struct Noise *),
+    struct InstrumentModel *inst,
+    struct ForegroundModel *conf,
+    struct SGWBModel *sgwb,
+    const int *Q_list, int n_Q,
+    double tol_abs, double tol_rel,
+    struct UnitTestBlockInfo *tests)
+{
+    int NT = data->wdm->NT;
+
+    build_full_cov(data->wdm, inst, conf, sgwb, data->noise);
+    invert_noise_covariance_matrix(data->noise);
+    double logL_full = my_noise_log_likelihood_wavelet(data, data->noise);
+    printf("[%s] reference logL_full = %.12g\n", scenario_name, logL_full);
+
+    for (int qi = 0; qi < n_Q; qi++) {
+        int Q = Q_list[qi];
+        if (Q < 1 || NT % Q != 0) continue;
+        int Pdim = data->Nlayer * (NT / Q);
+
+        struct CoarseStats stats;
+        alloc_coarse_stats(&stats, data->Nlayer, Q, NT);
+        coarse_grain_wavelet_data(data, &stats);
+
+        struct Noise *coarse = malloc(sizeof(struct Noise));
+        alloc_noise(coarse, Pdim, data->Nlayer, data->Nchannel);
+        build_coarse_cov(data->wdm, Q, inst, conf, sgwb, coarse);
+        invert_noise_covariance_matrix(coarse);
+
+        double logL_coarse = my_noise_log_likelihood_wavelet_coarse(data, coarse, &stats);
+
+        double abs_err = fabs(logL_full - logL_coarse);
+        double rel_err = abs_err / fabs(logL_full);
+        char tname[192];
+        snprintf(tname, sizeof(tname),
+                "%s: logL_coarse(Q=%d) vs logL_full (rel %.3g, tol_rel %.3g, tol_abs %.3g)",
+                scenario_name, Q, rel_err, tol_rel, tol_abs);
+        ++tests->test_counter;
+        printf("Test %d: %s\n", tests->test_counter, tname);
+        printf("\tlogL_full   = %.12g\n", logL_full);
+        printf("\tlogL_coarse = %.12g\n", logL_coarse);
+        if (rel_err < tol_rel || abs_err < tol_abs) {
+            printf("\tpass\n");
+        } else {
+            printf("\tFAIL: |dlogL|=%g (rel %g) exceeds tolerance\n", abs_err, rel_err);
+            tests->fail_counter++;
+        }
+
+        free_coarse_stats(&stats);
+        free_noise(coarse);
+    }
+}
+
 int main(int argc, char *argv[])
 {
     _Static_assert(WAVELET_DURATION == 7680, "currently we have hardcoded the WAVELET_DURATION. Either fix it or go back");
@@ -797,24 +867,18 @@ int main(int argc, char *argv[])
         for (int qi = 0; qi < n_Q; qi++) {
             int Q = Q_list[qi];
             if (Q < 1 || wdm.NT % Q != 0) continue;
-            int Ncoarse = wdm.NT / Q;
-            int Pdim = data3.Nlayer * Ncoarse;
+            int Pdim = data3.Nlayer * (wdm.NT / Q);
 
-            double *Pxx = malloc(Pdim*sizeof(double));
-            double *Pyy = malloc(Pdim*sizeof(double));
-            double *Pzz = malloc(Pdim*sizeof(double));
-            double *Pxy = malloc(Pdim*sizeof(double));
-            double *Pxz = malloc(Pdim*sizeof(double));
-            double *Pyz = malloc(Pdim*sizeof(double));
-            coarse_grain_wavelet_data(&data3, Q, Pxx, Pyy, Pzz, Pxy, Pxz, Pyz);
+            struct CoarseStats stats;
+            alloc_coarse_stats(&stats, data3.Nlayer, Q, wdm.NT);
+            coarse_grain_wavelet_data(&data3, &stats);
 
             struct Noise *coarse = malloc(sizeof(struct Noise));
             alloc_noise(coarse, Pdim, data3.Nlayer, data3.Nchannel);
             generate_full_dynamic_covariance_matrix_coarse(data3.wdm, Q, inst_w, NULL, NULL, coarse);
             invert_noise_covariance_matrix(coarse);
 
-            double logL_coarse = my_noise_log_likelihood_wavelet_coarse(&data3, coarse,
-                    Pxx, Pyy, Pzz, Pxy, Pxz, Pyz, Q);
+            double logL_coarse = my_noise_log_likelihood_wavelet_coarse(&data3, coarse, &stats);
 
             double abs_err = fabs(logL_full - logL_coarse);
             double rel_err = abs_err / fabs(logL_full);
@@ -832,8 +896,7 @@ int main(int argc, char *argv[])
                 coarse_tests.fail_counter++;
             }
 
-            free(Pxx); free(Pyy); free(Pzz);
-            free(Pxy); free(Pxz); free(Pyz);
+            free_coarse_stats(&stats);
             free_noise(coarse);
         }
 
@@ -894,13 +957,9 @@ int main(int argc, char *argv[])
             invert_noise_covariance_matrix(data3.noise);
             double logL_full = my_noise_log_likelihood_wavelet(&data3, data3.noise);
 
-            double *Pxx = malloc(Pdim*sizeof(double));
-            double *Pyy = malloc(Pdim*sizeof(double));
-            double *Pzz = malloc(Pdim*sizeof(double));
-            double *Pxy = malloc(Pdim*sizeof(double));
-            double *Pxz = malloc(Pdim*sizeof(double));
-            double *Pyz = malloc(Pdim*sizeof(double));
-            coarse_grain_wavelet_data(&data3, Q, Pxx, Pyy, Pzz, Pxy, Pxz, Pyz);
+            struct CoarseStats stats;
+            alloc_coarse_stats(&stats, data3.Nlayer, Q, wdm.NT);
+            coarse_grain_wavelet_data(&data3, &stats);
 
             // Coarse C = the (constant) full C inside the window, taken at the
             // first fine pixel of the cell. Equality with the full LL is now
@@ -921,8 +980,7 @@ int main(int argc, char *argv[])
             }
             invert_noise_covariance_matrix(coarse);
 
-            double logL_coarse = my_noise_log_likelihood_wavelet_coarse(&data3, coarse,
-                    Pxx, Pyy, Pzz, Pxy, Pxz, Pyz, Q);
+            double logL_coarse = my_noise_log_likelihood_wavelet_coarse(&data3, coarse, &stats);
 
             double abs_err = fabs(logL_full - logL_coarse);
             double rel_err = abs_err / fabs(logL_full);
@@ -942,10 +1000,97 @@ int main(int argc, char *argv[])
                 coarse_tests.fail_counter++;
             }
 
-            free(Pxx); free(Pyy); free(Pzz);
-            free(Pxy); free(Pxz); free(Pyz);
+            free_coarse_stats(&stats);
             free_noise(coarse);
         }
+
+        free_instrument_model(inst_w);
+    }
+
+    // ---- Scenario C: dynamic cov gen + SGWB (no foreground) ----
+    //
+    // SGWB contribution is stationary (no time modulation), so C_full and
+    // C_coarse agree at every fine pixel for any Q. Tight tolerance.
+    //
+    // (The conf path can't be exercised here because the test fixture's tiny
+    // Tobs ≈ 64hr makes `initialize_galaxy_modulation` allocate gm->N = 0
+    // splines. Conf-path regression for the refactor is covered by smoke
+    // runs of `noise_wavelet_mcmc[_coarse]` instead.)
+    {
+        struct InstrumentModel *inst_w = malloc(sizeof(struct InstrumentModel));
+        initialize_instrument_model_wavelet(orbit, &data3, inst_w);
+
+        struct SGWBModel *sgwb_w = malloc(sizeof(struct SGWBModel));
+        initialize_sgwb_model_wavelet(orbit, &data3, sgwb_w, SGWB_TEMPLATE_POWERLAW);
+
+        generate_full_dynamic_covariance_matrix(data3.wdm, inst_w, NULL, sgwb_w, data3.noise);
+        memset(testtdi->X, 0, data3.N*sizeof(double));
+        memset(testtdi->Y, 0, data3.N*sizeof(double));
+        memset(testtdi->Z, 0, data3.N*sizeof(double));
+        MyAddNoiseWavelet(&data3, testtdi);
+
+        const int Q_list[] = {1, 2, 3, 5, 6, 10, 15, 30};
+        run_coarse_logL_q_sweep("dyn+sgwb", &data3,
+                generate_full_dynamic_covariance_matrix,
+                generate_full_dynamic_covariance_matrix_coarse,
+                inst_w, NULL, sgwb_w,
+                Q_list, sizeof(Q_list)/sizeof(Q_list[0]),
+                1e-6, 1e-10, &coarse_tests);
+
+        free_sgwb_model(sgwb_w);
+        free_instrument_model(inst_w);
+    }
+
+    // ---- Scenario D: stationary cov gen + SGWB ----
+    //
+    // Exercises the `_stationary_` covariance generator pair. Stationary cov
+    // gen has no modulation cache so all Q should match exactly.
+    {
+        struct InstrumentModel *inst_w = malloc(sizeof(struct InstrumentModel));
+        initialize_instrument_model_wavelet(orbit, &data3, inst_w);
+
+        struct SGWBModel *sgwb_w = malloc(sizeof(struct SGWBModel));
+        initialize_sgwb_model_wavelet(orbit, &data3, sgwb_w, SGWB_TEMPLATE_POWERLAW);
+
+        generate_full_stationary_covariance_matrix(data3.wdm, inst_w, NULL, sgwb_w, data3.noise);
+        memset(testtdi->X, 0, data3.N*sizeof(double));
+        memset(testtdi->Y, 0, data3.N*sizeof(double));
+        memset(testtdi->Z, 0, data3.N*sizeof(double));
+        MyAddNoiseWavelet(&data3, testtdi);
+
+        const int Q_list[] = {1, 2, 3, 5, 6, 10, 15, 30};
+        run_coarse_logL_q_sweep("stat+sgwb", &data3,
+                generate_full_stationary_covariance_matrix,
+                generate_full_stationary_covariance_matrix_coarse,
+                inst_w, NULL, sgwb_w,
+                Q_list, sizeof(Q_list)/sizeof(Q_list[0]),
+                1e-6, 1e-10, &coarse_tests);
+
+        free_sgwb_model(sgwb_w);
+        free_instrument_model(inst_w);
+    }
+
+    // ---- Scenario E: stationary cov gen, instrument only ----
+    //
+    // Pairs with Scenario A (dynamic cov, instrument only) to lock in that
+    // the two cov gens produce the same numerics for the no-conf case.
+    {
+        struct InstrumentModel *inst_w = malloc(sizeof(struct InstrumentModel));
+        initialize_instrument_model_wavelet(orbit, &data3, inst_w);
+
+        generate_full_stationary_covariance_matrix(data3.wdm, inst_w, NULL, NULL, data3.noise);
+        memset(testtdi->X, 0, data3.N*sizeof(double));
+        memset(testtdi->Y, 0, data3.N*sizeof(double));
+        memset(testtdi->Z, 0, data3.N*sizeof(double));
+        MyAddNoiseWavelet(&data3, testtdi);
+
+        const int Q_list[] = {1, 2, 3, 5, 6, 10, 15, 30};
+        run_coarse_logL_q_sweep("stat+inst", &data3,
+                generate_full_stationary_covariance_matrix,
+                generate_full_stationary_covariance_matrix_coarse,
+                inst_w, NULL, NULL,
+                Q_list, sizeof(Q_list)/sizeof(Q_list[0]),
+                1e-6, 1e-10, &coarse_tests);
 
         free_instrument_model(inst_w);
     }
