@@ -910,9 +910,6 @@ void generate_full_dynamic_covariance_matrix_coarse(struct Wavelets *wdm, int Q,
 
     if (conf) galaxy_modulation_cache_for_Q(conf->modulation, wdm, Q);
 
-    // j outer, q inner: writes to coarse->C[a][b][k] are contiguous in q.
-    // Layout-equivalent to the full-res wavelet_pixel_to_index linearization
-    // when Q=1 (Ncoarse=NT, so k = q + jrel*NT = i + jrel*NT).
     for(int j=jmin; j<jmax; j++)
     {
         int jrel = j - jmin;
@@ -1133,19 +1130,18 @@ static inline double wavelet_nwip_linear(const double* __restrict a, const doubl
 // Per-pixel multivariate Gaussian log-likelihood contribution. Q absorbs the
 // Welch sufficient-statistic weighting: Q=1 is the standard Gaussian (one fine
 // pixel = one degree of freedom); Q>1 is the Wishart sufficient-statistic form
-// with the in-cell sample (cross-)covariances P_ab as observed data. The
-// off-diagonal factor of 2 is baked into the inv_xy/inv_xz/inv_yz weights.
+// with the in-cell sample (cross-)covariances P_ab as observed data.
 //
-// Documentation note (was inline below): the exact fine-grid multivariate
-// Gaussian log-likelihood summed over the Q fine pixels in each coarse window
-// rewrites as the Wishart form with P_{ab,mq} = (1/Q) sum_{i in cell q}
-// w_{a,mi} w_{b,mi} -- not a Gaussian-on-P or CLT approximation. The note
-// (Sec. "Welch and Bartlett-like coarse-graining") presents the equivalent
-// Gamma form for the diagonal/scalar case. For inference, P_{ab,mq} is fixed
-// data, and the Gamma form differs only by data-and-Q terms ((Q/2-1)log P,
-// log Gamma(Q/2), log(2/Q)) that are constants w.r.t. the model and don't
-// affect the posterior. The only approximation is that C is constant within
-// each coarse window; this is shared by both forms (and is exact at Q=1).
+// Note about this likelihood:
+// When Qd is 1, this is just the normal Gaussian / Whittle likelihood
+// When Qd  > 1, this is mostly equivalent to a Gamma likelihood
+// (see appendix of WDM note!)
+// But essentially, this only differs from the Gamma by dropping terms that only depend
+// on Q or the data, but are noise-model-independent. These don't affect the posterior
+//
+// TODO: in practice, the non-stationarity changes this distribution from a Gamma
+// see WDM note. It's an infinite sum of Gammas
+
 static inline double per_pixel_logL_contribution(
         double Qd,
         double pxx, double pyy, double pzz,
@@ -1456,9 +1452,9 @@ void default_sgwb_injection(double* params, const SGWB_t SGWB_type) {
             break;
         case SGWB_TEMPLATE_LOGNORMAL:
             // log10 A, log10 fstar [Hz], log10 Delta
-            params[0] = -5.0;
-            //params[0] = -2.5;
-            params[1] = -2.5;
+            //params[0] = -5.0;
+            params[0] = -2.5;
+            params[1] = log(2e-3) / log(10.0);
             params[2] = 0.0;
             break;
         case SGWB_TEMPLATE_PHASE_TRANSITION:

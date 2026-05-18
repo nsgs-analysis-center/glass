@@ -194,9 +194,6 @@ int main(int argc, char *argv[])
         fprintf(stderr, "--coarse-Q=%d must divide wdm->NT=%d\n", Q, data->wdm->NT);
         exit(-1);
     }
-    // Stationary covariance is time-invariant; any Ncoarse>1 just replicates
-    // identical entries through the cov build, 3x3 inverter, and LL. Collapse
-    // to Ncoarse=1 (Q=NT) for stationary runs.
     if (flags->stationary && Q != data->wdm->NT) {
         printf("[stationary] overriding --coarse-Q=%d to NT=%d (stationary covariance does not vary in time; finer Q is redundant work)\n", Q, data->wdm->NT);
         Q = data->wdm->NT;
