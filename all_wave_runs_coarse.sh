@@ -2,15 +2,14 @@
 # don't exit if a command errors
 set +e
 
-NSTEPS=20000
+NSTEPS=1000
 DURATION=$((7680*338*24))
 NCH=6
-COARSE_Q=13
 
-RUNDIR=wdmruns-coarse2/stat-noise-conf-pl-detection
+RUNDIR=wdmruns-coarse2/stat-noise-conf-ln-detection
 mkdir -p $RUNDIR
-nice -n 15 build/apps/src/noise_wavelet_mcmc_coarse \
-        --steps $NSTEPS \
+nice -n 15 build/apps/src/noise_wavelet_mcmc \
+        --steps $((10*$NSTEPS)) \
         --chains $NCH \
         --threads $NCH \
         --cheat \
@@ -19,15 +18,31 @@ nice -n 15 build/apps/src/noise_wavelet_mcmc_coarse \
         --duration $DURATION \
         --stationary \
         --conf-noise \
-        --sgwb-template 0 \
-        --coarse-Q $COARSE_Q \
+        --sgwb-template 1 \
+        --coarse-Q 1 \
         --rundir $RUNDIR \
         --sim-noise
 #        --stationary-conf \
 
-RUNDIR=wdmruns-coarse2/noise-conf-pl-169-detection
+RUNDIR=wdmruns-coarse2/noise-conf-ln-169-detection
 mkdir -p $RUNDIR
-nice -n 15 build/apps/src/noise_wavelet_mcmc_coarse \
+nice -n 15 build/apps/src/noise_wavelet_mcmc \
+        --steps $((10*$NSTEPS)) \
+        --chains $NCH \
+        --threads $NCH \
+        --cheat \
+        --fmin 5e-4 \
+        --fmax 8e-3 \
+        --duration $DURATION \
+        --conf-noise \
+        --sgwb-template 1 \
+        --coarse-Q 169 \
+        --rundir $RUNDIR \
+        --sim-noise
+
+RUNDIR=wdmruns-coarse2/noise-conf-ln-1-detection
+mkdir -p $RUNDIR
+nice -n 15 build/apps/src/noise_wavelet_mcmc \
         --steps $NSTEPS \
         --chains $NCH \
         --threads $NCH \
@@ -36,7 +51,7 @@ nice -n 15 build/apps/src/noise_wavelet_mcmc_coarse \
         --fmax 8e-3 \
         --duration $DURATION \
         --conf-noise \
-        --sgwb-template 0 \
-        --coarse-Q 169 \
+        --sgwb-template 1 \
+        --coarse-Q 1 \
         --rundir $RUNDIR \
         --sim-noise

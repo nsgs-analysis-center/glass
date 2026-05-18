@@ -10,7 +10,7 @@
 #OMP_NUM_THREADS=1 build/apps/src/noise_wavelet_mcmc --sim-noise --conf-noise --sgwb-template 0 --steps 500 --chains 1 --cheat --fmin 1e-3 --fmax 1.1e-3 --duration $((60*60*24*30*12)) --threads 1
 #build/apps/src/noise_wavelet_mcmc \
 #OMP_NUM_THREADS=1 lldb -- build/apps/src/noise_wavelet_mcmc \
-lldb -- build/apps/src/noise_wavelet_mcmc \
+build/apps/src/noise_wavelet_mcmc \
         --steps 10 \
         --chains 10 \
         --threads 10 \
