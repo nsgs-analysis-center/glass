@@ -319,7 +319,6 @@ int main(int argc, char *argv[])
         alloc_noise(scaleogram[ic], data->Nlayer*Ncoarse, data->Nlayer, data->Nchannel);
 
         scaleogram[ic]->kmin = data->wdm->kmin;
-        scaleogram[ic]->kmax = data->wdm->kmax;
         for (size_t j=0; j < (size_t)data->Nlayer; j++)
             for (size_t q=0; q < (size_t)Ncoarse; q++)
                 scaleogram[ic]->f[q + j*Ncoarse] = (data->lmin + j)*data->wdm->df;

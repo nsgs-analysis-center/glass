@@ -233,6 +233,10 @@ double spline_integration(struct CubicSpline *spline, double xi, double xf)
     return 2.0*simpson_integration_3(yi,ym,yf,dx); //TODO: check this factor of two w.r.t. simpson integration in other places
 }
 
+inline double signed_log_div(double num, double logdetC) {
+    return copysign(exp(log(fabs(num))-logdetC), num);
+}
+
 void invert_noise_covariance_matrix(struct Noise *noise)
 {
     int X,Y,Z,A,E;
@@ -269,9 +273,6 @@ void invert_noise_covariance_matrix(struct Noise *noise)
                 double num;
                 double logdetC = log(d1) + log(d2) + log(d3);
                 noise->logdetC[n] = logdetC;
-                inline double signed_log_div(double num, double logdetC) {
-                    return copysign(exp(log(fabs(num))-logdetC), num)
-                }
                 noise->invC[X][X][n] = signed_log_div(cyy*czz - cyz*cyz, logdetC);
                 noise->invC[Y][Y][n] = signed_log_div(czz*cxx - cxz*cxz, logdetC);
                 noise->invC[Z][Z][n] = signed_log_div(cxx*cyy - cxy*cxy, logdetC);
