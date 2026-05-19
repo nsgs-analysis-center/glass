@@ -124,7 +124,7 @@ void alloc_sgwb_model(struct SGWBModel *model, int Ndata, int Nlayer, int Nchann
     model->grid_cache = NULL;
     if (global_SGWBResponse == NULL) {
         model->R = malloc(sizeof(struct SGWBResponse)); // memory leak, only once per run
-        alloc_pop_sgwb_response(model->R,"./sgwb_response_xyz1.dat");
+        alloc_pop_sgwb_response(model->R,"./sgwb_response_xyz2.dat");
         global_SGWBResponse = model->R;
     } else {
         model->R = global_SGWBResponse;
