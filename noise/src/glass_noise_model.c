@@ -222,12 +222,12 @@ void free_instrument_model(struct InstrumentModel *model)
 }
 
 void free_galaxy_modulation(struct GalaxyModulation *gm) {
-    if(gm->XX_spline) free(XX_spline);
-    if(gm->YY_spline) free(YY_spline);
-    if(gm->ZZ_spline) free(ZZ_spline);
-    if(gm->XY_spline) free(XY_spline);
-    if(gm->XZ_spline) free(XZ_spline);
-    if(gm->YZ_spline) free(YZ_spline);
+    if(gm->XX_spline) free_cubic_spline(XX_spline);
+    if(gm->YY_spline) free_cubic_spline(YY_spline);
+    if(gm->ZZ_spline) free_cubic_spline(ZZ_spline);
+    if(gm->XY_spline) free_cubic_spline(XY_spline);
+    if(gm->XZ_spline) free_cubic_spline(XZ_spline);
+    if(gm->YZ_spline) free_cubic_spline(YZ_spline);
     if(gm->cache_XX) free(gm->cache_XX);
     if(gm->cache_YY) free(gm->cache_YY);
     if(gm->cache_ZZ) free(gm->cache_ZZ);
