@@ -5,11 +5,13 @@ requires-python = ">=3.13"
 dependencies = [
     "corner>=2.2.3",
     "jupyterlab>=4.4.6",
+    "lisaorbits>=3.0.3",
     "matplotlib>=3.10.5",
     "numpy>=2.3.2",
     "pandas>=2.3.1",
     "scipy>=1.16.3",
     "seaborn>=0.13.2",
+    "segwo>=1.2.0",
     "snakebar>=0.1.1",
     "wdmwavelettransforms>=0.0.1",
 ]
