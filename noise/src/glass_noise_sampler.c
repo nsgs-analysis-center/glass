@@ -500,7 +500,7 @@ void noise_instrument_model_mcmc(struct Orbit *orbit, struct Data *data, struct 
                 do
                 {
                     j = (int)(rand_r_U_0_1(&chain->r[ic])* (double)model_x->Nlink);
-                }while(i!=j);
+                }while(i==j);
                 
                 acc_jump = scale * Sacc * rand_r_N_0_1(&chain->r[ic]);
                 oms_jump = scale * Soms * rand_r_N_0_1(&chain->r[ic]);
@@ -708,8 +708,10 @@ void noise_foreground_model_mcmc(struct Data *data, struct InstrumentModel *nois
         
         //check priors
         for(int n=0; n<model_y->Nparams; n++)
-            if(model_y->sgal[n] < prior[n][0] || model_y->sgal[n] > prior[n][1])
+            if(model_y->sgal[n] < prior[n][0] || model_y->sgal[n] > prior[n][1]) {
                 logPy = -INFINITY;
+                break;
+            }
         
         //get noise covariance matrix for initial parameters
         if(logPy > -INFINITY && !flags->prior)
@@ -736,7 +738,8 @@ void noise_foreground_model_mcmc(struct Data *data, struct InstrumentModel *nois
         {
             copy_foreground_model(model_y, model_x);
             noise->logL = model_x->logL;
-            sgwb->logL = model_x->logL;
+            if (sgwb)
+                sgwb->logL = model_x->logL;
         }
     }
  
@@ -778,80 +781,17 @@ void noise_sgwb_model_mcmc(struct Data *data, struct InstrumentModel *noise, str
 
     
     //set priors
-    double **prior = malloc(sizeof(double *)*model_x->Nparams);
-    for(int n=0; n<model_x->Nparams; n++)
-        prior[n] = malloc(sizeof(double)*2);
+    const double (*prior)[2] = default_sgwb_priors[model_x->SGWB_type];
     
     //set correlation matrix
-    double *acc_jump_vec = malloc(model_x->Nparams*sizeof(double));
-    double **correlation_matrix = malloc(model_x->Nparams*sizeof(double *));
+    double acc_jump_vec[model_x->Nparams];
+    double correlation_matrix[model_x->Nparams][model_x->Nparams];
+    memset(correlation_matrix, 0, sizeof(double)*model_x->Nparams*model_x->Nparams);
     for(int n=0; n<model_x->Nparams; n++)
     {
-        correlation_matrix[n] = malloc(model_x->Nparams*sizeof(double));
         correlation_matrix[n][n] = +1.0;
     }
     
-    
-    _Static_assert(SGWB_TEMPLATE_COUNT == 3, "Did you add an SGWB template? Edit this switch case, it needs to be exhaustive.");
-    switch (model_x->SGWB_type) {
-        case SGWB_TEMPLATE_POWERLAW:
-            //log(A_p)
-            prior[0][0] = -16.0;
-            prior[0][1] = -4.0;
-
-            //alpha_p
-            prior[1][0] = -3.0;
-            prior[1][1] =  1.0;
-            correlation_matrix[0][1] = correlation_matrix[1][0] = 0.0;
-            break;
-        case SGWB_TEMPLATE_LOGNORMAL:
-            //log10 A
-            prior[0][0] = -5.0;
-            prior[0][1] =  0.0;
-
-            //log10 fstar [Hz]
-            prior[1][0] = -5.0;
-            prior[1][1] =  0.0;
-
-            //log10 Delta
-            prior[2][0] = -2.0;
-            prior[2][1] =  1.0;
-
-            correlation_matrix[0][1] = correlation_matrix[1][0] = 0.0;
-            correlation_matrix[0][2] = correlation_matrix[2][0] = 0.0;
-            correlation_matrix[1][2] = correlation_matrix[2][1] = 0.0;
-            break;
-        case SGWB_TEMPLATE_PHASE_TRANSITION:
-            //rb
-            prior[0][0] =  0.1;
-            prior[0][1] = 10.0;
-
-            //b
-            prior[1][0] =  0.0;
-            prior[1][1] =  8.0;
-
-            //log10 Ap
-            prior[2][0] = -22.0;
-            prior[2][1] = -4.0;
-
-            //log10 fp [Hz]
-            prior[3][0] = -5.0;
-            prior[3][1] =  0.0;
-
-            correlation_matrix[0][1] = correlation_matrix[1][0] = 0.0;
-            correlation_matrix[0][2] = correlation_matrix[2][0] = 0.0;
-            correlation_matrix[0][3] = correlation_matrix[3][0] = 0.0;
-            correlation_matrix[1][2] = correlation_matrix[2][1] = 0.0;
-            correlation_matrix[1][3] = correlation_matrix[3][1] = 0.0;
-            correlation_matrix[2][3] = correlation_matrix[3][2] = 0.0;
-            break;
-        default:
-            fprintf(stderr, "SGWB %s has no defined priors! Add them in noise_sgwb_model_mcmc", SGWB_TEMPLATE_NAMES[model_x->SGWB_type]);
-            exit(1);
-            break;
-    }
-    //printf("prior init\n");
-        
     for(int mc=0; mc<10; mc++)
     {
         
@@ -984,50 +924,13 @@ void noise_sgwb_model_mcmc_wavelet_dumb(struct Data *data, struct InstrumentMode
             return;
         }
     }
-    const int debug_inj = 0;
-    if (debug_inj > 0) {
-        switch (debug_inj) {
-            case 1:
-                model_y->params[0] = -9.005576;
-                model_y->params[1] =  0.544482;
-                break;
-            case 2:
-                model_y->params[0] = -8.;
-                model_y->params[1] = 2./3.;
-                break;
-            case 3:
-                model_y->params[0] = -14.0;
-                model_y->params[1] = 0.0;
-                break;
-        }
-    }
     generate_sgwb_model_wavelet(data->wdm, model_y);
     if (flags->stationary)
         generate_full_stationary_covariance_matrix_coarse(data->wdm, stats->Q, noise, galaxy, model_y, psd);
     else
         generate_full_dynamic_covariance_matrix_coarse(data->wdm, stats->Q, noise, galaxy, model_y, psd);
     invert_noise_covariance_matrix(psd);
-    // DEBUG note: this seems to work just fine, same as injection...
-    if (debug_inj > 0) {
-        const double rtol = 1e-8;
-        print_noise_model_dynamic(data, psd, "./debug_scaleogram.dat");
-        // invC test. C*invC == id?
-        for (size_t k=0; k < data->N; k++) {
-            for (size_t i=0; i<3; i++) {
-                for (size_t j=0; j<3; j++) {
-                    double prod = 0.0;
-                    for (size_t l=0; l<3; l++) {
-                        prod += psd->invC[i][l][k] * psd->C[l][j][k];
-                    }
-                    if ( ( (i != j) && fabs(prod) > rtol) || ((i==j) && fabs(prod - 1.0) > rtol) )
-                        printf("Inverse is bad. At k==%zu, (C*invC)[%zu][%zu] == %lg\n", k, i, j, prod);
-                }
-            }
-        }
-    }
     model_y->logL = my_noise_log_likelihood_wavelet_coarse(data, psd, stats);
-    //model_y->logL = -0.5*(pow((model_y->params[0] - -12.0) / 0.1,2) + pow((model_y->params[1] - 0) / 0.1, 2));
-
 
     double logH = (model_y->logL - model_x->logL)/chain->temperature[ic];
     double loga = log(rand_r_U_0_1(&chain->r[ic]));
@@ -1150,7 +1053,7 @@ void noise_instrument_model_mcmc_wavelet(struct Orbit *orbit, struct Data *data,
                 do
                 {
                     j = (int)(rand_r_U_0_1(&chain->r[ic])* (double)model_x->Nlink);
-                }while(i!=j);
+                }while(i==j);
                 
                 acc_jump = scale * Sacc * rand_r_N_0_1(&chain->r[ic]);
                 oms_jump = scale * Soms * rand_r_N_0_1(&chain->r[ic]);
@@ -1405,11 +1308,11 @@ void noise_sgwb_model_mcmc_wavelet(struct Data *data, struct InstrumentModel *no
     const double (*prior)[2] = default_sgwb_priors[model_x->SGWB_type];
     
     //set correlation matrix
-    double *acc_jump_vec = malloc(model_x->Nparams*sizeof(double));
-    double **correlation_matrix = malloc(model_x->Nparams*sizeof(double *));
+    double acc_jump_vec[model_x->Nparams];
+    double correlation_matrix[model_x->Nparams][model_x->Nparams];
+    memset(correlation_matrix, 0, sizeof(double)*model_x->Nparams*model_x->Nparams);
     for(int n=0; n<model_x->Nparams; n++)
     {
-        correlation_matrix[n] = malloc(model_x->Nparams*sizeof(double));
         correlation_matrix[n][n] = +1.0;
     }
         
@@ -1420,13 +1323,13 @@ void noise_sgwb_model_mcmc_wavelet(struct Data *data, struct InstrumentModel *no
         /* get proposed noise parameters */
         
         //get jump sizes
-        // TODO: this looks statistically sus
         double scale;
-        if(rand_r_U_0_1(&chain->r[ic])>0.75)
+        double u = rand_r_U_0_1(&chain->r[ic]);
+        if(u>0.75)
             scale = 0.1;
-        else if(rand_r_U_0_1(&chain->r[ic])>0.5)
+        else if(u>0.5)
             scale = 0.01;
-        else if(rand_r_U_0_1(&chain->r[ic])>0.25)
+        else if(u>0.25)
             scale = 0.001;
         else
             scale = 0.0001;
@@ -1455,7 +1358,6 @@ void noise_sgwb_model_mcmc_wavelet(struct Data *data, struct InstrumentModel *no
                 model_y->params[j] += correlation_matrix[i][j] * acc_jump_vec[j];
 
         }
-        //printf("got proposal %g %g\n", model_y->params[0], model_y->params[1]);
         
         //check priors
         for(int n=0; n<model_y->Nparams; n++)
@@ -1490,13 +1392,9 @@ void noise_sgwb_model_mcmc_wavelet(struct Data *data, struct InstrumentModel *no
             //printf("accepted %g %g %g\n", model_x->params[0], model_x->params[1], model_x->logL);
             copy_sgwb_model(model_y, model_x);
             noise->logL = model_x->logL;
-            galaxy->logL = model_x->logL;
+            if (galaxy)
+                galaxy->logL = model_x->logL;
         }
     }
- 
-    free(acc_jump_vec);
-    for(int n=0; n<model_x->Nparams; n++)
-        free(correlation_matrix[n]);
-    free(correlation_matrix);
 }
 

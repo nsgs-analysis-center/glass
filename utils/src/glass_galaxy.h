@@ -87,9 +87,8 @@ void rotate_galtoeclip(double *xg, double *xe);
 void rotate_ecliptogal(double *xg, double *xe);
 
 void initialize_galaxy_modulation(struct GalaxyModulation *gm, struct Wavelets *wdm, struct Orbit *orbit, double Tobs, double t0);
+void free_galaxy_modulation(struct GalaxyModulation *gm);
 void galaxy_modulation(struct GalaxyModulation *gm, double *params);
 
-/* Build (or refresh) the per-time-slice modulation cache for the given (wdm, Q).
- * Cheap no-op when (Q, NT/Q) match the cached state. Must be called after
- * galaxy_modulation() has fitted the splines; the cache mirrors them. */
+// Build (or refresh) the per-time-slice modulation cache for the given (wdm, Q).
 void galaxy_modulation_cache_for_Q(struct GalaxyModulation *gm, struct Wavelets *wdm, int Q);

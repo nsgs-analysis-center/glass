@@ -266,14 +266,19 @@ void invert_noise_covariance_matrix(struct Noise *noise)
                 double d2 = cyy - cxy*cxy/d1;
                 double t  = cyz - cxy*cxz/d1;
                 double d3 = (czz - cxz*cxz/d1) - (t*t)/d2;
+                double num;
                 double logdetC = log(d1) + log(d2) + log(d3);
                 noise->logdetC[n] = logdetC;
-                noise->invC[X][X][n] = exp(log(cyy*czz - cyz*cyz) - logdetC);
-                noise->invC[Y][Y][n] = exp(log(czz*cxx - cxz*cxz) - logdetC);
-                noise->invC[Z][Z][n] = exp(log(cxx*cyy - cxy*cxy) - logdetC);
-                noise->invC[X][Y][n] = exp(log(cxz*cyz - czz*cxy) - logdetC);
-                noise->invC[X][Z][n] = exp(log(cxy*cyz - cxz*cyy) - logdetC);
-                noise->invC[Y][Z][n] = exp(log(cxy*cxz - cxx*cyz) - logdetC);
+                inline double signed_log_div(double num, double logdetC) {
+                    return copysign(exp(log(fabs(num))-logdetC), num)
+                }
+                noise->invC[X][X][n] = signed_log_div(cyy*czz - cyz*cyz, logdetC);
+                noise->invC[Y][Y][n] = signed_log_div(czz*cxx - cxz*cxz, logdetC);
+                noise->invC[Z][Z][n] = signed_log_div(cxx*cyy - cxy*cxy, logdetC);
+                // note that these can be negative even with pos. def. C, need sign-safety here
+                noise->invC[X][Y][n] = signed_log_div(cxz*cyz - czz*cxy, logdetC);
+                noise->invC[X][Z][n] = signed_log_div(cxy*cyz - cxz*cyy, logdetC);
+                noise->invC[Y][Z][n] = signed_log_div(cxy*cxz - cxx*cyz, logdetC);
                 noise->invC[Y][X][n] = noise->invC[X][Y][n];
                 noise->invC[Z][X][n] = noise->invC[X][Z][n];
                 noise->invC[Z][Y][n] = noise->invC[Y][Z][n];
@@ -823,7 +828,8 @@ void glass_inverse_real_fft_outplace(double *freqdata, double *timedata, int N)
 
 void glass_inverse_real_fft(double *data, int N)
 {
-    // TODO: with creative pointer casting we can probably avoid any allocs here
+    // TODO: this is inplace but doesn't have enough bins for the whole signal
+    // should probably force DC bin=0 not Nyquist
     kiss_fftr_cfg cfg = kiss_fftr_alloc(N, 1, NULL, NULL); // 0 indicates forward FFT;
     kiss_fft_scalar *timedata = malloc(N*sizeof(kiss_fft_scalar));
     kiss_fft_cpx    *freqdata = malloc((N/2+1)*sizeof(kiss_fft_cpx));
@@ -844,32 +850,6 @@ void glass_inverse_real_fft(double *data, int N)
     free(timedata);
     free(freqdata);
 }
-
-/*
-void glass_inverse_real_fft(double *data, int N)
-{
-    // TODO: with creative pointer casting we can probably avoid any allocs here
-    kiss_fftr_cfg cfg = kiss_fftr_alloc(N, 1, NULL, NULL); // 0 indicates forward FFT;
-    kiss_fft_scalar *timedata = malloc(N*sizeof(kiss_fft_scalar));
-    kiss_fft_cpx    *freqdata = malloc((N/2+1)*sizeof(kiss_fft_cpx));
-
-    for(int i=0; i<N/2; i++)
-    {
-        freqdata[i].r = data[2*i];
-        freqdata[i].i = data[2*i+1];
-    }
-    
-    // Perform the inverse rFFT
-    kiss_fftri(cfg, freqdata, timedata);
-    
-    for(int i=0; i<N; i++)  data[i] = timedata[i]/N;
-    
-    // Clean up and free memory
-    kiss_fftr_free(cfg);
-    free(timedata);
-    free(freqdata);
-}
-*/
 
 void CubicSplineGLASS(int N, double *x, double *y, int Nint, double *xint, double *yint)
 {

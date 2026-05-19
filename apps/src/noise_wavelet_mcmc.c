@@ -210,7 +210,6 @@ int main(int argc, char *argv[])
     if(flags->strainData)
         ReadData(data,orbit,flags);
     else if(flags->simNoise) {
-#if 1
         // inject some noise
         struct InstrumentModel inst_inj = {0};
         initialize_instrument_model_wavelet(orbit, data, &inst_inj);
@@ -243,73 +242,10 @@ int main(int argc, char *argv[])
         memcpy(data->dwt->Y, data->tdi->Y, band_bytes);
         memcpy(data->dwt->Z, data->tdi->Z, band_bytes);
 
-        //__builtin_debugtrap();
+        /*
         write_wdm_data(data, data->tdi->X, "./debug_wdm_noise.dat");
         write_wdm_data(data, data->noise->C[0][0], "./debug_wdm_C00.dat");
-#else
-
-        // HACK: generate noise in FFT domain and transform to WDM
-        // This tests whether the WDM noise model normalization is correct
-        struct Wavelets *wdm = data->wdm;
-        int NF = wdm->NF;
-        int NT = wdm->NT;
-        int ND = NF * NT;
-        int NFFT_full = ND / 2 + 1;
-
-        struct Data data2 = {0};
-        data2.NFFT = NFFT_full;
-        data2.fmin = 0.0;
-        data2.T = data->T;
-        data2.Nchannel = 3;
-        struct InstrumentModel *inst_fft = malloc(sizeof(struct InstrumentModel));
-        initialize_instrument_model(orbit, &data2, inst_fft);
-        data2.noise = inst_fft->psd;
-
-        struct TDI *fft_tdi = malloc(sizeof(struct TDI));
-        alloc_tdi(fft_tdi, 2*NFFT_full, 3);
-        MyAddNoise(&data2, fft_tdi);
-
-        // data->dwt and data->noise->C are sized for the active band [lmin, lmax)
-        // only. The transform helpers write a full NF*NT scalogram, so route them
-        // through scratch and copy out the active layers.
-        double *full_buf = malloc(ND * sizeof(double));
-        size_t band_bytes = (size_t)data->Nlayer * NT * sizeof(double);
-        size_t band_off   = (size_t)data->lmin * NT;
-
-        wavelet_transform_freq(wdm, fft_tdi->X, full_buf);
-        write_wdm_data(wdm, full_buf, "./debug_fftwdm_noise.dat");
-        memcpy(data->dwt->X, full_buf + band_off, band_bytes);
-
-        wavelet_transform_freq(wdm, fft_tdi->Y, full_buf);
-        memcpy(data->dwt->Y, full_buf + band_off, band_bytes);
-
-        wavelet_transform_freq(wdm, fft_tdi->Z, full_buf);
-        memcpy(data->dwt->Z, full_buf + band_off, band_bytes);
-
-        // Wavelet likelihood reads data->tdi (see ReadData convention)
-        memcpy(data->tdi->X, data->dwt->X, band_bytes);
-        memcpy(data->tdi->Y, data->dwt->Y, band_bytes);
-        memcpy(data->tdi->Z, data->dwt->Z, band_bytes);
-
-        for (int ich=0; ich<3; ich++)
-            for (int jch=0; jch<3; jch++) {
-                stationary_dft_psd_to_wdm_psd_approx(wdm, inst_fft->psd->C[ich][jch], full_buf);
-                if (ich==0 && jch==0)
-                    write_wdm_data(wdm, full_buf, "./debug_fftwdm_psd.dat");
-                memcpy(data->noise->C[ich][jch], full_buf + band_off, band_bytes);
-            }
-
-        write_fft_data(inst_fft->psd->f[1] - inst_fft->psd->f[0],
-                NFFT_full, fft_tdi->X, "./debug_fft_noise.dat");
-        write_time_data(inst_fft->psd->f[1] - inst_fft->psd->f[0],
-                NFFT_full, inst_fft->psd->C[0][0], "./debug_fft_psd.dat");
-
-        __builtin_debugtrap();
-
-        free(full_buf);
-        free_tdi(fft_tdi);
-        free_instrument_model(inst_fft);
-#endif
+        */
 
     }
 
@@ -383,6 +319,7 @@ int main(int argc, char *argv[])
         alloc_noise(scaleogram[ic], data->Nlayer*Ncoarse, data->Nlayer, data->Nchannel);
 
         scaleogram[ic]->kmin = data->wdm->kmin;
+        scaleogram[ic]->kmax = data->wdm->kmax;
         for (size_t j=0; j < (size_t)data->Nlayer; j++)
             for (size_t q=0; q < (size_t)Ncoarse; q++)
                 scaleogram[ic]->f[q + j*Ncoarse] = (data->lmin + j)*data->wdm->df;
@@ -640,6 +577,7 @@ int main(int argc, char *argv[])
     stop = time(NULL);
 
     printf(" ELAPSED TIME = %g seconds\n",(double)(stop-start));
+    // TODO cleanup our mallocs?
 
     return 0;
 }

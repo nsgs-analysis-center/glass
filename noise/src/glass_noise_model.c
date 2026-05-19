@@ -123,7 +123,7 @@ void alloc_sgwb_model(struct SGWBModel *model, int Ndata, int Nlayer, int Nchann
     alloc_noise(model->psd, Ndata, Nlayer, Nchannel);
     model->grid_cache = NULL;
     if (global_SGWBResponse == NULL) {
-        model->R = malloc(sizeof(struct SGWBResponse)); // memory leak
+        model->R = malloc(sizeof(struct SGWBResponse)); // memory leak, only once per run
         alloc_pop_sgwb_response(model->R,"./sgwb_response_xyz1.dat");
         global_SGWBResponse = model->R;
     } else {
@@ -221,9 +221,25 @@ void free_instrument_model(struct InstrumentModel *model)
     free(model);
 }
 
+void free_galaxy_modulation(struct GalaxyModulation *gm) {
+    if(gm->XX_spline) free(XX_spline);
+    if(gm->YY_spline) free(YY_spline);
+    if(gm->ZZ_spline) free(ZZ_spline);
+    if(gm->XY_spline) free(XY_spline);
+    if(gm->XZ_spline) free(XZ_spline);
+    if(gm->YZ_spline) free(YZ_spline);
+    if(gm->cache_XX) free(gm->cache_XX);
+    if(gm->cache_YY) free(gm->cache_YY);
+    if(gm->cache_ZZ) free(gm->cache_ZZ);
+    if(gm->cache_XY) free(gm->cache_XY);
+    if(gm->cache_XZ) free(gm->cache_XZ);
+    if(gm->cache_YZ) free(gm->cache_YZ);
+}
+
 void free_foreground_model(struct ForegroundModel *model)
 {
     if (model->grid_cache) free_foreground_model(model->grid_cache);
+    if (model->modulation) free_galaxy_modulation(model->modulation);
     free_noise(model->psd);
     free(model->sgal);
     free(model);
@@ -403,6 +419,7 @@ void generate_instrument_noise_model(struct Orbit *orbit, struct InstrumentModel
         x = f/orbit->fstar;
         f2= f*f;
         
+        /*
         //at low frequency use linear approximation for trig functions
         if(x<0.1)
         {
@@ -414,6 +431,7 @@ void generate_instrument_noise_model(struct Orbit *orbit, struct InstrumentModel
             cosx = cos(x);
             tdi_transfer_function = noise_transfer_function(x);
         }
+        */
 
         cosx = cos(x);
         tdi_transfer_function = noise_transfer_function(x);
@@ -1543,7 +1561,6 @@ void initialize_foreground_model_wavelet(struct Orbit *orbit, struct Data *data,
 
     // get galaxy modulation
     model->modulation = malloc(sizeof(struct GalaxyModulation));
-    // TODO: discretize and save this in Galaxy class so we don't have to recalcuate it all the time
     initialize_galaxy_modulation(model->modulation, data->wdm, orbit, data->T, data->t0);
     
     /**************************************************
@@ -1661,5 +1678,6 @@ void GetStationaryNoiseModel(struct Data *data, struct Orbit *orbit, struct Flag
 
     free_instrument_model(inst_noise);
     free_foreground_model(conf_noise);
+    free_sgwb_model(sgwb);
 }
  

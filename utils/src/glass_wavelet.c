@@ -302,7 +302,7 @@ void wavelet_transform_timefreq(struct Wavelets *wdm, double *timedata) {
 static inline double my_phitilde(double omega, double DeltaOmega, double A)
 {
     double B = DeltaOmega - 2*A;
-    double insDOM = 1.0/sqrtf(DeltaOmega);
+    double insDOM = 1.0/sqrt(DeltaOmega);
     
     double x, y, z;
     
@@ -337,7 +337,7 @@ void build_wdm_filter_freq(double* phif, int Nf, int Nt, double A, bool forward)
             norm += 2*phif[i]*phif[i];
     }
     norm *= domega * M_1_PI;
-    norm = sqrtf(norm);
+    norm = sqrt(norm);
     if (forward)
         norm *= Nf / 2.0;
     for (int i = 0; i<Nt/2+1; i++) {
@@ -492,7 +492,7 @@ void wavelet_transform_freq_one_layer(struct Wavelets *wdm, int N, double *freqd
             norm += 2 * phif[i] * phif[i];
     }
     norm *= domega * M_1_PI;
-    norm = sqrtf(norm);
+    norm = sqrt(norm);
     norm *= Nf / 2.0; // forward transform
     for (int i = 0; i <= N/2; i++)
         phif[i] /= norm;
