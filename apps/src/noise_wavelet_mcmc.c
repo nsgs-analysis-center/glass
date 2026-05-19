@@ -348,11 +348,10 @@ int main(int argc, char *argv[])
     /* print various data products for plotting */
     print_data(data, flags);
 
-    /* Precompute sufficient statistics for the unified likelihood path.
-     * Q=1: Pij[k] = X[k]*Y[k] etc. (one fine pixel per "cell"), so the coarse
-     * LL evaluates to the standard wavelet-domain Gaussian.
-     * Q>1: Welch/Bartlett-like average of Q fine pixels per coarse cell.
-     * Built once after data injection; shared read-only across MCMC threads.
+    /* Precompute sufficient statistics for the likelihood.
+     * Q=1: Pij[k] = X[k]*Y[k] etc. the LL evaluates to the standard Whittle
+     * Q>1: Welch/Bartlett-like average of Q fine pixels per coarse cell, Q corrects for Gamma dist
+     * This is built once after data injection, shared read-only across threads.
      */
     struct CoarseStats stats;
     alloc_coarse_stats(&stats, data->Nlayer, Q, data->wdm->NT);
@@ -378,7 +377,7 @@ int main(int argc, char *argv[])
         scaleogram[ic] = malloc(sizeof(struct Noise));
 
         // see above note, we'll save the current scaleogram from all contributions here
-        // but the individual models will only have spectrum x modulation
+        // but the individual models will only have spectrum \otimes modulation
         // Coarse layout: k = q + jrel*Ncoarse, Nlayer*Ncoarse total slots.
         // At Q=1, Ncoarse=NT and this reduces to the full-resolution indexing.
         alloc_noise(scaleogram[ic], data->Nlayer*Ncoarse, data->Nlayer, data->Nchannel);
@@ -519,8 +518,8 @@ int main(int argc, char *argv[])
             
             if(threadID==0)
             {
-                // TODO fix this to track logL better
                 noise_ptmcmc(inst_model, chain, flags);
+                // note that this tracks the logL correctly, just swaps around chain->index
                 
                 if(flags->NMCMC >= 100 && step%(flags->NMCMC/100)==0)
                 {

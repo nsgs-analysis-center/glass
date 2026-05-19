@@ -124,7 +124,7 @@ bool test_array_equality(double* ta, double* tb, int N, struct UnitTestBlockInfo
     return true;
 }
 
-/* Wilson-Hilferty normal approximation: works for any dof >= 1 */
+/* Wilson-Hilferty normal approximation */
 double chi2_sf(double x, int dof) {
     if (x <= 0.0) return 1.0;
     double nu = (double)dof;
@@ -213,7 +213,7 @@ bool test_whitening_wdm_3ch(const struct TDI* tdi, const struct Noise* noise, in
         if (p >  0.0027) { // equivalent of 3sigma, basically 99.7%
             printf("\t%s (var) pass: var=%lg p=%lg\n", ch_names[ich], var, p);
         } else {
-            printf("\t%s (var) fail, inconsistent with chi2 distribution at 99.7%% CI. Got var %lf p=%lg\n", ch_names[ich], var, p);
+            printf("\t%s (var) fail, inconsistent with chi2 distribution at 99.7%% CI (3sigma). Got var %lf p=%lg\n", ch_names[ich], var, p);
             all_ch_good = false;
         }
 
@@ -317,7 +317,7 @@ bool test_whitening_fft_3ch(const struct TDI* tdi, const struct Noise* noise, in
         if (p >  0.0027) { // equivalent of 3sigma, basically 99.7%
             printf("\t%s (var) pass: var=%lg p=%lg\n", ch_names[ich], var, p);
         } else {
-            printf("\t%s (var) fail, inconsistent with chi2 distribution at 99.7%% CI. Got var %lf p=%lg\n", ch_names[ich], var, p);
+            printf("\t%s (var) fail, inconsistent with chi2 distribution at 99.7%% CI (3sigma). Got var %lf p=%lg\n", ch_names[ich], var, p);
             all_ch_good = false;
         }
 
@@ -529,7 +529,6 @@ int main(int argc, char *argv[])
     test_data[0] = 1.0;
     struct Wavelets wdm = {0};
     // NFFT_TEST == NF*NT
-    // T == NFFT_TEST*LISA_CADENCE
     double T = NFFT_TEST*LISA_CADENCE;
     initialize_wavelet(&wdm, T);
     wavelet_transform_timefreq(&wdm, test_data);
@@ -742,6 +741,8 @@ int main(int argc, char *argv[])
     data3.wdm = &wdm;
     data3.lmax = data3.Nlayer;
     data3.lmin = 0;
+    data3.wdm->kmin = data3.lmin * wdm.NT;
+    data3.wdm->kmax = data3.lmax * wdm.NT;
     data3.noise = malloc(sizeof(struct Noise));
     alloc_noise(data3.noise, data3.Nlayer*wdm.NT, data3.Nlayer, data3.Nchannel);
 
@@ -776,10 +777,8 @@ int main(int argc, char *argv[])
             &var_tests,
             "WDM PSD test: InstrumentModel PSD whitens FFT-generated noise");
 
-    // Same FFT->WDM whitening test, but build data3.noise via the production
+    // Same FFT->WDM whitening test, but build data3.noise with the production
     // initialize_instrument_model_wavelet + generate_full_dynamic_covariance_matrix
-    // path. This exercises the retooled generate_instrument_noise_model_wavelet
-    // end to end.
     {
         struct InstrumentModel *inst_w = malloc(sizeof(struct InstrumentModel));
         initialize_instrument_model_wavelet(orbit, &data3, inst_w);
@@ -790,14 +789,13 @@ int main(int argc, char *argv[])
                 data3.Nlayer*wdm.NT,
                 wdm.NT,
                 &var_tests,
-                "WDM PSD test (model path): InstrumentModel PSD whitens FFT-generated noise");
+                "WDM PSD test (generate_full_dynamic_covariance_matrix): InstrumentModel PSD whitens FFT-generated noise");
 
         free_instrument_model(inst_w);
     }
 
-    // Repeat the FFT->WDM whitening test with the approximate WDM PSD
-    // (single-bin lookup at layer center). Looser tolerance because the
-    // approximation drops the phif convolution.
+    // Repeat the FFT->WDM whitening test with the approximate WDM PSD (single-bin lookup at layer center).
+    // These will still pass within tolerance because the noise model varies slowly as a function of f
     stationary_dft_psd_to_wdm_psd_approx(&wdm, inst_fft->psd->C[0][0], data3.noise->C[0][0]);
     stationary_dft_psd_to_wdm_psd_approx(&wdm, inst_fft->psd->C[1][1], data3.noise->C[1][1]);
     stationary_dft_psd_to_wdm_psd_approx(&wdm, inst_fft->psd->C[2][2], data3.noise->C[2][2]);
@@ -811,25 +809,21 @@ int main(int argc, char *argv[])
 
     free_tdi(testtdi_fft);
     free_instrument_model(inst_fft);
+    free_noise(data3.noise);
+    free_tdi(testtdi);
     print_test_block_stats(&var_tests);
 
 
-    fprintf(stdout, "\n================= WDM COARSE-GRAINING LIKELIHOOD CHECKS ================\n");
+    fprintf(stdout, "\n================= WDM COARSE-GRAINED NOISE LIKELIHOOD CHECKS ================\n");
     struct UnitTestBlockInfo coarse_tests = {0};
-    coarse_tests.block_name = "WDM coarse-graining likelihood tests";
+    coarse_tests.block_name = "WDM coarse-grained noise likelihood tests";
     coarse_tests.atol = 1e-6;
     coarse_tests.rtol = 1e-10;
-
-    // Build a fresh data3-like context with lmin=1 (skip DC where the
-    // instrument PSD is numerically zero) and matching kmin so the active
-    // band starts at noise/tdi index 0.
-    // (Don't free the prior data3.noise / testtdi: an earlier test path runs
-    // generate_full_dynamic_covariance_matrix with mismatched kmin and writes
-    // out of bounds, leaving heap metadata corrupted.)
 
     // Pick a narrow band away from DC (where the instrument PSD is zero)
     // and away from the high frequencies where the existing 3x3 inverter
     // (`invert_noise_covariance_matrix`) NaNs on negative cofactors.
+
     data3.lmin = 4;
     data3.lmax = 64;
     data3.Nlayer = data3.lmax - data3.lmin;
@@ -851,8 +845,6 @@ int main(int argc, char *argv[])
         initialize_instrument_model_wavelet(orbit, &data3, inst_w);
         generate_full_dynamic_covariance_matrix(data3.wdm, inst_w, NULL, NULL, data3.noise);
 
-        // Inject noise from the same covariance the LL will evaluate against.
-        // (Re-inject because the data buffer was just reallocated.)
         memset(testtdi->X, 0, data3.N*sizeof(double));
         memset(testtdi->Y, 0, data3.N*sizeof(double));
         memset(testtdi->Z, 0, data3.N*sizeof(double));
