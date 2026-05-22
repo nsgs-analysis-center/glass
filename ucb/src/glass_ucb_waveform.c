@@ -533,11 +533,14 @@ void ucb_fisher_wavelet(struct Orbit *orbit, struct Data *data, struct Source *s
     
     // Plus and minus parameters:
     double *params_p = double_vector(UCB_MODEL_NP);
-    
+    double *params_m = double_vector(UCB_MODEL_NP);
+
     // Plus and minus templates for each detector:
     struct Source *wave_p = malloc(sizeof(struct Source));
+    struct Source *wave_m = malloc(sizeof(struct Source));
     alloc_source(wave_p, data->N, UCB_MODEL_NP, data->Nchannel);
-    
+    alloc_source(wave_m, data->N, UCB_MODEL_NP, data->Nchannel);
+
     // TDI variables to hold derivatives of h
     struct TDI **dhdx = malloc(UCB_MODEL_NP*sizeof(struct TDI *));
     for(n=0; n<UCB_MODEL_NP; n++)
@@ -559,31 +562,36 @@ void ucb_fisher_wavelet(struct Orbit *orbit, struct Data *data, struct Source *s
         for(j=0; j<UCB_MODEL_NP; j++)
         {
             wave_p->params[j] = source->params[j];
+            wave_m->params[j] = source->params[j];
         }
         
         // perturb parameters
-        wave_p->params[i] += epsilon;
-        
+        wave_p->params[i] += epsilon/2.;
+        wave_m->params[i] -= epsilon/2.;
+
 	    // catch when cosine parameters get pushed out of bounds
         if(i==1 || i==4)
         {
             if(wave_p->params[i] > 1.0) wave_p->params[i] = 1.0;
+            if(wave_m->params[i] <-1.0) wave_m->params[i] =-1.0;
         }
 
         // complete info in source structure
         map_array_to_ucb_params(wave_p, wave_p->params, data->T);
-        
+        map_array_to_ucb_params(wave_m, wave_m->params, data->T);
+
         // clean up TDI arrays, just in case
-        for(j=0; j<data->N; j++)
-        {
-            wave_p->tdi->X[j]=0.0;
-            wave_p->tdi->Y[j]=0.0;
-            wave_p->tdi->Z[j]=0.0;
-        }
-        
+        memset(wave_p->tdi->X, 0, data->N*sizeof(double));
+        memset(wave_p->tdi->Y, 0, data->N*sizeof(double));
+        memset(wave_p->tdi->Z, 0, data->N*sizeof(double));
+        memset(wave_m->tdi->X, 0, data->N*sizeof(double));
+        memset(wave_m->tdi->Y, 0, data->N*sizeof(double));
+        memset(wave_m->tdi->Z, 0, data->N*sizeof(double));
+
         
         // compute perturbed waveforms
         ucb_waveform_wavelet(orbit,data->wdm,data->T, data->t0, wave_p->params, wave_p->list, &wave_p->Nlist, wave_p->tdi->X, wave_p->tdi->Y, wave_p->tdi->Z);
+        ucb_waveform_wavelet(orbit,data->wdm,data->T, data->t0, wave_m->params, wave_m->list, &wave_m->Nlist, wave_m->tdi->X, wave_m->tdi->Y, wave_m->tdi->Z);
 
         // central differencing derivatives of waveforms w.r.t. parameters
         for(n=0; n<wave_p->Nlist; n++)
@@ -592,9 +600,9 @@ void ucb_fisher_wavelet(struct Orbit *orbit, struct Data *data, struct Source *s
             wavelet_index_to_pixel(data->wdm, &i_wdm, &j_wdm, k+data->wdm->kmin);
             if(i_wdm>data->wdm->imin && i_wdm<data->wdm->imax && k>=0 && k<data->N)
             {
-                dhdx[i]->X[k] = (wave_p->tdi->X[k] - source->tdi->X[k])*invstep;
-                dhdx[i]->Y[k] = (wave_p->tdi->Y[k] - source->tdi->Y[k])*invstep;
-                dhdx[i]->Z[k] = (wave_p->tdi->Z[k] - source->tdi->Z[k])*invstep;
+                dhdx[i]->X[k] = (wave_p->tdi->X[k] - wave_m->tdi->X[k])*invstep;
+                dhdx[i]->Y[k] = (wave_p->tdi->Y[k] - wave_m->tdi->Y[k])*invstep;
+                dhdx[i]->Z[k] = (wave_p->tdi->Z[k] - wave_m->tdi->Z[k])*invstep;
             }
         }
     }
@@ -679,8 +687,10 @@ void ucb_fisher_wavelet(struct Orbit *orbit, struct Data *data, struct Source *s
      
     free_int_vector(list);
     free_double_vector(params_p);
+    free_double_vector(params_m);
     free_source(wave_p);
-    
+    free_source(wave_m);
+
     for(n=0; n<UCB_MODEL_NP; n++) free_tdi(dhdx[n]);
     free(dhdx);
 }
@@ -813,8 +823,8 @@ void ucb_waveform(struct Orbit *orbit, char *format, double T, double t0, double
     sinps	= sin(2.*psi);
     
     //Calculate GW polarization amplitudes
-    Aplus  =  amp*(1.+cosi*cosi);
-    Across = -amp*(2.0*cosi);
+    Aplus  =  amp*(1.+cosi*cosi)*0.5;
+    Across = -amp*(cosi);
     
     df = PI2*(((double)q)/T);
     
@@ -1158,9 +1168,9 @@ void ucb_waveform_wavelet(struct Orbit *orbit, struct Wavelets *wdm, double Tobs
     initialize_cubic_spline(phase_interpolant_Z, time_ssb, tdi_phase->Z,SPLINE_BINARY_SEARCH);
 
     // get frequency wavelet window function for downsampled data
-    // TODO this used to be Nlayers, but that seems wrong? Different WDM basis? (RJR)
+    // Nlayers passed instead of NF to get norm right of heterodyned UCB wavefomr
     double *window = double_vector((wdm->NT/2+1));
-    build_wdm_filter_freq(window, wdm->NF, wdm->NT, wdm->A, true);
+    build_wdm_filter_freq(window, Nlayers+1, wdm->NT, wdm->A, true);
         
     // wavelet transform on heterodyned data using downsampled windows.
     build_interpolated_waveform(amp_interpolant_X, phase_interpolant_X, time_ds, phase_ds, phase_het, N_ds, wave->X);
@@ -1227,6 +1237,243 @@ void ucb_waveform_wavelet(struct Orbit *orbit, struct Wavelets *wdm, double Tobs
     free_cubic_spline(phase_interpolant_Z);
 
     free_double_vector(window);
+}
+
+/* Full sampled UCB wavelet transform */
+void ucb_waveform_wavelet_slow(struct Orbit *orbit, struct Wavelets *wdm, double Tobs, double t0, double *params, int *wavelet_list, int *Nwavelet, double *X, double *Y, double *Z)
+{
+    int Nspline = orbit->Norb;
+    double dt = Tobs/(double)(Nspline-1);
+
+    // get amplitude and phase at Barycenter on the orbit interpolation grid (with margin)...
+    double *time_ssb  = double_vector(Nspline);
+    double *amp_ssb   = double_vector(Nspline);
+    double *phase_ssb = double_vector(Nspline);
+    
+    // store time array for full data on orbit cadence
+    for(int i=0; i< Nspline; i++) time_ssb[i] = t0 + i*dt;
+    
+    //get ucb waveform on orbit grid
+    ucb_barycenter_waveform(params, Nspline, orbit->t, phase_ssb, amp_ssb, Tobs);
+    
+    // get frequency layers containing signal
+    int min_layer; //bottom layer
+    int Nlayers;   //number of layers
+    ucb_wavelet_layers(Tobs, params, wdm, &min_layer, &Nlayers);
+    
+    /*
+    Get spline interpolant for SSB phase and amplitude
+    */
+    struct CubicSpline *amp_ssb_spline   = alloc_cubic_spline(Nspline);
+    struct CubicSpline *phase_ssb_spline = alloc_cubic_spline(Nspline);
+    
+    initialize_cubic_spline(amp_ssb_spline,orbit->t,amp_ssb,SPLINE_EVEN_SAMPLED);
+    initialize_cubic_spline(phase_ssb_spline,orbit->t,phase_ssb,SPLINE_EVEN_SAMPLED);
+    
+    /*
+     Resample SSB phase to reference spacecraft
+     */
+    double *phase_sc = double_vector(Nspline);
+    double *time_sc  = double_vector(Nspline);
+    
+    // shift reference times from Barycenter to S/C 1
+    double costh = params[1];
+    double phi   = params[2];
+    LISA_spacecraft_to_barycenter_time(orbit, costh, phi, time_ssb, time_sc, Nspline, -1);
+
+    // get signal phase at S/C 1
+    for(int i=0; i< Nspline; i++)
+        phase_sc[i] = spline_interpolation(phase_ssb_spline, time_sc[i]);
+
+    free(time_sc);
+    
+    /*
+     Downsample waveform (i.e. shift to lower frequency layer)
+     */
+    int N_ds     = wdm->NT*wdm->NF; //number of downsampled data points
+    double dt_ds = Tobs/(double)(N_ds); //downsampled data cadence
+   
+    double *phase_ds  = double_vector(N_ds);  //downsampled phase
+    double *time_ds   = double_vector(N_ds);  //downsampled time
+    double *phase_het = double_vector(N_ds);  //heterodyne phase
+        
+    for(int i=0; i<N_ds; i++)
+    {
+        time_ds[i]   = t0 + i*dt_ds;
+        phase_het[i] = 0.0;//PI2 * f0 * time_ds[i];
+    }
+    
+    // shift reference times from Barycenter to spacecraft 0
+    time_sc = double_vector(N_ds);
+    LISA_spacecraft_to_barycenter_time(orbit, costh, phi, time_ds, time_sc, N_ds, -1);
+    
+    for(int i=0; i<N_ds; i++)
+        phase_ds[i] = spline_interpolation(phase_ssb_spline, time_sc[i]);
+
+    free(time_sc);
+
+    
+    
+    /*
+    Get TDI responses back in terms of phase and amplitude
+    */
+    struct TDI *tdi_phase = malloc(sizeof(struct TDI));
+    struct TDI *tdi_amp = malloc(sizeof(struct TDI));
+    alloc_tdi(tdi_phase,Nspline,3);
+    alloc_tdi(tdi_amp,Nspline,3);
+
+    //extract remaining extrinsic parameters from UCB parameter vector
+    double cosi  = params[4];
+    double psi   = params[5];
+
+    LISA_spline_response(orbit, time_ssb, Nspline, costh, phi, cosi, psi, amp_ssb_spline, NULL, phase_ssb_spline, phase_sc, tdi_amp, tdi_phase);
+
+    /*
+    Interpolate amplitude and phase for instrument response of each TDI channel onto wavelet grid
+    */
+    struct TDI *wave = malloc(sizeof(struct TDI));
+    alloc_tdi(wave,N_ds,3);
+
+    struct CubicSpline *amp_interpolant_X   = alloc_cubic_spline(Nspline);
+    struct CubicSpline *amp_interpolant_Y   = alloc_cubic_spline(Nspline);
+    struct CubicSpline *amp_interpolant_Z   = alloc_cubic_spline(Nspline);
+    struct CubicSpline *phase_interpolant_X = alloc_cubic_spline(Nspline);
+    struct CubicSpline *phase_interpolant_Y = alloc_cubic_spline(Nspline);
+    struct CubicSpline *phase_interpolant_Z = alloc_cubic_spline(Nspline);
+
+    initialize_cubic_spline(amp_interpolant_X,   time_ssb, tdi_amp->X,SPLINE_BINARY_SEARCH);
+    initialize_cubic_spline(amp_interpolant_Y,   time_ssb, tdi_amp->Y,SPLINE_BINARY_SEARCH);
+    initialize_cubic_spline(amp_interpolant_Z,   time_ssb, tdi_amp->Z,SPLINE_BINARY_SEARCH);
+    initialize_cubic_spline(phase_interpolant_X, time_ssb, tdi_phase->X,SPLINE_BINARY_SEARCH);
+    initialize_cubic_spline(phase_interpolant_Y, time_ssb, tdi_phase->Y,SPLINE_BINARY_SEARCH);
+    initialize_cubic_spline(phase_interpolant_Z, time_ssb, tdi_phase->Z,SPLINE_BINARY_SEARCH);
+
+        
+    // wavelet transform on heterodyned data using downsampled windows.
+    build_interpolated_waveform(amp_interpolant_X, phase_interpolant_X, time_ds, phase_ds, phase_het, N_ds, wave->X);
+    build_interpolated_waveform(amp_interpolant_Y, phase_interpolant_Y, time_ds, phase_ds, phase_het, N_ds, wave->Y);
+    build_interpolated_waveform(amp_interpolant_Z, phase_interpolant_Z, time_ds, phase_ds, phase_het, N_ds, wave->Z);
+
+    FILE *temp = fopen("Xtime.dat","w");
+    for(int n=0; n<N_ds; n++) fprintf(temp, "%.12g %.16g\n",n*dt_ds,wave->X[n]);
+    fclose(temp);
+
+    wavelet_transform_timefreq(wdm, wave->X);
+    wavelet_transform_timefreq(wdm, wave->Y);
+    wavelet_transform_timefreq(wdm, wave->Z);
+
+    temp = fopen("Xscale.dat","w");
+    int k;
+    for(int j=0; j<wdm->NF; j++)
+    {
+        for(int i=0; i<wdm->NT; i++)
+        {
+            wavelet_pixel_to_index(wdm,i,j,&k);
+            fprintf(temp,"%lg %lg %.16e\n", i*wdm->dt, j*wdm->df + WAVELET_BANDWIDTH/2,wave->X[k]*wave->X[k]);
+        }
+        fprintf(temp,"\n");
+    }
+    fclose(temp);
+    
+    double **freqData = double_matrix(3,N_ds+2); //needs DF & Nyq. bins for norms
+    double **waveData = double_matrix(3,N_ds);
+
+    //get TDI data into context
+    for(int i=0; i<wdm->NT; i++)
+    {
+        for(int j=0; j<wdm->NF; j++)
+        {
+            wavelet_pixel_to_index(wdm,i,j,&k);
+            waveData[0][k] = wave->X[k];
+            waveData[1][k] = wave->Y[k];
+            waveData[2][k] = wave->Z[k];
+        }
+    }
+
+    //wavelet to frequency
+    wavelet_transform_inverse_freq(wdm, waveData[0], freqData[0]);
+    wavelet_transform_inverse_freq(wdm, waveData[1], freqData[1]);
+    wavelet_transform_inverse_freq(wdm, waveData[2], freqData[2]);
+
+    temp=fopen("Xfreq.dat","w");
+    for(int n=0; n<N_ds/2; n++)
+    {
+        double f = (double)n/Tobs;
+        fprintf(temp,"%.14e %.14e %.14e\n", f, freqData[0][2*n],freqData[0][2*n+1]);
+    }
+    fclose(temp);
+
+    free_double_matrix(freqData,3);
+    free_double_matrix(waveData,3);
+
+    
+    /*
+     Properly re-index to undo the heterodyning
+    */
+    int N=0;
+
+    for(int i=0; i<wdm->NT; i++)
+    {
+        for(int j=min_layer; j<min_layer+Nlayers; j++)
+        {
+            wavelet_pixel_to_index(wdm,i,j,&k);
+            
+            //check that the pixel is in range
+            wavelet_list[N]=k-wdm->kmin;
+            X[k-wdm->kmin] = wave->X[k];
+            Y[k-wdm->kmin] = wave->Y[k];
+            Z[k-wdm->kmin] = wave->Z[k];
+
+            N++;
+        }
+    }
+    *Nwavelet = N;
+        
+//    //insert non-zero wavelet pixels into correct indicies
+//    for(int n=0; n<*Nwavelet; n++)
+//    {
+//        X[wavelet_list[n]] = wave->X[n];
+//        Y[wavelet_list[n]] = wave->Y[n];
+//        Z[wavelet_list[n]] = wave->Z[n];
+//    }
+//    
+    
+    temp = fopen("Xscale_mapped.dat","w");
+    for(int j=min_layer; j<min_layer+Nlayers; j++)
+    {
+        for(int i=0; i<wdm->NT; i++)
+        {
+            wavelet_pixel_to_index(wdm,i,j,&k);
+            k-=wdm->kmin;
+            fprintf(temp,"%lg %lg %.16e\n", i*wdm->dt, j*wdm->df + WAVELET_BANDWIDTH/2,X[k]*X[k]);
+        }
+        fprintf(temp,"\n");
+    }
+    fclose(temp);
+
+    free_double_vector(time_ssb);
+    free_double_vector(amp_ssb);
+    free_double_vector(phase_ssb);
+
+    free_cubic_spline(amp_ssb_spline);
+    free_cubic_spline(phase_ssb_spline);
+
+    free_double_vector(phase_sc);
+
+    free_double_vector(phase_ds);
+    free_double_vector(time_ds);
+    free_double_vector(phase_het);
+
+    free_tdi(tdi_phase);
+    free_tdi(tdi_amp);
+    free_tdi(wave);
+
+    free_cubic_spline(amp_interpolant_X);
+    free_cubic_spline(amp_interpolant_Y);
+    free_cubic_spline(amp_interpolant_Z);
+    free_cubic_spline(phase_interpolant_X);
+    free_cubic_spline(phase_interpolant_Y);
+    free_cubic_spline(phase_interpolant_Z);
 }
 
 /* Lookup table wavelet transform */

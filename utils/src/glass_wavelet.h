@@ -1,5 +1,6 @@
 /*
  * Copyright 2024 Neil J. Cornish & Tyson B. Littenberg
+ * Copyright 2026 Robert J. Rosati
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,11 +26,12 @@ struct Wavelets
 {
     /** @name define time-frequency-fdot grid */
      ///@{
-    int NF;    //!<total number of frequency layers
-    int NT;    //!<total number of time layers
+    int NF; //!<total number of frequency layers
+    int NT; //!<total number of time layers
+
     double cadence; //!<data sample cadence
-    double dt; //!<wavelet pixel duration
-    double df; //!<wavelet pixel bandwidth
+    double dt;      //!<wavelet pixel duration
+    double df;      //!<wavelet pixel bandwidth
     
     int frequency_steps; //!<frequency steps for wavelet filters
     int fdot_steps;      //!<fdot steps
@@ -43,7 +45,7 @@ struct Wavelets
     double domega;
     double inv_root_dOmega;
     double B;
-    double A;
+    double A; //!<roll off of Meyer window. Ranges from 0 to dOmega/2
     double BW;
     double deltaf;
     double *fdot;
@@ -92,11 +94,31 @@ void wavelet_transform_from_table(struct Wavelets *wdm, double *phase, double *f
 
 // new transform funcs from Robbie (March 2026)
 // these are mostly translations / simplifications of WDMWaveletTransforms
+
+// Note that this is called the timefreq transform in other codes:
+// FFT first, then use the fast algorithm for FFT->WDM
 void wavelet_transform_timefreq(struct Wavelets *wdm, double *timedata);
+
+// NOTE: this implementation matches WDMWaveletTransforms by Matt Digman
+// as well as Olitas.jl
+// We assume freqdata has ND+2 elements
 void wavelet_transform_freq(struct Wavelets *wdm, double *freqdata, double *wdmdata);
+
+// inverse frequency transform, assumes that freqdata has enough room for ND/2+1 complexes
 void wavelet_transform_inverse_freq(struct Wavelets *wdm, double *wdmdata, double *freqdata);
+
+// This is a utility function mostly used in the MBHB waveform
+// Here we assume that the freqdata only has frequency content in one layer
+// N is number of time data points, freqdata is length N/2+1
 void wavelet_transform_freq_segment(struct Wavelets *wdm, int N, int layer, double *data);
+
+// Basically the same thing as wavelet_transform_timefreq, but we assume
+// that the output fits into the layers with indices jmin...jmin+Nlayers
+// used only in the UCB waveform
+// expects timedata of length wdm->NT*(Nlayers+1)
 void wavelet_transform_timefreq_by_layers(struct Wavelets* wdm, int jmin, int Nlayers, double *window, double* timedata);
+
+// this function puts the Meyer window into phif properly normalized
 void build_wdm_filter_freq(double* phif, int Nf, int Nt, double A, bool forward);
 void stationary_dft_psd_to_wdm_psd(struct Wavelets* wdm, double * dft_psd, double * wdm_psd);
 void stationary_dft_psd_to_wdm_psd_approx(struct Wavelets* wdm, double * dft_psd, double * wdm_psd);

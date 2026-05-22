@@ -1038,10 +1038,10 @@ void LISA_spline_response(struct Orbit *orbit, double *tarray, int N, double cos
         //Full Antenna patterns
         for(i=0; i<3; i++)
         {
-            App[i] = 0.5 * dplus[i]  / (1.0 + kdotn[i]);
-            Apm[i] = 0.5 * dplus[i]  / (1.0 - kdotn[i]);
-            Acp[i] = 0.5 * dcross[i] / (1.0 + kdotn[i]);
-            Acm[i] = 0.5 * dcross[i] / (1.0 - kdotn[i]);
+            App[i] = dplus[i]  / (1.0 + kdotn[i]);
+            Apm[i] = dplus[i]  / (1.0 - kdotn[i]);
+            Acp[i] = dcross[i] / (1.0 + kdotn[i]);
+            Acm[i] = dcross[i] / (1.0 - kdotn[i]);
         }
         
         /* build X, Y, Z responses */
@@ -1325,6 +1325,55 @@ void copy_tdi_segment(struct TDI *origin, struct TDI *copy, int index, int N)
     memcpy(copy->X+index, origin->X+index, N*sizeof(double));
     memcpy(copy->Y+index, origin->Y+index, N*sizeof(double));
     memcpy(copy->Z+index, origin->Z+index, N*sizeof(double));
+}
+
+void mpi_send_tdi(struct TDI *tdi, int dest)
+{
+    int N = tdi->N;
+    
+    //pack up and send integers
+    int int_values[2] = {tdi->N, tdi->Nchannel};
+    MPI_Send(&int_values, 2, MPI_INT, dest, 0, MPI_COMM_WORLD);
+    
+    //pack up send doubles
+    double *double_values = double_vector(3*N+1);
+    for(int n=0; n<N; n++)
+    {
+        double_values[n]     = tdi->X[n];
+        double_values[N+n]   = tdi->Y[n];
+        double_values[2*N+n] = tdi->Z[n];
+    }
+    double_values[3*N] = tdi->delta;
+    MPI_Send(double_values, 3*N+1, MPI_DOUBLE, dest, 0, MPI_COMM_WORLD);
+    
+    
+    free_double_vector(double_values);
+}
+
+void mpi_receive_tdi(struct TDI *tdi, int source)
+{
+    MPI_Status status;
+
+    //receive and unpack integers
+    int int_values[2];
+    MPI_Recv(&int_values, 2, MPI_INT, source, 0, MPI_COMM_WORLD, &status);
+    tdi->N = int_values[0];
+    tdi->Nchannel = int_values[1];
+
+    int N = tdi->N;
+
+    //pack up send doubles
+    double *double_values = double_vector(3*N+1);
+    MPI_Recv(double_values, 3*N+1, MPI_DOUBLE, source, 0, MPI_COMM_WORLD, &status);
+    for(int n=0; n<N; n++)
+    {
+        tdi->X[n] = double_values[n];
+        tdi->Y[n] = double_values[N+n];
+        tdi->Z[n] = double_values[2*N+n];
+    }
+    tdi->delta = double_values[3*N];
+    
+    free_double_vector(double_values);
 }
 
 void free_tdi(struct TDI *tdi)

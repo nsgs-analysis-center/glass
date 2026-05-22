@@ -16,35 +16,22 @@ foreach(policy
 endforeach()
 
 # Set compiler
-#set(CMAKE_C_COMPILER mpicc)
-set(CMAKE_C_COMPILER /opt/homebrew/Cellar/llvm/22.1.5/bin/clang )
+set(CMAKE_C_COMPILER mpicc)
 
 project(glass VERSION 2.0.0 LANGUAGES C)
 
 # External packages
 find_package(LAPACK REQUIRED)
-#set(LAPACK_LIBRARIES lapacke gfortran ${LAPACK_LIBRARIES})
-#find_package(OpenBLAS REQUIRED)
-find_package(BLAS REQUIRED)
+find_package(OpenBLAS REQUIRED)
 find_package(OpenMP REQUIRED)
 find_package(HDF5 REQUIRED)
 find_package(MPI REQUIRED)
-find_package(GSL REQUIRED)
+#find_package(GSL REQUIRED)
 
 # set cflags
 #set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -I/opt/homebrew/Cellar/libomp/21.1.8/include")
 if(APPLE)
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Xpreprocessor")
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -I/opt/homebrew/opt/openblas/include")
-  link_directories("/opt/homebrew/lib/")
-endif()
-#Force to use Homebrew's libomp (same one OpenBLAS uses)
-if(APPLE)
-set_target_properties(OpenMP::OpenMP_C PROPERTIES
-    INTERFACE_COMPILE_OPTIONS "-Xpreprocessor;-fopenmp"
-    INTERFACE_INCLUDE_DIRECTORIES "/opt/homebrew/opt/libomp/include"
-    INTERFACE_LINK_LIBRARIES "/opt/homebrew/opt/libomp/lib/libomp.dylib"
-)
 endif()
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fopenmp -Wall -std=gnu99 -march=native")

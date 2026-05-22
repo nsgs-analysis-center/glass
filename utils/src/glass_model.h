@@ -153,6 +153,12 @@ void alloc_model(struct Data *data, struct Model *model, int NP, int Nmax);
 void alloc_source(struct Source *source, int N, int NP, int Nchannel);
 ///@}
 
+/** @name MPI Send/Receive for Source structure */
+///@{
+void mpi_send_source(struct Source *source, int dest);
+void mpi_receive_source(struct Source *source, int src);
+///@}
+
 /**
  \brief Shallow copy of Data structure
  */
@@ -169,6 +175,13 @@ void copy_model_lite(struct Model *origin, struct Model *copy);
  \brief swap model pointers
  */
 void swap_model(struct Model **ptr1, struct Model **ptr2);
+
+/** @name MPI Send/Receive for model structure */
+///@{
+void mpi_send_model(struct Model *model, int dest);
+void mpi_receive_model(struct Model *model, int source);
+///@}
+
 
 /** @name Free memory for structures */
 ///@{

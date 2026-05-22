@@ -38,6 +38,7 @@
 
 #include <hdf5.h>
 #include <omp.h>
+#include <mpi.h>
 #include <lapacke.h>
 
 #include <sys/stat.h>

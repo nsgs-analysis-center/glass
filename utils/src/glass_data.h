@@ -26,7 +26,7 @@
 #define FILTER_LENGTH 5e3 //seconds
 #define MAXSTRINGSIZE 1024 //!<maximum number of characters for `path+filename` strings
 
-#define WAVELET_EDGE_BUFFER 50 //!<number of time slices to leave out of likelihood to avoid edge effects
+#define WAVELET_EDGE_BUFFER 100 //!<number of time slices to leave out of likelihood to avoid edge effects
 #define WAVELET_DURATION 7680.0
 #define WAVELET_BANDWIDTH (6.51041666666667e-5)
 //#define WAVELET_DURATION 20480.0 //!<duration of wavelet pixels [s]
@@ -474,11 +474,23 @@ void alloc_calibration(struct Calibration *calibration);
  */
 void copy_data(struct Data *origin, struct Data *copy);
 
+/** @name MPI Send/Receive for data structure */
+///@{
+void mpi_send_data(struct Data *data, int dest);
+void mpi_receive_data(struct Data *data, int source);
+///@}
+
 /** @name Deep copy structure contents */
 ///@{
 void copy_noise(struct Noise *origin, struct Noise *copy);
 void copy_Cij(double ***origin, double ***copy, int M, int N);
 void copy_calibration(struct Calibration *origin, struct Calibration *copy);
+///@}
+
+/** @name MPI Send/Receive for noise structure */
+///@{
+void mpi_send_noise(struct Noise *noise, int dest);
+void mpi_receive_noise(struct Noise *noise, int source);
 ///@}
 
 /** @name Free memory for structures */

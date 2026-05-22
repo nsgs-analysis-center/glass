@@ -1,5 +1,6 @@
 /*
  * Copyright 2024 Neil J. Cornish & Tyson B. Littenberg
+ * Copyright 2026 Robert J. Rosati
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -291,12 +292,14 @@ void inline wavelet_pixel_to_index(struct Wavelets *wdm, int i, int j, int *k)
 // to the user, appears to be an in-place operation
 void wavelet_transform_timefreq(struct Wavelets *wdm, double *timedata) {
     int ND = wdm->NT*wdm->NF;
-    double freqdata[ND + 2]; // extra complex element
+    double *freqdata = double_vector(ND + 2); // extra complex element
 
     glass_forward_real_fft_outplace(timedata, freqdata, ND);
 
     // note: below will overwrite timedata
     wavelet_transform_freq(wdm, freqdata, timedata);
+    
+    free_double_vector(freqdata);
 }
 
 static inline double my_phitilde(double omega, double DeltaOmega, double A)
@@ -535,15 +538,20 @@ void wavelet_transform_freq_one_layer(struct Wavelets *wdm, int N, double *freqd
     }
 }
 
-// Basically the same thing as wavelet_transform_timefreq, but we assume
-// that the output fits into the layers with indices jmin...jmin+Nlayers
 // used only in the UCB waveform
 // expects timedata of length wdm->NT*(Nlayers+1)
+// assumes timedata has been heterodyned and freqs start at jmin
 void wavelet_transform_timefreq_by_layers(struct Wavelets* wdm, int jmin, int Nlayers, double *window, double* timedata) {
     int Nf = wdm->NF;
     int Nt = wdm->NT;
     int N = Nt * (Nlayers+1); // length of input data
     double freqdata[N + 2]; // full-length FFT
+
+    // RJR: my understanding of this factor is that it matches how signals
+    // (e.g. sines) scale in the FFT. We need this because we have downsampled and
+    // N here != wdm->NT*wdm->NF. 
+    // TODO: define all FFTs to include a dt factor? That would absorb this!
+    double normalization = sqrt((double)wdm->NF)/(Nlayers+1.0);
 
     // TODO: tukey window was here, removed for invertibility in tests
     /*
@@ -557,8 +565,8 @@ void wavelet_transform_timefreq_by_layers(struct Wavelets* wdm, int jmin, int Nl
     double DX_t[2*Nt];
     double *phif = window; // should be length Nt/2+1
 
-    // output is packed as Nlayers * Nt elements
-    memset(timedata, 0, Nlayers * Nt * sizeof(double));
+    // zero the input buffer so samples beyond Nt*Nlayers don't leak
+    memset(timedata, 0, N * sizeof(double));
 
     for (int m = jmin; m < jmin + Nlayers; m++) {
         int center = (m - jmin + 1) * Nt / 2;
@@ -575,22 +583,28 @@ void wavelet_transform_timefreq_by_layers(struct Wavelets* wdm, int jmin, int Nl
         }
         glass_inverse_complex_fft_outplace(DX, DX_t, Nt);
 
-        int layer_offset = (m - jmin) * Nt;
+        int layer_offset = m - jmin;
+        int k;
         if (m == 0) {
-            for (int n = 0; n < Nt; n += 2)
-                timedata[layer_offset + n] = DX_t[2*n] * M_SQRT2;
+            for (int n = 0; n < Nt; n += 2) {
+                k = n*Nlayers + layer_offset;
+                timedata[k] = DX_t[2*n] * M_SQRT2 * normalization;
+            }
         }
         else if (m == Nf) {
-            for (int n = 0; n < Nt; n += 2)
-                timedata[layer_offset + n + 1] = DX_t[2*n] * M_SQRT2;
+            for (int n = 0; n < Nt; n += 2) {
+                k = n*Nlayers + layer_offset;  // unused in production since UCB has jmin>=1 and jmax<NF)
+                timedata[k] = DX_t[2*n] * M_SQRT2 * normalization;
+            }
         }
         else {
             int imag_sign = m % 2 == 0 ? 1 : -1;
             for (int n = 0; n < Nt; n++) {
+                k = n*Nlayers + layer_offset;
                 if ((n + m) % 2 == 0)
-                    timedata[layer_offset + n] = DX_t[2*n];
+                    timedata[k] = DX_t[2*n] * normalization;
                 else
-                    timedata[layer_offset + n] = imag_sign * DX_t[2*n+1];
+                    timedata[k] = imag_sign * DX_t[2*n+1] * normalization;
             }
         }
     }
@@ -831,9 +845,6 @@ void wavelet_window_frequency(struct Wavelets *wdm, double *window, int Nlayers)
     
 }
 
-// This is a utility function mostly used in the MBHB waveform
-// Here we assume that the freqdata only has frequency content in one layer
-// N is number of time data points, freqdata is length N/2+1
 void wavelet_transform_freq_segment(struct Wavelets *wdm, int N, int layer, double *freqdata)
 {
     double wdmdata[N];
