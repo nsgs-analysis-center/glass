@@ -120,5 +120,8 @@ void wavelet_transform_timefreq_by_layers(struct Wavelets* wdm, int jmin, int Nl
 
 // this function puts the Meyer window into phif properly normalized
 void build_wdm_filter_freq(double* phif, int Nf, int Nt, double A, bool forward);
-
+void stationary_dft_psd_to_wdm_psd(struct Wavelets* wdm, double * dft_psd, double * wdm_psd);
+void stationary_dft_psd_to_wdm_psd_approx(struct Wavelets* wdm, double * dft_psd, double * wdm_psd);
+void stationary_dft_psd_to_wdm_layer_var(struct Wavelets* wdm, double * dft_psd, double * layer_var);
+void stationary_dft_psd_to_wdm_layer_var_approx(struct Wavelets* wdm, double * dft_psd, double * layer_var);
 #endif /* glass_wavelet_h */

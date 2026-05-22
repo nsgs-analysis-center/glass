@@ -105,6 +105,8 @@ double spline_integration(struct CubicSpline *spline, double xi, double xf);
  */
 void invert_noise_covariance_matrix(struct Noise *noise);
 
+inline double signed_log_div(double num, double logdetC);
+
 /**
 \brief Compute chirp mass from component masses
   
@@ -238,8 +240,8 @@ double power_spectrum(double *data, int n);
  @param N number of frequency bins in sum
  @return \f$(a|b) =  4 \sum_n a^*_n b_n C^-1_n \f$
  */
-double fourier_nwip(double *a, double *b, double *invC, int N);
-double wavelet_nwip(double *a, double *b, double *invC, int *list, int N);
+double fourier_nwip(const double *a, const double *b, const double *invC, int N);
+double wavelet_nwip(const double *a, const double *b, const double *invC, const int *list, int N);
 
 /**
 \brief Signal to noise ratio in frequency domain
@@ -317,6 +319,8 @@ void matrix_multiply(double **A, double **B, double **AB, int N);
  */
 void cholesky_decomp(double **A, double **L, int N);
 
+void my_cholesky_decomp(int N, const double A[N][N], double L[N][N]);
+
 /**
  \brief Wrapper to `GLASS` cubic spline interpolation routines.
 
@@ -355,6 +359,17 @@ void unwrap_phase(int N, double *phase);
 
 double simpson_integration_3(double f0, double f1, double f2, double h);
 double simpson_integration_5(double f0, double f1, double f2, double f3, double f4, double h);
+
+/**
+\brief Complementary error function
+
+ In-house implementation (Abramowitz & Stegun 7.1.26) so we don't depend on
+ GSL for the SGWB templates. Maximum absolute error ~1.5e-7 for all real x.
+
+ @param x argument
+ @return \f$ \mathrm{erfc}(x) = 1 - \mathrm{erf}(x) \f$
+ */
+double glass_erfc(double x);
 
 /**
 \brief wrapper for qsort() specific to integer arrays

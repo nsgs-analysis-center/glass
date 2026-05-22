@@ -1,4 +1,5 @@
 .DS_Store
+.vscode
 
 utils/src/gitversion.h
 gbmcmc/src/gitversion.h
@@ -57,6 +58,8 @@ ldasoft.build
 
 #Vim junk
 *.swp
+tags
+basis
 
 #install directories
 build
@@ -97,3 +100,5 @@ mbh/src/IMRPhenomD.h
 mbh/src/IMRPhenomT.c
 mbh/src/IMRPhenomT.h
 
+# python junk
+*.ipynb_checkpoints/

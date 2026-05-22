@@ -61,6 +61,21 @@ struct GalaxyModulation
     struct CubicSpline *XZ_spline; //!<Modulation in PSD of XZ channels
     struct CubicSpline *YZ_spline; //!<Modulation in PSD of YZ channels
 
+    /* Spline evaluations cached on the wavelet time grid for a given coarsening
+     * factor Q. The 6 modulation splines are stationary across an MCMC run, so
+     * we evaluate them once per (wdm, Q) pair and reuse. cache_*[q] is the
+     * spline value at t = (q*Q + (Q-1)/2) * wdm->dt, which collapses to t = q*dt
+     * when Q = 1. Q_cached = 0 means uninitialized. */
+    int Q_cached;
+    int Nt_cached;
+    int Nt_alloc;
+    double *cache_XX;
+    double *cache_YY;
+    double *cache_ZZ;
+    double *cache_XY;
+    double *cache_XZ;
+    double *cache_YZ;
+
     long Npix;        //!<Number of pixels on the healpix grid
     double *skytheta; //!<Latitude value of healpix grid pixels
     double *skyphi;   //!<Longitude value of healpix grid pixels
@@ -72,4 +87,8 @@ void rotate_galtoeclip(double *xg, double *xe);
 void rotate_ecliptogal(double *xg, double *xe);
 
 void initialize_galaxy_modulation(struct GalaxyModulation *gm, struct Wavelets *wdm, struct Orbit *orbit, double Tobs, double t0);
+void free_galaxy_modulation(struct GalaxyModulation *gm);
 void galaxy_modulation(struct GalaxyModulation *gm, double *params);
+
+// Build (or refresh) the per-time-slice modulation cache for the given (wdm, Q).
+void galaxy_modulation_cache_for_Q(struct GalaxyModulation *gm, struct Wavelets *wdm, int Q);

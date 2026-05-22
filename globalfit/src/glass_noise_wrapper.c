@@ -58,7 +58,7 @@ void select_noise_segment(struct Noise *psd_full, struct Data *data, struct Chai
                 memcpy(model[n]->noise->invC[i][j], psd_full->invC[i][j]+dq, data->N*sizeof(double));
             }
         }
-        memcpy(model[n]->noise->detC, psd_full->detC+dq, data->N*sizeof(double));
+        memcpy(model[n]->noise->logdetC, psd_full->logdetC+dq, data->N*sizeof(double));
 
     }
 
@@ -297,6 +297,9 @@ int update_noise_sampler(struct NoiseData *noise_data)
     struct InstrumentModel **inst_trial = noise_data->inst_trial;
     struct ForegroundModel **conf_model = noise_data->conf_model;
     struct ForegroundModel **conf_trial = noise_data->conf_trial;
+    // TODO: placeholder SGWB
+    struct SGWBModel** sgwb_model = NULL;
+    struct SGWBModel** sgwb_trial = NULL;
 
     int NC = chain->NC;
     
@@ -321,6 +324,8 @@ int update_noise_sampler(struct NoiseData *noise_data)
             struct InstrumentModel *inst_trial_ptr = inst_trial[chain->index[ic]];
             struct ForegroundModel *conf_model_ptr = conf_model[chain->index[ic]];
             struct ForegroundModel *conf_trial_ptr = conf_trial[chain->index[ic]];
+            struct SGWBModel* sgwb_model_ptr = NULL;
+            struct SGWBModel* sgwb_trial_ptr = NULL;
 
             //update log likelihood (data may have changed)
             inst_model_ptr->logL = noise_log_likelihood(data, inst_model_ptr->psd);
@@ -328,8 +333,9 @@ int update_noise_sampler(struct NoiseData *noise_data)
             //evolve fixed dimension sampler
             for(int steps=0; steps<10; steps++)
             {
-                noise_instrument_model_mcmc(orbit, data, inst_model_ptr, inst_trial_ptr, conf_model_ptr, psd_ptr, chain, flags, ic);
-                if(flags->confNoise) noise_foreground_model_mcmc(data, inst_model_ptr, conf_model_ptr, conf_trial_ptr, psd_ptr, chain, flags, ic);
+                noise_instrument_model_mcmc(orbit, data, inst_model_ptr, inst_trial_ptr, conf_model_ptr, sgwb_model_ptr, psd_ptr, chain, flags, ic);
+                if(flags->confNoise) noise_foreground_model_mcmc(data, inst_model_ptr, conf_model_ptr, conf_trial_ptr, sgwb_model_ptr, psd_ptr, chain, flags, ic);
+                // TODO: sgwb mcmc here
             }
             
             

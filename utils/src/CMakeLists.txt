@@ -13,7 +13,8 @@ add_library(glass_utils STATIC
 
 include_directories ("${PROJECT_SOURCE_DIR}/external/")
 include_directories ("${PROJECT_SOURCE_DIR}/utils/src/")
-include_directories(SYSTEM ${HDF5_INCLUDE_DIRS} ${BLAS_INCLUDE_DIRS})
+include_directories ("${PROJECT_SOURCE_DIR}/noise/src/")
+include_directories(SYSTEM ${GSL_INCLUDE_DIRS} ${HDF5_INCLUDE_DIRS})
 
 install(DIRECTORY "./" DESTINATION include/glass FILES_MATCHING PATTERN "*.h")
 

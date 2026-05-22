@@ -233,6 +233,10 @@ double spline_integration(struct CubicSpline *spline, double xi, double xf)
     return 2.0*simpson_integration_3(yi,ym,yf,dx); //TODO: check this factor of two w.r.t. simpson integration in other places
 }
 
+inline double signed_log_div(double num, double logdetC) {
+    return copysign(exp(log(fabs(num))-logdetC), num);
+}
+
 void invert_noise_covariance_matrix(struct Noise *noise)
 {
     int X,Y,Z,A,E;
@@ -243,12 +247,12 @@ void invert_noise_covariance_matrix(struct Noise *noise)
         {
             case 1:
                 X=0;
-                noise->detC[n] = noise->C[X][X][n];
+                noise->logdetC[n] = log(noise->C[X][X][n]);
                 noise->invC[X][X][n] = 1./noise->C[X][X][n];
                 break;
             case 2:
                 A=0, E=1;
-                noise->detC[n] = noise->C[A][A][n]*noise->C[E][E][n];
+                noise->logdetC[n] = log(noise->C[A][A][n]) + log(noise->C[E][E][n]);
                 noise->invC[A][A][n] = 1./noise->C[A][A][n];
                 noise->invC[E][E][n] = 1./noise->C[E][E][n];
                 break;
@@ -260,14 +264,22 @@ void invert_noise_covariance_matrix(struct Noise *noise)
                 double cxy = noise->C[X][Y][n];
                 double cxz = noise->C[X][Z][n];
                 double cyz = noise->C[Y][Z][n];
-                noise->detC[n] = cxx*(czz*cyy - cyz*cyz) - cxy*(cxy*czz - cxz*cyz) + cxz*(cxy*cyz - cyy*cxz);
-                double invdetC = 1./noise->detC[n];
-                noise->invC[X][X][n] = (cyy*czz - cyz*cyz)*invdetC;
-                noise->invC[Y][Y][n] = (czz*cxx - cxz*cxz)*invdetC;
-                noise->invC[Z][Z][n] = (cxx*cyy - cxy*cxy)*invdetC;
-                noise->invC[X][Y][n] = (cxz*cyz - czz*cxy)*invdetC;
-                noise->invC[X][Z][n] = (cxy*cyz - cxz*cyy)*invdetC;
-                noise->invC[Y][Z][n] = (cxy*cxz - cxx*cyz)*invdetC;
+                // This gives NaNs lots of the time, try a Cholesky-like decomposition
+                //double olddetC = cxx*(czz*cyy - cyz*cyz) - cxy*(cxy*czz - cxz*cyz) + cxz*(cxy*cyz - cyy*cxz);
+                double d1 = cxx;
+                double d2 = cyy - cxy*cxy/d1;
+                double t  = cyz - cxy*cxz/d1;
+                double d3 = (czz - cxz*cxz/d1) - (t*t)/d2;
+                double num;
+                double logdetC = log(d1) + log(d2) + log(d3);
+                noise->logdetC[n] = logdetC;
+                noise->invC[X][X][n] = signed_log_div(cyy*czz - cyz*cyz, logdetC);
+                noise->invC[Y][Y][n] = signed_log_div(czz*cxx - cxz*cxz, logdetC);
+                noise->invC[Z][Z][n] = signed_log_div(cxx*cyy - cxy*cxy, logdetC);
+                // note that these can be negative even with pos. def. C, need sign-safety here
+                noise->invC[X][Y][n] = signed_log_div(cxz*cyz - czz*cxy, logdetC);
+                noise->invC[X][Z][n] = signed_log_div(cxy*cyz - cxz*cyy, logdetC);
+                noise->invC[Y][Z][n] = signed_log_div(cxy*cxz - cxx*cyz, logdetC);
                 noise->invC[Y][X][n] = noise->invC[X][Y][n];
                 noise->invC[Z][X][n] = noise->invC[X][Z][n];
                 noise->invC[Z][Y][n] = noise->invC[Y][Z][n];
@@ -347,7 +359,7 @@ double power_spectrum(double *data, int n)
     return (Re*Re + Im*Im);
 }
 
-double fourier_nwip(double *a, double *b, double *invC, int N)
+double fourier_nwip(const double *a, const double *b, const double *invC, int N)
 {
     int j,k;
     double arg, product;
@@ -367,7 +379,7 @@ double fourier_nwip(double *a, double *b, double *invC, int N)
     return(2.0*arg);
 }
 
-double wavelet_nwip(double *a, double *b, double *invC, int *list, int N)
+double wavelet_nwip(const double *a, const double *b, const double *invC, const int *list, int N)
 {
     double arg = 0.0;
     for(int n=0; n<N; n++)
@@ -379,8 +391,14 @@ double wavelet_nwip(double *a, double *b, double *invC, int *list, int N)
 }
 
 int even_sampled_search(double *array, int nmin, int nmax, double x) {
+    // Bug history: an earlier refactor dropped the array[0] offset, so any
+    // spline whose x-axis didn't start at 0 (e.g. logf-spaced SGWB response,
+    // padded modulation t) returned wildly wrong indices and gave NaN logL.
     double dx = array[1] - array[0];
-    return (int)floor(x/dx);
+    int n = (int)floor((x - array[0]) / dx);
+    if (n < nmin) n = nmin;
+    if (n > nmax - 1) n = nmax - 1;
+    return n;
 }
 double snr(struct Source *source, struct Noise *noise)
 {
@@ -572,6 +590,17 @@ void matrix_multiply(double **A, double **B, double **AB, int N)
     
 }
 
+void my_cholesky_decomp(int N, const double A[N][N], double L[N][N]) {
+    for (size_t i = 0; i < N; ++i)
+        for (size_t j = 0; j < N; ++j)
+            L[i][j] = A[i][j];
+    int info = LAPACKE_dpotrf(LAPACK_ROW_MAJOR, 'L', N, &L[0][0], N);
+    // zero the upper triangle for a clean lower-triangular L
+    for (size_t i = 0; i < N; ++i)
+        for (size_t j = i + 1; j < N; ++j)
+            L[i][j] = 0.0;
+}
+
 
 void cholesky_decomp(double **A, double **L, int N)
 {
@@ -749,6 +778,7 @@ void glass_inverse_complex_fft_outplace(double *freqdata, double *timedata, int 
 
 void glass_forward_real_fft(double *data, int N)
 {
+    // TODO: try stack allocation here
     kiss_fftr_cfg cfg = kiss_fftr_alloc(N, 0, NULL, NULL); // 0 indicates forward FFT;
     kiss_fft_scalar *timedata = malloc(N*sizeof(kiss_fft_scalar));
     kiss_fft_cpx    *freqdata = malloc((N/2+1)*sizeof(kiss_fft_cpx));
@@ -799,7 +829,8 @@ void glass_inverse_real_fft_outplace(double *freqdata, double *timedata, int N)
 
 void glass_inverse_real_fft(double *data, int N)
 {
-    // TODO: with creative pointer casting we can probably avoid any allocs here
+    // TODO: this is inplace but doesn't have enough bins for the whole signal
+    // should probably force DC bin=0 not Nyquist
     kiss_fftr_cfg cfg = kiss_fftr_alloc(N, 1, NULL, NULL); // 0 indicates forward FFT;
     kiss_fft_scalar *timedata = malloc(N*sizeof(kiss_fft_scalar));
     kiss_fft_cpx    *freqdata = malloc((N/2+1)*sizeof(kiss_fft_cpx));
@@ -820,31 +851,6 @@ void glass_inverse_real_fft(double *data, int N)
     free(timedata);
     free(freqdata);
 }
-
-/*
-void glass_inverse_real_fft(double *data, int N)
-{
-    kiss_fftr_cfg cfg = kiss_fftr_alloc(N, 1, NULL, NULL); // 0 indicates forward FFT;
-    kiss_fft_scalar *timedata = malloc(N*sizeof(kiss_fft_scalar));
-    kiss_fft_cpx    *freqdata = malloc((N/2+1)*sizeof(kiss_fft_cpx));
-
-    for(int i=0; i<N/2; i++)
-    {
-        freqdata[i].r = data[2*i];
-        freqdata[i].i = data[2*i+1];
-    }
-    
-    // Perform the rFFT
-    kiss_fftr(cfg, timedata, freqdata);
-    
-    for(int i=0; i<N; i++)  data[i] = timedata[i];
-    
-    // Clean up and free memory
-    kiss_fftr_free(cfg);
-    free(timedata);
-    free(freqdata);
-}
-*/
 
 void CubicSplineGLASS(int N, double *x, double *y, int Nint, double *xint, double *yint)
 {
@@ -1045,14 +1051,18 @@ void unwrap_phase(int N, double *phase)
     }
 }
 
-double simpson_integration_3(double f0, double f1, double f2, double h)
+inline double simpson_integration_3(double f0, double f1, double f2, double h)
 {
+    // note: unlike wikipedia, "h" here is the full width
     return h*(f0 + 4.0*f1 + f2)/6.0;
 }
 
-double simpson_integration_5(double f0, double f1, double f2, double f3, double f4, double h)
+inline double simpson_integration_5(double f0, double f1, double f2, double f3, double f4, double h)
 {
-    return h*(f0 + 4.0*f1 + 2.0*f2 + 4.0*f3 + f4)/12.0;
+    // note: unlike wikipedia, "h" here is the full width
+    //return h*(f0 + 4.0*f1 + 2.0*f2 + 4.0*f3 + f4)/12.0;
+    // use Boole's rule here for better error. (6th order instead of 4th)
+    return h*(7.0*f0 + 32.0*f1 + 12.0*f2 + 32.0*f3 + 7.0*f4)/90.0;
 }
 
 static int int_compare(const void* a, const void* b) 
@@ -1294,5 +1304,17 @@ void extract_amplitude_and_phase(int Ns, double *As, double *Dphi, double *M, do
     
     free_double_vector(flip);
     free_double_vector(pjump);
-    
+
+}
+
+double glass_erfc(double x)
+{
+    // Abramowitz & Stegun 7.1.26 applied to erfc directly so we keep precision
+    // for large positive x (where 1 - erf cancels). Reflection handles x < 0.
+    double ax = fabs(x);
+    double t = 1.0 / (1.0 + 0.3275911 * ax);
+    double poly = ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t
+                    - 0.284496736) * t + 0.254829592) * t;
+    double y = poly * exp(-ax * ax);
+    return (x < 0.0) ? (2.0 - y) : y;
 }

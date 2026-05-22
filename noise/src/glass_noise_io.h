@@ -34,14 +34,21 @@ void print_spline_state(struct SplineModel *model, FILE *fptr, int step);
 void print_instrument_state(struct InstrumentModel *model, FILE *fptr);
 
 /**
- \brief Print current state of instrument model to ASCII
+ \brief Print current state of foreground model to ASCII
  */
 void print_foreground_state(struct ForegroundModel *model, FILE *fptr);
+
+/**
+ \brief Print current state of sgwb model to ASCII
+ */
+void print_sgwb_state(struct SGWBModel *model, FILE *fptr);
 
 /**
  \brief Print full PSD model to file named `filename`
  */
 void print_noise_model(struct Noise *noise, char filename[]);
+void print_noise_model_dynamic(struct Data* data, struct Noise *noise, char filename[]);
+void print_noise_model_dynamic_coarse(struct Data* data, struct Noise *coarse, int Q, char filename[]);
 
 /**
  \brief Print data whitened by modeled variance to file named `filename`

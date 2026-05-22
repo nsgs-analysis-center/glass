@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Tyson B. Littenberg & Neil J. Cornish
+ * Copyright 2023 Tyson B. Littenberg, Neil J. Cornish, Robert Rosati
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 
 #include <glass_utils.h>
+#include <glass_math.h>
 
 #include "glass_noise.h"
 
@@ -99,6 +100,7 @@ void alloc_instrument_model(struct InstrumentModel *model, int Ndata, int Nlayer
     model->sacc = malloc(model->Nlink*sizeof(double));
     model->psd = malloc(sizeof(struct Noise));
     alloc_noise(model->psd, Ndata, Nlayer, Nchannel);
+    model->grid_cache = NULL;
 }
 
 void alloc_foreground_model(struct ForegroundModel *model, int Ndata, int Nlayer, int Nchannel)
@@ -107,6 +109,100 @@ void alloc_foreground_model(struct ForegroundModel *model, int Ndata, int Nlayer
     model->sgal = malloc(model->Nparams*sizeof(double));
     model->psd = malloc(sizeof(struct Noise));
     alloc_noise(model->psd, Ndata, Nlayer, Nchannel);
+    model->grid_cache = NULL;
+}
+
+struct SGWBResponse* global_SGWBResponse = NULL;
+
+void alloc_sgwb_model(struct SGWBModel *model, int Ndata, int Nlayer, int Nchannel, SGWB_t SGWB_type)
+{
+    model->SGWB_type = SGWB_type;
+    model->Nparams = SGWB_TEMPLATE_NPARAMS[SGWB_type];
+    model->params = malloc(model->Nparams*sizeof(double));
+    model->psd = malloc(sizeof(struct Noise));
+    alloc_noise(model->psd, Ndata, Nlayer, Nchannel);
+    model->grid_cache = NULL;
+    if (global_SGWBResponse == NULL) {
+        model->R = malloc(sizeof(struct SGWBResponse)); // memory leak, only once per run
+        alloc_pop_sgwb_response(model->R,"./sgwb_response_xyz2.dat");
+        global_SGWBResponse = model->R;
+    } else {
+        model->R = global_SGWBResponse;
+    }
+}
+
+void alloc_pop_sgwb_response(struct SGWBResponse* sgwbr, char* fname) {
+    FILE* ff = fopen(fname,"r");
+    if (ff == NULL) {
+        printf("Could not open file %s ! SGWBResponse generation failed.",fname);
+        exit(-2);
+    }
+    int *N = &sgwbr->N;
+    if (fscanf(ff,"%d\n",N) != 1) {
+        fclose(ff);
+        printf("Failed to read first line of %s ! SGWBResponse generation failed.",fname);
+        exit(-2);
+    }
+    if (*N > 3000 || *N < 10) {
+        fclose(ff);
+        printf("That seems wrong? I read N=%d . SGWBResponse generation failed.",*N);
+        exit(-2);
+    }
+
+    // memory leak
+    sgwbr->logf = malloc(sizeof(double) * *N); 
+    sgwbr->logXX = malloc(sizeof(double) * *N);
+    sgwbr->logYY = malloc(sizeof(double) * *N);
+    sgwbr->logZZ = malloc(sizeof(double) * *N);
+    sgwbr->asinhXY = malloc(sizeof(double) * *N);
+    sgwbr->asinhXZ = malloc(sizeof(double) * *N);
+    sgwbr->asinhYZ = malloc(sizeof(double) * *N);
+    sgwbr->asinh_scale = 1e-7;
+    for (int i=0;i<*N;i++) {
+        double f,XX,YY,ZZ,XY,XZ,YZ;
+        fscanf(ff,"%lf %lf %lf %lf %lf %lf %lf\n",&f,&XX,&YY,&ZZ,&XY,&XZ,&YZ);
+        sgwbr->logf[i] = log(f);
+        sgwbr->logXX[i] = log(XX);
+        sgwbr->logYY[i] = log(YY);
+        sgwbr->logZZ[i] = log(ZZ);
+        sgwbr->asinhXY[i] = asinh(XY / sgwbr->asinh_scale);
+        sgwbr->asinhXZ[i] = asinh(XZ / sgwbr->asinh_scale);
+        sgwbr->asinhYZ[i] = asinh(YZ / sgwbr->asinh_scale);
+    }
+    fclose(ff);
+
+
+    // memory leak
+    sgwbr->spline_logRXX   = alloc_cubic_spline(*N);
+    sgwbr->spline_logRYY   = alloc_cubic_spline(*N);
+    sgwbr->spline_logRZZ   = alloc_cubic_spline(*N);
+    sgwbr->spline_asinhRXY = alloc_cubic_spline(*N);
+    sgwbr->spline_asinhRXZ = alloc_cubic_spline(*N);
+    sgwbr->spline_asinhRYZ = alloc_cubic_spline(*N);
+    initialize_cubic_spline(sgwbr->spline_logRXX, sgwbr->logf, sgwbr->logXX, SPLINE_EVEN_SAMPLED);
+    initialize_cubic_spline(sgwbr->spline_logRYY, sgwbr->logf, sgwbr->logYY, SPLINE_EVEN_SAMPLED);
+    initialize_cubic_spline(sgwbr->spline_logRZZ, sgwbr->logf, sgwbr->logZZ, SPLINE_EVEN_SAMPLED);
+    initialize_cubic_spline(sgwbr->spline_asinhRXY, sgwbr->logf, sgwbr->asinhXY, SPLINE_EVEN_SAMPLED);
+    initialize_cubic_spline(sgwbr->spline_asinhRXZ, sgwbr->logf, sgwbr->asinhXZ, SPLINE_EVEN_SAMPLED);
+    initialize_cubic_spline(sgwbr->spline_asinhRYZ, sgwbr->logf, sgwbr->asinhYZ, SPLINE_EVEN_SAMPLED);
+
+}
+
+void free_sgwb_response(struct SGWBResponse *sgwbr) {
+    free(sgwbr->logf);
+    free(sgwbr->logXX);
+    free(sgwbr->logYY);
+    free(sgwbr->logZZ);
+    free(sgwbr->asinhXY);
+    free(sgwbr->asinhXZ);
+    free(sgwbr->asinhYZ);
+    free_cubic_spline(sgwbr->spline_logRXX);
+    free_cubic_spline(sgwbr->spline_logRYY);
+    free_cubic_spline(sgwbr->spline_logRZZ);
+    free_cubic_spline(sgwbr->spline_asinhRXY);
+    free_cubic_spline(sgwbr->spline_asinhRXZ);
+    free_cubic_spline(sgwbr->spline_asinhRYZ);
+    free(sgwbr);
 }
 
 void free_spline_model(struct SplineModel *model)
@@ -118,16 +214,45 @@ void free_spline_model(struct SplineModel *model)
 
 void free_instrument_model(struct InstrumentModel *model)
 {
+    if (model->grid_cache) free_instrument_model(model->grid_cache);
     free(model->soms);
     free(model->sacc);
     free_noise(model->psd);
     free(model);
 }
 
+void free_galaxy_modulation(struct GalaxyModulation *gm) {
+    if(gm->XX_spline) free_cubic_spline(gm->XX_spline);
+    if(gm->YY_spline) free_cubic_spline(gm->YY_spline);
+    if(gm->ZZ_spline) free_cubic_spline(gm->ZZ_spline);
+    if(gm->XY_spline) free_cubic_spline(gm->XY_spline);
+    if(gm->XZ_spline) free_cubic_spline(gm->XZ_spline);
+    if(gm->YZ_spline) free_cubic_spline(gm->YZ_spline);
+    if(gm->cache_XX) free(gm->cache_XX);
+    if(gm->cache_YY) free(gm->cache_YY);
+    if(gm->cache_ZZ) free(gm->cache_ZZ);
+    if(gm->cache_XY) free(gm->cache_XY);
+    if(gm->cache_XZ) free(gm->cache_XZ);
+    if(gm->cache_YZ) free(gm->cache_YZ);
+}
+
 void free_foreground_model(struct ForegroundModel *model)
 {
+    if (model->grid_cache) free_foreground_model(model->grid_cache);
+    if (model->modulation) free_galaxy_modulation(model->modulation);
     free_noise(model->psd);
     free(model->sgal);
+    free(model);
+}
+
+void free_sgwb_model(struct SGWBModel *model)
+{
+    if (model->grid_cache) free_sgwb_model(model->grid_cache);
+    free_noise(model->psd);
+    // TODO should actually only do this if we're the last SGWBModel instance.
+    // for now, leak this memory
+    // free_sgwb_response(model->R);
+    free(model->params);
     free(model);
 }
 
@@ -175,6 +300,21 @@ void copy_foreground_model(struct ForegroundModel *origin, struct ForegroundMode
     copy->Tobs = origin->Tobs;
     copy->Nparams = origin->Nparams;
     memcpy(copy->sgal, origin->sgal, origin->Nparams*sizeof(double));
+    
+}
+void copy_sgwb_model(struct SGWBModel *origin, struct SGWBModel *copy)
+{
+    //Noise model parameters
+    copy_noise(origin->psd,copy->psd);
+    
+    //Model likelihood
+    copy->logL = origin->logL;
+
+    //SGWB model Parameters
+    copy->Tobs = origin->Tobs;
+    copy->Nparams = origin->Nparams;
+    copy->SGWB_type = origin->SGWB_type;
+    memcpy(copy->params, origin->params, origin->Nparams*sizeof(double));
     
 }
 
@@ -268,9 +408,18 @@ void generate_instrument_noise_model(struct Orbit *orbit, struct InstrumentModel
     for(int n=0; n<model->psd->N; n++)
     {
         f = model->psd->f[n];
+        if(f == 0.0) {
+            model->psd->C[0][0][n] = 0.0;
+            model->psd->C[0][1][n] = 0.0;
+            model->psd->C[0][2][n] = 0.0;
+            model->psd->C[1][2][n] = 0.0;
+            model->psd->C[2][2][n] = 0.0;
+            continue;
+        }
         x = f/orbit->fstar;
         f2= f*f;
         
+        /*
         //at low frequency use linear approximation for trig functions
         if(x<0.1)
         {
@@ -282,6 +431,7 @@ void generate_instrument_noise_model(struct Orbit *orbit, struct InstrumentModel
             cosx = cos(x);
             tdi_transfer_function = noise_transfer_function(x);
         }
+        */
 
         cosx = cos(x);
         tdi_transfer_function = noise_transfer_function(x);
@@ -393,57 +543,70 @@ void generate_instrument_noise_model(struct Orbit *orbit, struct InstrumentModel
                 model->psd->C[i][j][n] /= 4.0;
     }
 }
-
-void generate_instrument_noise_model_wavelet(struct Wavelets *wdm, struct Orbit *orbit, struct InstrumentModel *model)
-{
-
-    /* 
-    oversampled frequency grid 
-    */
-    struct InstrumentModel *grid = malloc(sizeof(struct InstrumentModel));
-
+//TODO: is it worth oversampling these very smooth functional forms...?
+/*
+void generate_instrument_noise_model_wavelet_coarse(struct Wavelets *wdm, struct Orbit *orbit, struct InstrumentModel *model) {
     // active layers
     int imin = (int)round(model->psd->f[0]/wdm->df);
     int imax = (int)round(model->psd->f[model->psd->N-1]/wdm->df)+1;
+    generate_instrument_noise_model(orbit,model);
+    //NOTE: normalization fudge factor
+    for(int i=0; i<model->psd->N; i++)
+        for(int n=0; n<3; n++)
+            for(int m=n; m<3; m++)
+                C[n][m][i]/=8.;
+}
+*/
 
-    // initialize data models
-    alloc_instrument_model(grid, 2*wdm->NF, imax-imin, 3);
+void generate_instrument_noise_model_wavelet(struct Wavelets *wdm, struct Orbit *orbit, struct InstrumentModel *model)
+{
+    /*
+     * Sample the instrument model directly at the wavelet layer-center
+     * frequencies of the active band (f_k = (imin+k) * wdm->df). The approx
+     * FFT->WDM convolution only reads layer-center bins, and only the active
+     * layers are written back to model->psd, so evaluating on either the full
+     * FFT grid or the full layer grid is wasted work; this is identical.
+     * Stationary instrument model only.
+     */
+    int NF = wdm->NF;
+    int NT = wdm->NT;
+    int ND = NF * NT;
 
-    // set up psd frequency grid
-    for(int n=0; n<grid->psd->N; n++)
-        grid->psd->f[n] = wdm->df/2.0*(n+1);
+    // active layers (model->psd->C[i][j][k] holds layer imin+k)
+    int imin = (int)round(model->psd->f[0]/wdm->df);
+    int imax = (int)round(model->psd->f[model->psd->N-1]/wdm->df)+1;
+    int Nactive = imax - imin;
 
-    // initialize noise levels
+    struct InstrumentModel *grid = model->grid_cache;
+    if (grid && (grid->psd->N != Nactive ||
+                 grid->psd->f[0] != (double)imin * wdm->df)) {
+        // band or wdm changed: drop and re-alloc
+        free_instrument_model(grid);
+        grid = NULL;
+    }
+    if (!grid) {
+        grid = malloc(sizeof(struct InstrumentModel));
+        alloc_instrument_model(grid, Nactive, NF, 3);
+        for(int n=0; n<Nactive; n++)
+            grid->psd->f[n] = (double)(imin + n) * wdm->df;
+        model->grid_cache = grid;
+    }
     for(int i=0; i<grid->Nlink; i++)
     {
         grid->soms[i] = model->soms[i];
         grid->sacc[i] = model->sacc[i];
     }
+    generate_instrument_noise_model(orbit, grid);
 
-    // get noise covariance matrix for initial parameters
-    generate_instrument_noise_model(orbit,grid);
-    
-    /*
-    integrate instrument noise over each frequency layer
-    */
-    double ***C     = model->psd->C;
-    double ***Cgrid = grid->psd->C;
-    for(int i=imin; i<imax; i++)
-    {
-        int j = 2*i-2;
-        for(int n=0; n<3; n++)
-            for(int m=n; m<3; m++)
-                C[n][m][i-imin] = simpson_integration_3(Cgrid[n][m][j],Cgrid[n][m][j+1],Cgrid[n][m][j+2],1.0);
-    }
-
-    //NOTE: normalization fudge factor
-    for(int i=0; i<model->psd->N; i++)
-        for(int n=0; n<3; n++)
-            for(int m=n; m<3; m++)
-                C[n][m][i]/=4.;
-
-    free_instrument_model(grid);
-
+    // Layer variance = PSD(f_m) / ND, matching stationary_dft_psd_to_wdm_layer_var_approx
+    double inv_ND = 1.0 / (double)ND;
+    for(int n=0; n<3; n++)
+        for(int m=n; m<3; m++)
+            for(int k=0; k<Nactive; k++) {
+                double v = grid->psd->C[n][m][k] * inv_ND;
+                model->psd->C[n][m][k] = v;
+                model->psd->C[m][n][k] = v;
+            }
 }
 
 void generate_galactic_foreground_model(struct ForegroundModel *model)
@@ -492,23 +655,35 @@ void generate_galactic_foreground_model(struct ForegroundModel *model)
 
 void generate_galactic_foreground_model_wavelet(struct Wavelets *wdm, struct ForegroundModel *model)
 {
-    /* 
-    oversampled frequency grid 
-    */
-    struct ForegroundModel *grid = malloc(sizeof(struct ForegroundModel));
+    /*
+     * Sample the foreground PSD directly at the active-band layer-center
+     * frequencies. The approx FFT->WDM map only reads layer-center bins,
+     * so evaluating outside the active band was wasted work.
+     */
+    int NF = wdm->NF;
+    int NT = wdm->NT;
+    int ND = NF * NT;
 
-    // active layers
     int imin = (int)round(model->psd->f[0]/wdm->df);
     int imax = (int)round(model->psd->f[model->psd->N-1]/wdm->df)+1;
+    int Nactive = imax - imin;
 
-    // initialize data models
-    alloc_foreground_model(grid, 2*wdm->NF, imax-imin, 3);
+    struct ForegroundModel *grid = model->grid_cache;
+    if (grid && (grid->psd->N != Nactive ||
+                 grid->psd->f[0] != (double)imin * wdm->df)) {
+        free_foreground_model(grid);
+        grid = NULL;
+    }
+    if (!grid) {
+        grid = malloc(sizeof(struct ForegroundModel));
+        alloc_foreground_model(grid, Nactive, NF, 3);
+        for(int n=0; n<Nactive; n++)
+            grid->psd->f[n] = (double)(imin + n) * wdm->df;
+        model->grid_cache = grid;
+    }
 
-    // set up psd frequency grid
-    for(int n=0; n<grid->psd->N; n++)
-        grid->psd->f[n] = wdm->df/2.0*(n+1);
-
-    // initialize foreground parameters levels
+    // copy foreground parameters
+    map_array_to_foreground_params(model);
     grid->Tobs  = model->Tobs;
     grid->Amp   = model->Amp;
     grid->f1    = model->f1;
@@ -517,39 +692,203 @@ void generate_galactic_foreground_model_wavelet(struct Wavelets *wdm, struct For
     grid->f2    = model->f2;
     map_foreground_params_to_array(grid);
 
-    // get noise covariance matrix for initial parameters
     generate_galactic_foreground_model(grid);
 
-    /*
-    integrate foreground over each frequency layer
-    */
-    double ***C     = model->psd->C;
-    double ***Cgrid = grid->psd->C;
-
-    for(int i=imin; i<imax; i++)
-    {
-        int j = 2*i-2;
+    // galaxy_foreground diverges at f=0; only present in the grid if imin==0.
+    if (imin == 0) {
         for(int n=0; n<3; n++)
-            for(int m=n; m<3; m++)
-                C[n][m][i-imin] = simpson_integration_3(Cgrid[n][m][j],Cgrid[n][m][j+1],Cgrid[n][m][j+2],1.0);
+            for(int m=0; m<3; m++)
+                grid->psd->C[n][m][0] = 0.0;
     }
 
-    //NOTE: undo isotropc -1/2 on covariance hardcoded in generate_galactic_foreground_model()
-    for(int i=0; i<model->psd->N; i++)
+    // Undo the isotropic -1/2 baked into generate_galactic_foreground_model
+    // off-diagonals (modulation(t) is applied later).
+    for(int n=0; n<3; n++)
+        for(int m=n+1; m<3; m++)
+            for(int k=0; k<Nactive; k++)
+                grid->psd->C[n][m][k] *= -2.0;
+
+    // Layer variance = PSD(f_m) / ND, matching stationary_dft_psd_to_wdm_layer_var_approx
+    double inv_ND = 1.0 / (double)ND;
+    for(int n=0; n<3; n++)
+        for(int m=n; m<3; m++)
+            for(int k=0; k<Nactive; k++) {
+                double v = grid->psd->C[n][m][k] * inv_ND;
+                model->psd->C[n][m][k] = v;
+                model->psd->C[m][n][k] = v;
+            }
+}
+
+
+_Static_assert(SGWB_TEMPLATE_COUNT == 3, "Did you add an SGWB template? Implement its form in frequency in a new function here");
+inline double sgwb_powerlaw(double f, const double* params) {
+    static double fref = 25.0;
+    double A     = pow(10.0,params[0]);
+    double alpha = params[1];
+    double prefactor = Hscale / (f*f*f);
+    return prefactor*A*pow(f/fref,alpha);
+}
+
+// Pi & Sasaki, JCAP 2020 (arXiv:2005.12306), wide-Delta limit, eq. (3.29).
+// Falls back to the asymptotic numerical value (3.33) for D >= 9 where the
+// closed-form expression suffers from catastrophic cancellation.
+inline double sgwb_lognormal(double f, const double* params) {
+    double A     = pow(10.0,params[0]);
+    double fstar = pow(10.0,params[1]);
+    double D     = pow(10.0,params[2]);
+    double prefactor = Hscale / (f*f*f);
+    double ft = f/fstar;
+    if (D < 9.0) {
+        double logft = log(ft);
+        double logK  = logft + 1.5*D*D;
+        double sqrtpi = sqrt(M_PI);
+        double half_log32 = 0.5*log(1.5);
+        double D2 = D*D;
+        double t1 = 4.0/5.0/sqrtpi * ft*ft*ft * exp(9.0*D2/4.0) / D
+                    * ((logK*logK + 0.5*D2) * glass_erfc((logK + half_log32)/D)
+                       - D/sqrtpi * exp(-(logK + half_log32)*(logK + half_log32)/D2)
+                         * (logK - half_log32));
+        double t2 = 0.0659/D2 * ft*ft * exp(D2)
+                    * exp(-(logft + D2 - 0.5*log(4.0/3.0))*(logft + D2 - 0.5*log(4.0/3.0))/D2);
+        double t3 = (1.0/3.0) * sqrt(2.0)/sqrtpi * pow(ft,-4) * exp(8.0*D2) / D
+                    * exp(-logft*logft/(2.0*D2))
+                    * glass_erfc((4.0*D2 - logft + log(4.0))/(D*sqrt(2.0)));
+        return prefactor * cgOr0 * A*A * (t1 + t2 + t3);
+    } else {
+        // Numerical asymptote from Pi & Sasaki eq. (3.33).
+        return prefactor * cgOr0 * A*A * 0.783/1e3;
+    }
+}
+
+inline double sgwb_phase_transition(double f, const double* params) {
+    double rb = params[0];
+    double b  = params[1];
+    double Ap = pow(10.0,params[2]);
+    double fp = pow(10.0,params[3]);
+    double rb4 = rb*rb*rb*rb;
+    double m = (9*rb4+b)/(rb4+1);
+    double s = f/fp;
+    double s4 = s*s*s*s;
+    double s9 = s4*s4*s;
+    double M = s9 * pow((1+rb4)/(rb4+s4),(9-b)/4) * pow((b+4)/(b+4-m + m*s*s),(b+4)/2);
+    double prefactor = Hscale / (f*f*f);
+    return Ap*M*prefactor;
+}
+
+void generate_sgwb_model(struct SGWBModel *model)
+{
+    double f;
+    double Sgw;
+
+    
+    for(int n=0; n<model->psd->N; n++)
+    {
+        f = model->psd->f[n];
+        
+        _Static_assert(SGWB_TEMPLATE_COUNT == 3, "Did you add an SGWB template? Edit this switch case, it needs to be exhaustive.");
+        switch(model->SGWB_type) {
+            case SGWB_TEMPLATE_POWERLAW:
+                Sgw = sgwb_powerlaw(f,model->params);
+                break;
+            case SGWB_TEMPLATE_LOGNORMAL:
+                Sgw = sgwb_lognormal(f,model->params);
+                break;
+            case SGWB_TEMPLATE_PHASE_TRANSITION:
+                Sgw = sgwb_phase_transition(f,model->params);
+                break;
+            default:
+                fprintf(stderr,"Unimplemented SGWB type?\n\tTemplate index: %d\n\tTemplate name: %s\n",model->SGWB_type,SGWB_TEMPLATE_NAMES[model->SGWB_type]);
+                exit(1);
+                break;
+        }
+        
+        switch(model->psd->Nchannel)
+        {
+            double Rxx, Ryy, Rzz, Rxy, Rxz, Ryz;
+            double logf;
+            case 1:
+            case 2:
+                fprintf(stderr, "Unimplemented error! SGWB covariance generation with Nchannels = %d\n",model->psd->Nchannel);
+                exit(-3);
+                break;
+            case 3:
+                if (f == 0.0) {
+                    // TODO better zero check
+                    model->psd->C[0][0][n] = 0.0;
+                    model->psd->C[1][1][n] = 0.0;
+                    model->psd->C[2][2][n] = 0.0;
+                    model->psd->C[0][1][n] = model->psd->C[1][0][n] = 0.0;
+                    model->psd->C[0][2][n] = model->psd->C[2][0][n] = 0.0;
+                    model->psd->C[1][2][n] = model->psd->C[2][1][n] = 0.0;
+                    continue;
+                }
+                logf = log(f);
+                Rxx =  exp(spline_interpolation(model->R->spline_logRXX, logf));
+                Ryy =  exp(spline_interpolation(model->R->spline_logRYY, logf));
+                Rzz =  exp(spline_interpolation(model->R->spline_logRZZ, logf));
+                Rxy = model->R->asinh_scale * sinh(spline_interpolation(model->R->spline_asinhRXY, logf));
+                Rxz = model->R->asinh_scale * sinh(spline_interpolation(model->R->spline_asinhRXZ, logf));
+                Ryz = model->R->asinh_scale * sinh(spline_interpolation(model->R->spline_asinhRYZ, logf));
+                // note that, in equal-arm LISA, XYZ: Rxx = Ryy = Rzz, and Rxy = Rxz = Ryz = -0.5*Rxx
+                model->psd->C[0][0][n] = Rxx*Sgw;
+                model->psd->C[1][1][n] = Ryy*Sgw;
+                model->psd->C[2][2][n] = Rzz*Sgw;
+                model->psd->C[0][1][n] = model->psd->C[1][0][n] = Rxy*Sgw;
+                model->psd->C[0][2][n] = model->psd->C[2][0][n] = Rxz*Sgw;
+                model->psd->C[1][2][n] = model->psd->C[2][1][n] = Ryz*Sgw;
+                break;
+        }
+    }
+}
+void generate_sgwb_model_wavelet(struct Wavelets* wdm, struct SGWBModel *model)
+{
+    // Sample directly at active-band layer-center frequencies (see comment in
+    // generate_instrument_noise_model_wavelet).
+    int NF = wdm->NF;
+    int NT = wdm->NT;
+    int ND = NF * NT;
+
+    int imin = (int)round(model->psd->f[0]/wdm->df);
+    int imax = (int)round(model->psd->f[model->psd->N-1]/wdm->df)+1;
+    int Nactive = imax - imin;
+
+    struct SGWBModel *grid = model->grid_cache;
+    if (grid && (grid->psd->N != Nactive ||
+                 grid->psd->f[0] != (double)imin * wdm->df)) {
+        free_sgwb_model(grid);
+        grid = NULL;
+    }
+    if (!grid) {
+        grid = malloc(sizeof(struct SGWBModel));
+        alloc_sgwb_model(grid, Nactive, NF, 3, model->SGWB_type);
+        for(int n=0; n<Nactive; n++)
+            grid->psd->f[n] = (double)(imin + n) * wdm->df;
+        model->grid_cache = grid;
+    }
+
+    grid->Nparams = model->Nparams;
+    grid->Tobs = model->Tobs;
+    for (int i=0; i<model->Nparams; i++)
+        grid->params[i] = model->params[i];
+
+    generate_sgwb_model(grid);
+
+    // DC layer is only in the grid if the active band starts at 0.
+    if (imin == 0) {
         for(int n=0; n<3; n++)
-            for(int m=n; m<3; m++)
-                if(n!=m) C[n][m][i]*=-2.;
+            for(int m=0; m<3; m++)
+                grid->psd->C[n][m][0] = 0.0;
+    }
 
-
-    //NOTE: normalization fudge factor
-    for(int i=0; i<model->psd->N; i++)
-        for(int n=0; n<3; n++)
-            for(int m=n; m<3; m++)
-                C[n][m][i]/=4.;
-
-
-
-    free_foreground_model(grid);
+    // Layer variance = PSD(f_m) / ND, matching stationary_dft_psd_to_wdm_layer_var_approx
+    double inv_ND = 1.0 / (double)ND;
+    for(int n=0; n<3; n++)
+        for(int m=n; m<3; m++)
+            for(int k=0; k<Nactive; k++) {
+                double v = grid->psd->C[n][m][k] * inv_ND;
+                model->psd->C[n][m][k] = v;
+                model->psd->C[m][n][k] = v;
+            }
 }
 
 void generate_full_covariance_matrix(struct Noise *full, struct Noise *component, int Nchannel)
@@ -566,89 +905,208 @@ void generate_full_covariance_matrix(struct Noise *full, struct Noise *component
     }
 }
 
-void generate_full_dynamic_covariance_matrix(struct Wavelets *wdm, struct InstrumentModel *inst, struct ForegroundModel *conf, struct Noise *full)
+
+// Q=1 is the degenerate (full-resolution) case of the coarse path: Ncoarse=NT,
+// k = q + jrel*NT, which equals wavelet_pixel_to_index(i, lmin+jrel) - kmin.
+// The full-res LL (my_noise_log_likelihood_wavelet) reads noise->C[k] via that
+// same linearization, so this delegation is layout-equivalent.
+void generate_full_dynamic_covariance_matrix(struct Wavelets *wdm, struct InstrumentModel *inst, struct ForegroundModel *conf, struct SGWBModel *sgwb, struct Noise *full)
 {
-    int k;
-    int jmin=(int)round(inst->psd->f[0]/wdm->df);
-    int jmax=(int)round(inst->psd->f[inst->psd->N-1]/wdm->df)+1; 
-
-    for(int i=0; i<wdm->NT; i++)
-    {
-        double t = i*wdm->dt;
-        for(int j=jmin; j<jmax; j++)
-        {
-            wavelet_pixel_to_index(wdm,i,j,&k);
-
-            k-=wdm->kmin;
-
-            //stationary instrument noise 
-            full->C[0][0][k] = inst->psd->C[0][0][j-jmin];
-            full->C[1][1][k] = inst->psd->C[1][1][j-jmin];
-            full->C[2][2][k] = inst->psd->C[2][2][j-jmin];
-            full->C[0][1][k] = inst->psd->C[0][1][j-jmin];
-            full->C[0][2][k] = inst->psd->C[0][2][j-jmin];
-            full->C[1][2][k] = inst->psd->C[1][2][j-jmin];
-
-            /*modulated galactic foreground
-            full->C[0][0][k] += conf->psd->C[0][0][j-jmin]*spline_interpolation(conf->modulation->XX_spline, t);
-            full->C[1][1][k] += conf->psd->C[1][1][j-jmin]*spline_interpolation(conf->modulation->YY_spline, t);
-            full->C[2][2][k] += conf->psd->C[2][2][j-jmin]*spline_interpolation(conf->modulation->ZZ_spline, t);
-            full->C[0][1][k] += conf->psd->C[0][1][j-jmin]*spline_interpolation(conf->modulation->XY_spline, t);
-            full->C[0][2][k] += conf->psd->C[0][2][j-jmin]*spline_interpolation(conf->modulation->XZ_spline, t);
-            full->C[1][2][k] += conf->psd->C[1][2][j-jmin]*spline_interpolation(conf->modulation->YZ_spline, t);*/
-
-            //noise covariance matrix is symmetric
-            full->C[1][0][k] = full->C[0][1][k]; 
-            full->C[2][0][k] = full->C[0][2][k]; 
-            full->C[2][1][k] = full->C[1][2][k]; 
-        } //loop over frequency layers
-    } //loop over time slices
+    generate_full_dynamic_covariance_matrix_coarse(wdm, 1, inst, conf, sgwb, full);
 }
 
-static void generate_full_stationary_covariance_matrix(struct Wavelets *wdm, struct InstrumentModel *inst, struct ForegroundModel *conf, struct Noise *full)
+void generate_full_stationary_covariance_matrix(struct Wavelets *wdm, struct InstrumentModel *inst, struct ForegroundModel *conf, struct SGWBModel *sgwb, struct Noise *full)
 {
-    int k;
+    generate_full_stationary_covariance_matrix_coarse(wdm, 1, inst, conf, sgwb, full);
+}
+
+void generate_full_dynamic_covariance_matrix_coarse(struct Wavelets *wdm, int Q, struct InstrumentModel *inst, struct ForegroundModel *conf, struct SGWBModel *sgwb, struct Noise *coarse)
+{
     int jmin=(int)round(inst->psd->f[0]/wdm->df);
     int jmax=(int)round(inst->psd->f[inst->psd->N-1]/wdm->df)+1;
+    int Ncoarse = wdm->NT / Q;
 
-    for(int i=0; i<wdm->NT; i++)
+    if (conf) galaxy_modulation_cache_for_Q(conf->modulation, wdm, Q);
+
+    for(int j=jmin; j<jmax; j++)
     {
-        for(int j=jmin; j<jmax; j++)
+        int jrel = j - jmin;
+        for(int q=0; q<Ncoarse; q++)
         {
-            wavelet_pixel_to_index(wdm,i,j,&k);
+            double mxx=0, myy=0, mzz=0, mxy=0, mxz=0, myz=0;
+            if (conf) {
+                mxx = conf->modulation->cache_XX[q];
+                myy = conf->modulation->cache_YY[q];
+                mzz = conf->modulation->cache_ZZ[q];
+                mxy = conf->modulation->cache_XY[q];
+                mxz = conf->modulation->cache_XZ[q];
+                myz = conf->modulation->cache_YZ[q];
+            }
 
-            k-=wdm->kmin;
+            int k = q + jrel*Ncoarse;
 
             //stationary instrument noise
-            full->C[0][0][k] = inst->psd->C[0][0][j-jmin];
-            full->C[1][1][k] = inst->psd->C[1][1][j-jmin];
-            full->C[2][2][k] = inst->psd->C[2][2][j-jmin];
-            full->C[0][1][k] = inst->psd->C[0][1][j-jmin];
-            full->C[0][2][k] = inst->psd->C[0][2][j-jmin];
-            full->C[1][2][k] = inst->psd->C[1][2][j-jmin];
+            coarse->C[0][0][k] = inst->psd->C[0][0][jrel];
+            coarse->C[1][1][k] = inst->psd->C[1][1][jrel];
+            coarse->C[2][2][k] = inst->psd->C[2][2][jrel];
+            coarse->C[0][1][k] = inst->psd->C[0][1][jrel];
+            coarse->C[0][2][k] = inst->psd->C[0][2][jrel];
+            coarse->C[1][2][k] = inst->psd->C[1][2][jrel];
 
-            //modulated galactic foreground
-            full->C[0][0][k] += conf->psd->C[0][0][j-jmin];
-            full->C[1][1][k] += conf->psd->C[1][1][j-jmin];
-            full->C[2][2][k] += conf->psd->C[2][2][j-jmin];
-            full->C[0][1][k] -= conf->psd->C[0][1][j-jmin]/2.;
-            full->C[0][2][k] -= conf->psd->C[0][2][j-jmin]/2.;
-            full->C[1][2][k] -= conf->psd->C[1][2][j-jmin]/2.;
+            //modulated galactic foreground (sampled at coarse-cell midpoint)
+            if (conf) {
+                coarse->C[0][0][k] += conf->psd->C[0][0][jrel]*mxx;
+                coarse->C[1][1][k] += conf->psd->C[1][1][jrel]*myy;
+                coarse->C[2][2][k] += conf->psd->C[2][2][jrel]*mzz;
+                coarse->C[0][1][k] += conf->psd->C[0][1][jrel]*mxy;
+                coarse->C[0][2][k] += conf->psd->C[0][2][jrel]*mxz;
+                coarse->C[1][2][k] += conf->psd->C[1][2][jrel]*myz;
+            }
 
-            //noise covariance matrix is symmetric
-            full->C[1][0][k] = full->C[0][1][k];
-            full->C[2][0][k] = full->C[0][2][k];
-            full->C[2][1][k] = full->C[1][2][k];
-        }// loop over frequency layers
-    }// loop over time slices
+            //stationary stochastic background
+            if (sgwb) {
+                coarse->C[0][0][k] += sgwb->psd->C[0][0][jrel];
+                coarse->C[1][1][k] += sgwb->psd->C[1][1][jrel];
+                coarse->C[2][2][k] += sgwb->psd->C[2][2][jrel];
+                coarse->C[0][1][k] += sgwb->psd->C[0][1][jrel];
+                coarse->C[0][2][k] += sgwb->psd->C[0][2][jrel];
+                coarse->C[1][2][k] += sgwb->psd->C[1][2][jrel];
+            }
+
+            coarse->C[1][0][k] = coarse->C[0][1][k];
+            coarse->C[2][0][k] = coarse->C[0][2][k];
+            coarse->C[2][1][k] = coarse->C[1][2][k];
+        }
+    }
+}
+
+void generate_full_stationary_covariance_matrix_coarse(struct Wavelets *wdm, int Q, struct InstrumentModel *inst, struct ForegroundModel *conf, struct SGWBModel *sgwb, struct Noise *coarse)
+{
+    int jmin=(int)round(inst->psd->f[0]/wdm->df);
+    int jmax=(int)round(inst->psd->f[inst->psd->N-1]/wdm->df)+1;
+    int Ncoarse = wdm->NT / Q;
+
+    // j outer, q inner for contiguous writes. See dynamic variant above.
+    for(int j=jmin; j<jmax; j++)
+    {
+        int jrel = j - jmin;
+        for(int q=0; q<Ncoarse; q++)
+        {
+            int k = q + jrel*Ncoarse;
+
+            coarse->C[0][0][k] = inst->psd->C[0][0][jrel];
+            coarse->C[1][1][k] = inst->psd->C[1][1][jrel];
+            coarse->C[2][2][k] = inst->psd->C[2][2][jrel];
+            coarse->C[0][1][k] = inst->psd->C[0][1][jrel];
+            coarse->C[0][2][k] = inst->psd->C[0][2][jrel];
+            coarse->C[1][2][k] = inst->psd->C[1][2][jrel];
+
+            // mirror the stationary-path foreground convention from
+            // generate_full_stationary_covariance_matrix
+            if (conf) {
+                coarse->C[0][0][k] += conf->psd->C[0][0][jrel];
+                coarse->C[1][1][k] += conf->psd->C[1][1][jrel];
+                coarse->C[2][2][k] += conf->psd->C[2][2][jrel];
+                coarse->C[0][1][k] -= conf->psd->C[0][1][jrel]/2.;
+                coarse->C[0][2][k] -= conf->psd->C[0][2][jrel]/2.;
+                coarse->C[1][2][k] -= conf->psd->C[1][2][jrel]/2.;
+            }
+
+            if (sgwb) {
+                coarse->C[0][0][k] += sgwb->psd->C[0][0][jrel];
+                coarse->C[1][1][k] += sgwb->psd->C[1][1][jrel];
+                coarse->C[2][2][k] += sgwb->psd->C[2][2][jrel];
+                coarse->C[0][1][k] += sgwb->psd->C[0][1][jrel];
+                coarse->C[0][2][k] += sgwb->psd->C[0][2][jrel];
+                coarse->C[1][2][k] += sgwb->psd->C[1][2][jrel];
+            }
+
+            coarse->C[1][0][k] = coarse->C[0][1][k];
+            coarse->C[2][0][k] = coarse->C[0][2][k];
+            coarse->C[2][1][k] = coarse->C[1][2][k];
+        }
+    }
+}
+
+void alloc_coarse_stats(struct CoarseStats *s, int Nlayer, int Q, int NT)
+{
+    int Ncoarse = NT / Q;
+    size_t Pdim = (size_t)Nlayer * (size_t)Ncoarse;
+    // Allocate via non-const handles, expose as const through the struct.
+    double *Pxx = malloc(Pdim*sizeof(double));
+    double *Pyy = malloc(Pdim*sizeof(double));
+    double *Pzz = malloc(Pdim*sizeof(double));
+    double *Pxy = malloc(Pdim*sizeof(double));
+    double *Pxz = malloc(Pdim*sizeof(double));
+    double *Pyz = malloc(Pdim*sizeof(double));
+    s->Pxx = Pxx; s->Pyy = Pyy; s->Pzz = Pzz;
+    s->Pxy = Pxy; s->Pxz = Pxz; s->Pyz = Pyz;
+    s->Q = Q;
+    s->Ncoarse = Ncoarse;
+    s->Nlayer = Nlayer;
+}
+
+void free_coarse_stats(struct CoarseStats *s)
+{
+    free((void*)s->Pxx); free((void*)s->Pyy); free((void*)s->Pzz);
+    free((void*)s->Pxy); free((void*)s->Pxz); free((void*)s->Pyz);
+    s->Pxx = s->Pyy = s->Pzz = NULL;
+    s->Pxy = s->Pxz = s->Pyz = NULL;
+}
+
+void coarse_grain_wavelet_data(struct Data *data, struct CoarseStats *stats)
+{
+    struct Wavelets *wdm = data->wdm;
+    struct TDI *tdi = data->tdi;
+    int Q = stats->Q;
+    int Ncoarse = stats->Ncoarse;
+    double invQ = 1.0/(double)Q;
+    // Populator owns mutable views of the arrays it allocated.
+    double *Pxx = (double*)stats->Pxx;
+    double *Pyy = (double*)stats->Pyy;
+    double *Pzz = (double*)stats->Pzz;
+    double *Pxy = (double*)stats->Pxy;
+    double *Pxz = (double*)stats->Pxz;
+    double *Pyz = (double*)stats->Pyz;
+
+    for(int j=data->lmin; j<data->lmax; j++)
+    {
+        int jrel = j - data->lmin;
+        for(int q=0; q<Ncoarse; q++)
+        {
+            double sxx=0, syy=0, szz=0, sxy=0, sxz=0, syz=0;
+            for(int i=q*Q; i<(q+1)*Q; i++)
+            {
+                int k_full;
+                wavelet_pixel_to_index(wdm, i, j, &k_full);
+                k_full -= wdm->kmin;
+                double wx = tdi->X[k_full];
+                double wy = tdi->Y[k_full];
+                double wz = tdi->Z[k_full];
+                sxx += wx*wx;
+                syy += wy*wy;
+                szz += wz*wz;
+                sxy += wx*wy;
+                sxz += wx*wz;
+                syz += wy*wz;
+            }
+            int k_coarse = q + jrel*Ncoarse;
+            Pxx[k_coarse] = sxx*invQ;
+            Pyy[k_coarse] = syy*invQ;
+            Pzz[k_coarse] = szz*invQ;
+            Pxy[k_coarse] = sxy*invQ;
+            Pxz[k_coarse] = sxz*invQ;
+            Pyz[k_coarse] = syz*invQ;
+        }
+    }
 }
 
 double noise_log_likelihood(struct Data *data, struct Noise *noise)
 {
     double logL = 0.0;
-    
+
     struct TDI *tdi = data->tdi;
-    
+
     int N = data->NFFT;
     
     switch(data->Nchannel)
@@ -670,9 +1128,181 @@ double noise_log_likelihood(struct Data *data, struct Noise *noise)
             break;
     }
     for(int n=0; n<N; n++)
-        logL -= log(noise->detC[n]);
+        logL -= noise->logdetC[n];
     
     return logL;
+}
+
+static inline double wavelet_nwip_linear(const double* __restrict a, const double* __restrict b, const double* __restrict invC, size_t N)
+{
+    // TODO: use lapack/blas here? this is just a.b.invC
+    double arg = 0.0;
+    #pragma omp simd reduction(+:arg)
+    for(size_t k=0; k<N; k++)
+    {
+        arg += a[k]*b[k]*invC[k];
+    }
+    return arg;
+}
+
+// Per-pixel multivariate Gaussian log-likelihood contribution. Q absorbs the
+// Welch sufficient-statistic weighting: Q=1 is the standard Gaussian (one fine
+// pixel = one degree of freedom); Q>1 is the Wishart sufficient-statistic form
+// with the in-cell sample (cross-)covariances P_ab as observed data.
+//
+// Note about this likelihood:
+// When Qd is 1, this is just the normal Gaussian / Whittle likelihood
+// When Qd  > 1, this is mostly equivalent to a Gamma likelihood
+// (see appendix of WDM note!)
+// But essentially, this only differs from the Gamma by dropping terms that only depend
+// on Q or the data, but are noise-model-independent. These don't affect the posterior
+//
+// TODO: in practice, the non-stationarity changes this distribution from a Gamma
+// see WDM note. It's an infinite sum of Gammas
+
+static inline double per_pixel_logL_contribution(
+        double Qd,
+        double pxx, double pyy, double pzz,
+        double pxy, double pxz, double pyz,
+        double inv_xx, double inv_yy, double inv_zz,
+        double inv_xy, double inv_xz, double inv_yz,
+        double logdetC)
+{
+    double s = 0.0;
+    s -= 0.5*Qd*inv_xx*pxx;
+    s -= 0.5*Qd*inv_yy*pyy;
+    s -= 0.5*Qd*inv_zz*pzz;
+    s -=     Qd*inv_xy*pxy;
+    s -=     Qd*inv_xz*pxz;
+    s -=     Qd*inv_yz*pyz;
+    s -= 0.5*Qd*logdetC;
+    return s;
+}
+
+double my_noise_log_likelihood_wavelet(struct Data *data, struct Noise *noise) {
+    struct TDI *tdi = data->tdi;
+    const double log2pi = log(2*M_PI);
+    int NT = data->wdm->NT;
+    int Nlayer = data->Nlayer;
+    double logL = 0.0;
+    // j outer / i inner so k = i + j*NT increments by 1 in the inner loop
+    // (matches the column-major wavelet layout, equivalent to
+    // wavelet_pixel_to_index(i, lmin+j) - kmin).
+    #pragma omp simd reduction(+:logL)
+    for (int j=0; j<Nlayer; j++) {
+        for (int i=0; i<NT; i++) {
+            int k = i + j*NT;
+            double wx = tdi->X[k];
+            double wy = tdi->Y[k];
+            double wz = tdi->Z[k];
+            logL += per_pixel_logL_contribution(1.0,
+                    wx*wx, wy*wy, wz*wz,
+                    wx*wy, wx*wz, wy*wz,
+                    noise->invC[0][0][k], noise->invC[1][1][k], noise->invC[2][2][k],
+                    noise->invC[0][1][k], noise->invC[0][2][k], noise->invC[1][2][k],
+                    noise->logdetC[k]);
+        }
+    }
+    logL -= 0.5 * 3 * data->N * log2pi;
+
+    return logL;
+}
+
+double my_noise_log_likelihood_wavelet_coarse(struct Data *data, struct Noise *coarse_noise, const struct CoarseStats *stats)
+{
+    const double log2pi = log(2*M_PI);
+    int Nlayer = data->Nlayer;
+    int Ncoarse = stats->Ncoarse;
+    double Qd = (double)stats->Q;
+    const double *Pxx = stats->Pxx;
+    const double *Pyy = stats->Pyy;
+    const double *Pzz = stats->Pzz;
+    const double *Pxy = stats->Pxy;
+    const double *Pxz = stats->Pxz;
+    const double *Pyz = stats->Pyz;
+    double logL = 0.0;
+    #pragma omp simd reduction(+:logL)
+    for (int j=0; j<Nlayer; j++) {
+        for (int q=0; q<Ncoarse; q++) {
+            int k = q + j*Ncoarse;
+            logL += per_pixel_logL_contribution(Qd,
+                    Pxx[k], Pyy[k], Pzz[k],
+                    Pxy[k], Pxz[k], Pyz[k],
+                    coarse_noise->invC[0][0][k], coarse_noise->invC[1][1][k], coarse_noise->invC[2][2][k],
+                    coarse_noise->invC[0][1][k], coarse_noise->invC[0][2][k], coarse_noise->invC[1][2][k],
+                    coarse_noise->logdetC[k]);
+        }
+    }
+    // constant uses the original full-grid pixel count (each fine pixel is a
+    // Gaussian degree of freedom); data->N == Nlayer * NT
+    logL -= 0.5 * 3 * data->N * log2pi;
+
+    return logL;
+}
+
+double my_noise_log_likelihood(struct Data *data, struct Noise *noise)
+{
+    double logL = 0.0;
+    const double log2pi = log(2*M_PI);
+    
+    struct TDI *tdi = data->tdi;
+    
+    int N = data->NFFT;
+    #pragma omp simd reduction(+:logL)
+    for (int n=0; n<N; n++) {
+        double rex = tdi->X[2*n], imx = tdi->X[2*n+1];
+        double rey = tdi->Y[2*n], imy = tdi->Y[2*n+1];
+        double rez = tdi->Z[2*n], imz = tdi->Z[2*n+1];
+        double xx = rex*rex + imx*imx;
+        double yy = rey*rey + imy*imy;
+        double zz = rez*rez + imz*imz;
+        double xy = rex*rey + imx*imy; // note this is really (x*conj(y) + y*conj(x))/2
+        double xz = rex*rez + imx*imz;
+        double yz = rey*rez + imy*imz;
+        logL -= 0.5*xx*noise->invC[0][0][n]*2;
+        logL -= 0.5*yy*noise->invC[1][1][n]*2;
+        logL -= 0.5*zz*noise->invC[2][2][n]*2;
+        logL -=     xy*noise->invC[0][1][n]*2;
+        logL -=     xz*noise->invC[0][2][n]*2;
+        logL -=     yz*noise->invC[1][2][n]*2;
+        logL -= noise->logdetC[n];
+    }
+    logL -= 3 * N * log2pi;
+    
+    return logL;
+}
+
+double noise_log_likelihood_wavelet(struct Data *data, struct Noise *noise)
+{
+    double logL = 0.0;
+    
+    struct TDI *tdi = data->tdi;
+    
+    int N = data->N;
+    
+    switch(data->Nchannel)
+    {
+        case 1:
+            logL += -0.5*wavelet_nwip_linear(tdi->X, tdi->X, noise->invC[0][0], N);
+            break;
+        case 2:
+            logL += -0.5*wavelet_nwip_linear(tdi->A, tdi->A, noise->invC[0][0], N);
+            logL += -0.5*wavelet_nwip_linear(tdi->E, tdi->E, noise->invC[1][1], N);
+            break;
+        case 3:
+            logL += -0.5*wavelet_nwip_linear(tdi->X, tdi->X, noise->invC[0][0], N);
+            logL += -0.5*wavelet_nwip_linear(tdi->Y, tdi->Y, noise->invC[1][1], N);
+            logL += -0.5*wavelet_nwip_linear(tdi->Z, tdi->Z, noise->invC[2][2], N);
+            logL += -wavelet_nwip_linear(tdi->X, tdi->Y, noise->invC[0][1], N);
+            logL += -wavelet_nwip_linear(tdi->X, tdi->Z, noise->invC[0][2], N);
+            logL += -wavelet_nwip_linear(tdi->Y, tdi->Z, noise->invC[1][2], N);
+            break;
+    }
+    for(int n=0; n<N; n++)
+        logL -= 0.5*noise->logdetC[n];
+
+    return logL;
+    // this comment constitutes an offering to the deity responsible for the correct factors of 2
 }
 
 double noise_delta_log_likelihood(struct Data *data, struct SplineModel *model_x, struct SplineModel *model_y, double fmin, double fmax,int ic)
@@ -691,13 +1321,13 @@ double noise_delta_log_likelihood(struct Data *data, struct SplineModel *model_x
     dlogL -= -0.5*fourier_nwip(tdi->A+2*imin, tdi->A+2*imin, psd_x->invC[0][0]+imin, N);
     dlogL -= -0.5*fourier_nwip(tdi->E+2*imin, tdi->E+2*imin, psd_x->invC[1][1]+imin, N);
     for(int n=imin; n<imin+N; n++)
-        dlogL += log(psd_x->detC[n]);
+        dlogL += psd_x->logdetC[n];
 
     /* add contribution for proposed state y */
     dlogL += -0.5*fourier_nwip(tdi->A+2*imin, tdi->A+2*imin, psd_y->invC[0][0]+imin, N);
     dlogL += -0.5*fourier_nwip(tdi->E+2*imin, tdi->E+2*imin, psd_y->invC[1][1]+imin, N);
     for(int n=imin; n<imin+N; n++)
-        dlogL -= log(psd_y->detC[n]);
+        dlogL -= psd_y->logdetC[n];
     
     return dlogL;
 }
@@ -755,6 +1385,14 @@ void initialize_instrument_model(struct Orbit *orbit, struct Data *data, struct 
         model->psd->f[n] = data->fmin + (double)n/data->T;
 
     // initialize noise levels
+    /* NOTE: changed to match wavelet */
+    /*
+    for(int i=0; i<model->Nlink; i++)
+    {
+        model->soms[i] = 1.28e-22;
+        model->sacc[i] = 5.76e-30;
+    }
+    */
     for(int i=0; i<model->Nlink; i++)
     {
         model->soms[i] = 1.28e-22;
@@ -771,7 +1409,7 @@ void initialize_instrument_model_wavelet(struct Orbit *orbit, struct Data *data,
     struct Wavelets *wdm = data->wdm;
 
     // initialize data models
-    alloc_instrument_model(model, data->lmax-data->lmin, data->Nlayer, data->Nchannel);
+    alloc_instrument_model(model, data->lmax - data->lmin, data->Nlayer, data->Nchannel);
     
     // set up psd frequency grid
     for(int n=0; n<model->psd->N; n++)
@@ -785,7 +1423,7 @@ void initialize_instrument_model_wavelet(struct Orbit *orbit, struct Data *data,
     }
     
     // get noise covariance matrix for initial parameters
-    generate_instrument_noise_model_wavelet(wdm,orbit,model);
+    generate_instrument_noise_model_wavelet(wdm, orbit, model);
 }
 
 void initialize_foreground_model(struct Orbit *orbit, struct Data *data, struct ForegroundModel *model)
@@ -819,13 +1457,83 @@ void initialize_foreground_model(struct Orbit *orbit, struct Data *data, struct 
 
 }
 
+void default_sgwb_injection(double* params, const SGWB_t SGWB_type) {
+    _Static_assert(SGWB_TEMPLATE_COUNT == 3, "Did you add an SGWB template? Edit this switch case, it needs to be exhaustive.");
+    // set default values
+    switch (SGWB_type) {
+        case SGWB_TEMPLATE_POWERLAW:
+            //params[0] = -21.0;
+            params[0] = -8.45;
+            //params[0] = -16.0;
+            params[1] = 2./3.;
+            //params[1] = 0.0;
+            break;
+        case SGWB_TEMPLATE_LOGNORMAL:
+            // log10 A, log10 fstar [Hz], log10 Delta
+            //params[0] = -5.0;
+            params[0] = -2.5;
+            params[1] = log(2e-3) / log(10.0);
+            params[2] = 0.0;
+            break;
+        case SGWB_TEMPLATE_PHASE_TRANSITION:
+            // rb, b, log10 Ap, log10 fp [Hz]
+            params[0] = 1.0;
+            params[1] = 1.0;
+            params[2] = -18.0;
+            params[3] = -2.5;
+            break;
+        default:
+            fprintf(stderr,"need default values for SGWB type: %s", SGWB_TEMPLATE_NAMES[SGWB_type]);
+            exit(1);
+            break;
+    }
+}
+
+
+void initialize_sgwb_model(struct Orbit *orbit, struct Data *data, struct SGWBModel *model, SGWB_t SGWB_type)
+{
+    // initialize data models
+    alloc_sgwb_model(model, data->NFFT, data->Nlayer, data->Nchannel, SGWB_type);
+    
+    // set up psd frequency grid
+    for(int n=0; n<model->psd->N; n++)
+        model->psd->f[n] = data->fmin + (double)n/data->T;
+
+    default_sgwb_injection(model->params, SGWB_type);
+    
+    model->Tobs  =  data->T;
+    // get covariance matrix for initial parameters
+    generate_sgwb_model(model);
+
+}
+
+void initialize_sgwb_model_wavelet(struct Orbit *orbit, struct Data *data, struct SGWBModel *model, SGWB_t SGWB_type)
+{
+    struct Wavelets* wdm = data->wdm;
+
+    // initialize data models
+    alloc_sgwb_model(model, data->lmax - data->lmin, data->Nlayer, data->Nchannel, SGWB_type);
+    
+    // set up psd frequency grid
+    for(int n=0; n<model->psd->N; n++)
+        model->psd->f[n] = (data->lmin+n)*wdm->df;
+
+    default_sgwb_injection(model->params, SGWB_type);
+
+    
+    model->Tobs  =  data->T;
+    // get covariance matrix for initial parameters
+    generate_sgwb_model_wavelet(wdm, model);
+
+}
+
 void initialize_foreground_model_wavelet(struct Orbit *orbit, struct Data *data, struct ForegroundModel *model)
 {
     //wavelet basis
     struct Wavelets *wdm = data->wdm;
 
     // initialize data models
-    alloc_foreground_model(model, data->lmax-data->lmin, data->Nlayer, data->Nchannel);
+    alloc_foreground_model(model, data->lmax - data->lmin, data->Nlayer, data->Nchannel);
     
     // set up psd frequency grid
     for(int n=0; n<model->psd->N; n++)
@@ -834,6 +1542,7 @@ void initialize_foreground_model_wavelet(struct Orbit *orbit, struct Data *data,
     // initialize constant foreground parameters levels 
     model->Tobs  =  data->T;
     model->Amp   =  1.2826e-44;
+    //model->Amp   =  1.2826e-53;
     model->alpha =  1.629667;
     model->f2    =  4.810781e-4;
 
@@ -850,13 +1559,14 @@ void initialize_foreground_model_wavelet(struct Orbit *orbit, struct Data *data,
     // get noise covariance matrix for initial parameters
     generate_galactic_foreground_model_wavelet(wdm,model);
 
-        // get galaxy modulation
+    // get galaxy modulation
     model->modulation = malloc(sizeof(struct GalaxyModulation));
     initialize_galaxy_modulation(model->modulation, data->wdm, orbit, data->T, data->t0);
     
     /**************************************************
      * Compute galaxy modulation
     **************************************************/
+    // TODO: use Pozzoli et al's analytic response for modulation
     
     double *galaxy_params = double_vector(6); // defines galaxy shape
     galaxy_params[0] = 0.25; // A 0.25    bulge fraction
@@ -886,9 +1596,15 @@ void GetDynamicNoiseModel(struct Data *data, struct Orbit *orbit, struct Flags *
     initialize_foreground_model_wavelet(orbit, data, conf_noise);
 
     /**************************************************
+     * Compute SGWB noise levels
+    **************************************************/
+    struct SGWBModel *sgwb = malloc(sizeof(struct SGWBModel));
+    initialize_sgwb_model_wavelet(orbit, data, sgwb, flags->sgwbTemplate);
+
+    /**************************************************
      * Combine noise components
     **************************************************/
-    generate_full_dynamic_covariance_matrix(data->wdm, inst_noise, conf_noise, data->noise);
+    generate_full_dynamic_covariance_matrix(data->wdm, inst_noise, conf_noise, sgwb, data->noise);
     invert_noise_covariance_matrix(data->noise);
 
     char filename[128];
@@ -911,6 +1627,7 @@ void GetDynamicNoiseModel(struct Data *data, struct Orbit *orbit, struct Flags *
 
     free_instrument_model(inst_noise);
     free_foreground_model(conf_noise);
+    free_sgwb_model(sgwb);
 }
 
 void GetStationaryNoiseModel(struct Data *data, struct Orbit *orbit, struct Flags *flags, struct Noise *noise)
@@ -928,15 +1645,23 @@ void GetStationaryNoiseModel(struct Data *data, struct Orbit *orbit, struct Flag
     initialize_foreground_model_wavelet(orbit, data, conf_noise);
 
     /**************************************************
+     * Compute SGWB noise levels
+    **************************************************/
+    struct SGWBModel *sgwb = malloc(sizeof(struct SGWBModel));
+    initialize_sgwb_model_wavelet(orbit, data, sgwb, flags->sgwbTemplate);
+
+
+    /**************************************************
      * Combine noise components
     **************************************************/
-    generate_full_stationary_covariance_matrix(data->wdm, inst_noise, conf_noise, noise);
+    generate_full_stationary_covariance_matrix(data->wdm, inst_noise, conf_noise, sgwb, noise);
     invert_noise_covariance_matrix(noise);
 
     char filename[128];
     sprintf(filename,"%s/power_stationary_noise.dat",data->dataDir);
     FILE *fptr=fopen(filename,"w");
     int k;
+    // TODO: check bounds here
     for(int j=data->lmin; j<data->lmax; j++)
     {
         double f = j*data->wdm->df;
@@ -953,5 +1678,6 @@ void GetStationaryNoiseModel(struct Data *data, struct Orbit *orbit, struct Flag
 
     free_instrument_model(inst_noise);
     free_foreground_model(conf_noise);
+    free_sgwb_model(sgwb);
 }
  

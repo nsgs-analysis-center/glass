@@ -29,6 +29,7 @@ find_package(MPI REQUIRED)
 #find_package(GSL REQUIRED)
 
 # set cflags
+#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -I/opt/homebrew/Cellar/libomp/21.1.8/include")
 if(APPLE)
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Xpreprocessor")
 endif()
@@ -74,7 +75,7 @@ set (GITVERSION "\"${_build_version}\"")
 add_subdirectory(external)
 add_subdirectory(utils)
 add_subdirectory(ucb)
-add_subdirectory(mbh)
+#add_subdirectory(mbh)
 add_subdirectory(noise)
 
 # Merge into a single library
@@ -82,7 +83,7 @@ add_library(glass
         $<TARGET_OBJECTS:glass_external>
         $<TARGET_OBJECTS:glass_utils>
         $<TARGET_OBJECTS:glass_ucb>
-        $<TARGET_OBJECTS:glass_mbh>
+        #        $<TARGET_OBJECTS:glass_mbh>
         $<TARGET_OBJECTS:glass_noise>
 )
 install(TARGETS glass DESTINATION lib)

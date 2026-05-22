@@ -14,7 +14,9 @@
  * limitations under the License.
  */
 
+#include <assert.h>
 #include "glass_utils.h"
+#include "glass_noise.h"
 #include "gitversion.h"
 
 #define FIXME 0
@@ -177,7 +179,7 @@ void initialize_chain(struct Chain *chain, struct Flags *flags, unsigned int *se
 void alloc_data(struct Data *data, struct Flags *flags)
 {
     int NMCMC = flags->NMCMC;
-        
+
     data->logN = log((double)(data->N*data->Nchannel));
     
     data->tdi   = malloc(sizeof(struct TDI));
@@ -302,7 +304,8 @@ void alloc_noise(struct Noise *noise, int N, int Nlayer, int Nchannel)
         }
     }
 
-    noise->detC     = calloc(N,sizeof(double));
+    noise->logdetC  = malloc(N*sizeof(double));
+    for (size_t i=0; i<N; i++) noise->logdetC[i] = -INFINITY;
     noise->transfer = calloc(N,sizeof(double));
     
     int n;
@@ -311,7 +314,7 @@ void alloc_noise(struct Noise *noise, int N, int Nlayer, int Nchannel)
         for(int i=0; i<Nchannel; i++) noise->C[i][i][n] = 1.0;
         for(int i=0; i<Nchannel; i++)
         {
-            for(int j=i+1; i<Nchannel; i++)
+            for(int j=i+1; j<Nchannel; j++)
             {
                 noise->C[i][j][n] = 0.0;
                 noise->C[j][i][n] = 0.0;
@@ -541,7 +544,7 @@ void copy_noise(struct Noise *origin, struct Noise *copy)
     copy_Cij(origin->C, copy->C, origin->Nchannel, origin->N);
     copy_Cij(origin->invC, copy->invC, origin->Nchannel, origin->N);
 
-    memcpy(copy->detC, origin->detC, origin->N*sizeof(double));
+    memcpy(copy->logdetC, origin->logdetC, origin->N*sizeof(double));
     memcpy(copy->transfer, origin->transfer, origin->N*sizeof(double));
 }
 
@@ -587,7 +590,7 @@ void free_noise(struct Noise *noise)
     }
     free(noise->C);
     free(noise->invC);
-    free(noise->detC);
+    free(noise->logdetC);
     free(noise->transfer);
     free(noise);
 }
@@ -912,16 +915,91 @@ void ReadHDF5(struct Data *data, struct TDI *tdi, struct TDI *tdi_dwt, struct Fl
 
 void ReadASCII(struct Data *data, struct TDI *tdi)
 {
+    // for now, assume the data is saved as ascii fft, then convert to wavelet if needed
+
     double f;
     double junk;
-    
+
     FILE *fptr = fopen(data->fileName,"r");
+    
+    if (data->Nchannel == 2) {
+        //count number of samples
+        int Nsamples = 0;
+        while(!feof(fptr))
+        {
+            int check = fscanf(fptr,"%lg %lg %lg %lg %lg",&f,&junk,&junk,&junk,&junk);
+            if(!check)
+            {
+                fprintf(stderr,"Error reading %s\n",data->fileName);
+                exit(1);
+            }
+            Nsamples++;
+        }
+        rewind(fptr);
+        Nsamples--;
+        
+        //load full dataset into TDI structure
+        alloc_tdi(tdi, 2*Nsamples, 3);
+        
+        for(int n=0; n<Nsamples; n++)
+        {
+            int check = fscanf(fptr,"%lg %lg %lg %lg %lg",&f,&tdi->A[2*n],&tdi->A[2*n+1],&tdi->E[2*n],&tdi->E[2*n+1]);
+            if(!check)
+            {
+                fprintf(stderr,"Error reading %s\n",data->fileName);
+                exit(1);
+            }
+            
+        }
+    }
+    else {
+        //count number of samples
+        int Nsamples = 0;
+        while(!feof(fptr))
+        {
+            int check = fscanf(fptr,"%lg %lg %lg %lg %lg %lg %lg",&f,&junk,&junk,&junk,&junk, &junk, &junk);
+            if(!check)
+            {
+                fprintf(stderr,"Error reading %s\n",data->fileName);
+                exit(1);
+            }
+            Nsamples++;
+        }
+        rewind(fptr);
+        Nsamples--;
+        
+        //load full dataset into TDI structure
+        alloc_tdi(tdi, 2*Nsamples, 3);
+        
+        for(int n=0; n<Nsamples; n++)
+        {
+            int check = fscanf(fptr,"%lg %lg %lg %lg %lg %lg %lg",&f,&tdi->X[2*n],&tdi->X[2*n+1],&tdi->Y[2*n],&tdi->Y[2*n+1],&tdi->Z[2*n],&tdi->Z[2*n+1]);
+            if(!check)
+            {
+                fprintf(stderr,"Error reading %s\n",data->fileName);
+                exit(1);
+            }
+            
+        }
+    }
+    fclose(fptr);
+
+}
+
+void ReadASCII_timeseries(struct Data* data, struct TDI* tdi_dft, struct TDI* tdi_dwt)
+{
+    double t;
+    double junk;
+
+    FILE *fptr = fopen(data->fileName,"r");
+    // only can read XYZ
+    data->Nchannel = 3;
     
     //count number of samples
     int Nsamples = 0;
     while(!feof(fptr))
     {
-        int check = fscanf(fptr,"%lg %lg %lg %lg %lg",&f,&junk,&junk,&junk,&junk);
+        int check = fscanf(fptr,"%lg %lg %lg %lg",&t,&junk,&junk,&junk);
         if(!check)
         {
             fprintf(stderr,"Error reading %s\n",data->fileName);
@@ -931,21 +1009,46 @@ void ReadASCII(struct Data *data, struct TDI *tdi)
     }
     rewind(fptr);
     Nsamples--;
-    
-    //load full dataset into TDI structure
-    alloc_tdi(tdi, 2*Nsamples, 3);
-    
+
+    struct TDI tdi_td = {0};
+    alloc_tdi(&tdi_td, Nsamples, 3);
     for(int n=0; n<Nsamples; n++)
     {
-        int check = fscanf(fptr,"%lg %lg %lg %lg %lg",&f,&tdi->A[2*n],&tdi->A[2*n+1],&tdi->E[2*n],&tdi->E[2*n+1]);
+        int check = fscanf(fptr,"%lg %lg %lg %lg", &t, &tdi_td.X[n], &tdi_td.Y[n], &tdi_td.Z[n]);
         if(!check)
         {
             fprintf(stderr,"Error reading %s\n",data->fileName);
             exit(1);
         }
+            
+    }
+    double Tobs = t;
+
+
+    //load full dataset into TDI structure
+    alloc_tdi(tdi_dft, Nsamples, 3);
+    tdi_dft->delta = 1./Tobs;
+    alloc_tdi(tdi_dwt, Nsamples, 3);
+
+    // TODO: in principle, detrend, window here
+
+    glass_forward_real_fft_outplace(tdi_td.X, tdi_dft->X, Nsamples);
+    glass_forward_real_fft_outplace(tdi_td.Y, tdi_dft->Y, Nsamples);
+    glass_forward_real_fft_outplace(tdi_td.Z, tdi_dft->Z, Nsamples);
+
+
+    /* Wavelet transform time-domain TDI channels */
+    if(!strcmp(data->basis,"wavelet"))
+    {
+
+        wavelet_transform_freq(data->wdm, tdi_dft->X, tdi_dwt->X); 
+        wavelet_transform_freq(data->wdm, tdi_dft->Y, tdi_dwt->Y); 
+        wavelet_transform_freq(data->wdm, tdi_dft->Z, tdi_dwt->Z); 
+        
+        /* populate AET channels because I can't let go */
+        for(int n=0; n<Nsamples; n++) XYZ2AET(tdi_dwt->X[n], tdi_dwt->Y[n], tdi_dwt->Z[n], &tdi_dwt->A[n], &tdi_dwt->E[n], &tdi_dwt->T[n]);
         
     }
-    fclose(fptr);
 }
 
 void ReadData(struct Data *data, struct Orbit *orbit, struct Flags *flags)
@@ -960,8 +1063,14 @@ void ReadData(struct Data *data, struct Orbit *orbit, struct Flags *flags)
     
     if(flags->hdf5Data)
         ReadHDF5(data,tdi_full_dft,tdi_full_dwt,flags);
-    else
-        ReadASCII(data,tdi_full_dft);
+    else {
+        if (flags->timeseries) {
+            ReadASCII_timeseries(data,tdi_full_dft, tdi_full_dwt);
+        } else {
+            ReadASCII(data,tdi_full_dft);
+        }
+    }
+
     
     
     /* select frequency segment */
@@ -1172,6 +1281,45 @@ void GetNoiseModel(struct Data *data, struct Orbit *orbit, struct Flags *flags)
     }
 }
 
+void MyAddNoise(struct Data *data, struct TDI *tdi)
+{
+    printf("   ...adding (Robbie's version of a) Gaussian noise realization\n");
+    //set RNG for noise
+    unsigned int r = data->nseed;
+
+    int Nc = data->Nchannel;
+    double L[Nc][Nc]; // will be Cholesky decomposition of covariance
+    double C[Nc][Nc]; // non-ragged copy of covariance
+    double n[Nc]; // vector of random normals
+    // force 0 DC component (will probably be cropped out later anyway)
+    tdi->X[0] = 0.0; tdi->X[1] = 0.0;
+    tdi->Y[0] = 0.0; tdi->Y[1] = 0.0;
+    tdi->Z[0] = 0.0; tdi->Z[1] = 0.0;
+    for (int k=1; k<data->NFFT; k++) {
+        for (int i=0; i<Nc; i++)
+            for (int j=0; j<Nc; j++) {
+                C[i][j] = data->noise->C[i][j][k];
+            }
+        my_cholesky_decomp(Nc, C, L);
+        // real part
+        for (int m=0; m<Nc; m++)
+            n[m] = rand_r_N_0_1(&r) / M_SQRT2; // note 2 here -- variance of real or imaginary part
+        for (int m=0; m<Nc; m++) {
+            tdi->X[2*k] += L[0][m] * n[m];
+            tdi->Y[2*k] += L[1][m] * n[m];
+            tdi->Z[2*k] += L[2][m] * n[m];
+        }
+        // imag part
+        for (int m=0; m<Nc; m++)
+            n[m] = rand_r_N_0_1(&r) / M_SQRT2; // note 2 here -- variance of real or imaginary part
+        for (int m=0; m<Nc; m++) {
+            tdi->X[2*k+1] += L[0][m] * n[m];
+            tdi->Y[2*k+1] += L[1][m] * n[m];
+            tdi->Z[2*k+1] += L[2][m] * n[m];
+        }
+    }
+}
+
 void AddNoise(struct Data *data, struct TDI *tdi)
 {
     
@@ -1217,8 +1365,8 @@ void AddNoise(struct Data *data, struct TDI *tdi)
         {
             for(int j=0; j<data->Nchannel; j++)
             {
-                n_re[i] += L[i][j]*u_re[j]/sqrt(2.);
-                n_im[i] += L[i][j]*u_im[j]/sqrt(2.);
+                n_re[i] += L[i][j]*u_re[j]/M_SQRT2;
+                n_im[i] += L[i][j]*u_im[j]/M_SQRT2;
             }
         }
         
@@ -1252,6 +1400,33 @@ void AddNoise(struct Data *data, struct TDI *tdi)
     }
     free(L);
     free(C);
+}
+void MyAddNoiseWavelet(struct Data *data, struct TDI *tdi)
+{
+    printf("   ...adding (Robbie's version of a) Gaussian noise realization\n");
+    double L[3][3] = {0}; // will be Cholesky decomposition of covariance
+    double C[3][3] = {0}; // non-ragged copy of covariance
+    double n[3] = {0}; // vector of random normals
+    unsigned int r = data->nseed;
+    for (int i=0; i<data->wdm->NT; i++) {
+        for (int j=data->lmin; j<data->lmax; j++) {
+            int k;
+            wavelet_pixel_to_index(data->wdm,i,j,&k);
+            k -= data->wdm->kmin;
+            for (int m=0; m<3; m++)
+                for (int n=0; n<3; n++) {
+                    C[m][n] = data->noise->C[m][n][k];
+                }
+            my_cholesky_decomp(3, C, L);
+            for (int m=0; m<3; m++)
+                n[m] = rand_r_N_0_1(&r); // real wavelet coefficient gets full variance, no sqrt(2) factor
+            for (int m=0; m<3; m++) {
+                tdi->X[k] += L[0][m] * n[m];
+                tdi->Y[k] += L[1][m] * n[m];
+                tdi->Z[k] += L[2][m] * n[m];
+            }
+        }
+    }
 }
 
 void AddNoiseWavelet(struct Data *data, struct TDI *tdi)
@@ -1345,14 +1520,18 @@ void SimulateData(struct Data *data, struct Orbit *orbit, struct Flags *flags)
     data->qmax = data->qmin+data->NFFT;
 
     //Get noise spectrum for data segment
-    GetNoiseModel(data,orbit,flags);
-    
+    // TODO: switching here to use inst model
+    //GetNoiseModel(data,orbit,flags);
+    struct InstrumentModel *inst = malloc(sizeof(struct InstrumentModel));
+    initialize_instrument_model(orbit, data, inst);
+    copy_noise(inst->psd, data->noise);
+    free_instrument_model(inst); 
+
     //Add Gaussian noise to injection
-    if(flags->simNoise) AddNoise(data,tdi);
-    
+    if(flags->simNoise) MyAddNoise(data,tdi);
+
     //print various data products for plotting
     print_data(data, flags);
-
 }
 
 void print_data(struct Data *data, struct Flags *flags)
@@ -1361,10 +1540,13 @@ void print_data(struct Data *data, struct Flags *flags)
     FILE *fptr;
     char filename[256];
     struct TDI *tdi = NULL;
+    int lendir = 0;
     
     
     /* Power spectra */
     tdi = data->dft;
+    lendir = strnlen(data->dataDir, MAXSTRINGSIZE);
+    if (lendir==0) return;
     sprintf(filename,"%s/power_data.dat",data->dataDir);
     fptr=fopen(filename,"w");
     for(int i=0; i<data->NFFT; i++)
@@ -1392,13 +1574,13 @@ void print_data(struct Data *data, struct Flags *flags)
         sprintf(filename,"%s/scaleogram_data.dat",data->dataDir);
         fptr=fopen(filename,"w");
 
-        for(int j=data->lmin; j<data->lmax; j++)
+        for(int i=0; i<data->wdm->NT; i++)
         {
-            for(int i=0; i<data->wdm->NT; i++)
+            for(int j=data->lmin; j<data->lmax; j++)
             {
                 wavelet_pixel_to_index(data->wdm,i,j,&k);
                 k-=data->wdm->kmin;
-                fprintf(fptr,"%lg %lg %.14e %.14e %.14e\n", i*data->wdm->dt, j*data->wdm->df + WAVELET_BANDWIDTH/2,tdi->X[k]*tdi->X[k], tdi->Y[k]*tdi->Y[k], tdi->Z[k]*tdi->Z[k]);
+                fprintf(fptr,"%lg %lg %.14e %.14e %.14e\n", i*data->wdm->dt, j*data->wdm->df, tdi->X[k]*tdi->X[k], tdi->Y[k]*tdi->Y[k], tdi->Z[k]*tdi->Z[k]);
             }
             fprintf(fptr,"\n");
         }
@@ -1431,9 +1613,9 @@ void print_data(struct Data *data, struct Flags *flags)
         tdi = data->dwt;
         sprintf(filename,"%s/dwt_data.dat",data->dataDir);
         fptr=fopen(filename,"w");
-        for(int j=data->lmin; j<data->lmax; j++)
+        for(int i=0; i<data->wdm->NT; i++)
         {
-            for(int i=0; i<data->wdm->NT; i++)
+            for(int j=data->lmin; j<data->lmax; j++)
             {
                 wavelet_pixel_to_index(data->wdm,i,j,&k);
                 k-=data->wdm->kmin;
@@ -1584,6 +1766,8 @@ void print_glass_usage()
     fprintf(stdout,"       --sim-noise   : data w/out noise realization        \n");
     fprintf(stdout,"       --conf-noise  : include model for confusion noise   \n");
     fprintf(stdout,"       --stationary  : use stationary noise model in logL  \n");
+    fprintf(stdout,"       --stationary-conf : inject confusion noise as stationary (no time modulation)\n");
+    fprintf(stdout,"       --coarse-Q    : WDM time-axis coarse-graining factor (1)\n");
     fprintf(stdout,"       --noiseseed   : seed for noise RNG                  \n");
     fprintf(stdout,"\n");
     
@@ -1634,10 +1818,14 @@ void parse_data_args(int argc, char **argv, struct Data *data, struct Orbit *orb
     flags->quiet       = 0;
     flags->simNoise    = 0;
     flags->confNoise   = 0;
+    flags->sgwbTemplate=-1;
     flags->stationary  = 0;
+    flags->stationaryConf = 0;
+    flags->coarseQ     = 1;
     flags->burnin      = 1;
     flags->debug       = 0;
     flags->strainData  = 0;
+    flags->timeseries  = false;
     flags->hdf5Data    = 0;
     flags->psd         = 0;
     flags->orbit       = 0;
@@ -1673,24 +1861,25 @@ void parse_data_args(int argc, char **argv, struct Data *data, struct Orbit *orb
     static struct option long_options[] =
     {
         /* These options set a flag. */
-        {"samples",    required_argument, 0, 0},
-        {"layers",     required_argument, 0, 0},
-        {"padding",    required_argument, 0, 0},
-        {"duration",   required_argument, 0, 0},
-        {"start-time", required_argument, 0, 0},
-        {"orbit",      required_argument, 0, 0},
-        {"chains",     required_argument, 0, 0},
-        {"chainseed",  required_argument, 0, 0},
-        {"noiseseed",  required_argument, 0, 0},
-        {"data",       required_argument, 0, 0},
-        {"h5-data",    required_argument, 0, 0},
-        {"psd",        required_argument, 0, 0},
-        {"fmin",       required_argument, 0, 0},
-        {"fmax",       required_argument, 0, 0},
-        {"channels",   required_argument, 0, 0},
-        {"steps",      required_argument, 0, 0},
-        {"threads",    required_argument, 0, 0},
-        {"rundir",     required_argument, 0, 0},
+        {"samples",      required_argument, 0, 0},
+        {"layers",       required_argument, 0, 0},
+        {"padding",      required_argument, 0, 0},
+        {"duration",     required_argument, 0, 0},
+        {"start-time",   required_argument, 0, 0},
+        {"orbit",        required_argument, 0, 0},
+        {"chains",       required_argument, 0, 0},
+        {"chainseed",    required_argument, 0, 0},
+        {"noiseseed",    required_argument, 0, 0},
+        {"data",         required_argument, 0, 0},
+        {"h5-data",      required_argument, 0, 0},
+        {"psd",          required_argument, 0, 0},
+        {"fmin",         required_argument, 0, 0},
+        {"fmax",         required_argument, 0, 0},
+        {"channels",     required_argument, 0, 0},
+        {"steps",        required_argument, 0, 0},
+        {"threads",      required_argument, 0, 0},
+        {"rundir",       required_argument, 0, 0},
+        {"sgwb-template",required_argument, 0, 0},
         
         /* These options don’t set a flag.
          We distinguish them by their indices. */
@@ -1702,6 +1891,8 @@ void parse_data_args(int argc, char **argv, struct Data *data, struct Orbit *orb
         {"sim-noise",   no_argument, 0, 0 },
         {"conf-noise",  no_argument, 0, 0 },
         {"stationary",  no_argument, 0, 0 },
+        {"stationary-conf", no_argument, 0, 0 },
+        {"coarse-Q",    required_argument, 0, 0 },
         {"phase",       no_argument, 0, 0 },
         {"sangria",     no_argument, 0, 0 },
         {"prior",       no_argument, 0, 0 },
@@ -1713,6 +1904,7 @@ void parse_data_args(int argc, char **argv, struct Data *data, struct Orbit *orb
         {"h5-no-ucb-hi",no_argument, 0, 0 },
         {"h5-no-vgb",   no_argument, 0, 0 },
         {"h5-no-noise", no_argument, 0, 0 },
+        {"timeseries",  no_argument, 0, 0 },
         {0, 0, 0, 0}
     };
     
@@ -1736,7 +1928,10 @@ void parse_data_args(int argc, char **argv, struct Data *data, struct Orbit *orb
                 if(strcmp("injseed",     long_options[long_index].name) == 0) data->iseed       = (unsigned int)atoi(optarg);
                 if(strcmp("sim-noise",   long_options[long_index].name) == 0) flags->simNoise   = 1;
                 if(strcmp("conf-noise",  long_options[long_index].name) == 0) flags->confNoise  = 1;
+                if(strcmp("sgwb-template",long_options[long_index].name)== 0) flags->sgwbTemplate=atoi(optarg);
                 if(strcmp("stationary",  long_options[long_index].name) == 0) flags->stationary = 1;
+                if(strcmp("stationary-conf", long_options[long_index].name) == 0) flags->stationaryConf = 1;
+                if(strcmp("coarse-Q",    long_options[long_index].name) == 0) flags->coarseQ    = atoi(optarg);
                 if(strcmp("prior",       long_options[long_index].name) == 0) flags->prior      = 1;
                 if(strcmp("no-burnin",   long_options[long_index].name) == 0) flags->burnin     = 0;
                 if(strcmp("no-rj",       long_options[long_index].name) == 0) flags->rj         = 0;
@@ -1747,6 +1942,7 @@ void parse_data_args(int argc, char **argv, struct Data *data, struct Orbit *orb
                 if(strcmp("h5-no-vgb",   long_options[long_index].name) == 0) flags->no_vgb     = 1;
                 if(strcmp("h5-no-ucb-hi",long_options[long_index].name) == 0) flags->no_ucb_hi  = 1;
                 if(strcmp("h5-no-noise", long_options[long_index].name) == 0) flags->no_noise   = 1;
+                if(strcmp("timeseries" , long_options[long_index].name) == 0) flags->timeseries = true;
                 if(strcmp("threads",     long_options[long_index].name) == 0) flags->threads    = atoi(optarg);
                 if(strcmp("rundir",      long_options[long_index].name) == 0) strcpy(flags->runDir,optarg);
                 if(strcmp("phase",       long_options[long_index].name) == 0) sprintf(data->format,"phase");
@@ -1819,6 +2015,15 @@ void parse_data_args(int argc, char **argv, struct Data *data, struct Orbit *orb
         }
     }
     if(flags->cheat || !flags->burnin) flags->NBURN = 0;
+
+    if(flags->sgwbTemplate < -1 || flags->sgwbTemplate >= SGWB_TEMPLATE_COUNT)
+    {
+        fprintf(stderr,"selected SGWB template does not exist, options are:\n");
+        for (int i=0; i<SGWB_TEMPLATE_COUNT; i++) {
+            fprintf(stderr,"\t%d: %s\n",i,SGWB_TEMPLATE_NAMES[i]);
+        }
+        exit(1);
+    }
     
     if(flags->verbose && flags->quiet)
     {
@@ -1866,6 +2071,7 @@ void parse_data_args(int argc, char **argv, struct Data *data, struct Orbit *orb
         data->fmax = data->fmin + (double)(data->Nlayer)*WAVELET_BANDWIDTH;
 
     }
+    //printf("old fmin=%lg, fmax=%lg\n",data->fmin,data->fmax);
 
     //after all of that resize data
     if(!strcmp(data->basis,"fourier")) data->N = data->NFFT*2;
@@ -1888,6 +2094,15 @@ void parse_data_args(int argc, char **argv, struct Data *data, struct Orbit *orb
 
     //reset opt counter
     optind = 0;
+
+    // double check wavelet fmin
+    if(!strcmp(data->basis,"wavelet")) 
+    {
+        if (floor(data->fmin/WAVELET_BANDWIDTH) == 0) {
+            fprintf(stderr, "Error, your minimum frequency (after padding) includes the DC wavelet frequency bin!\nThis bin goes until %g Hz\nYou almost certainly don't want to do this. Recommended fix: increase fmin\n", WAVELET_BANDWIDTH);
+            exit(-2);
+        }
+    }
 
     //free placeholder for argvs
     for(int i=0; i<=argc; i++)free(argv_copy[i]);

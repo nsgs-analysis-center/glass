@@ -270,7 +270,7 @@ void initialize_wavelet(struct Wavelets *wdm, double T)
     fprintf(stdout,"=============================================\n");
 }
 
-void wavelet_index_to_pixel(struct Wavelets *wdm, int *i, int *j, int k)
+void inline wavelet_index_to_pixel(struct Wavelets *wdm, int *i, int *j, int k)
 {
     int NT = wdm->NT;
     
@@ -281,15 +281,15 @@ void wavelet_index_to_pixel(struct Wavelets *wdm, int *i, int *j, int k)
     *j = (k - (*i))/NT; //scary integer math
 }
 
-void wavelet_pixel_to_index(struct Wavelets *wdm, int i, int j, int *k)
+void inline wavelet_pixel_to_index(struct Wavelets *wdm, int i, int j, int *k)
 {
     int NT = wdm->NT;
     
     *k = i + j*NT;
 }
 
-// Note that this is called the timefreq transform in other codes:
 // FFT first, then use the fast algorithm for FFT->WDM
+// to the user, appears to be an in-place operation
 void wavelet_transform_timefreq(struct Wavelets *wdm, double *timedata) {
     int ND = wdm->NT*wdm->NF;
     double *freqdata = double_vector(ND + 2); // extra complex element
@@ -305,7 +305,7 @@ void wavelet_transform_timefreq(struct Wavelets *wdm, double *timedata) {
 static inline double my_phitilde(double omega, double DeltaOmega, double A)
 {
     double B = DeltaOmega - 2*A;
-    double insDOM = 1.0/sqrtf(DeltaOmega);
+    double insDOM = 1.0/sqrt(DeltaOmega);
     
     double x, y, z;
     
@@ -340,7 +340,7 @@ void build_wdm_filter_freq(double* phif, int Nf, int Nt, double A, bool forward)
             norm += 2*phif[i]*phif[i];
     }
     norm *= domega * M_1_PI;
-    norm = sqrtf(norm);
+    norm = sqrt(norm);
     if (forward)
         norm *= Nf / 2.0;
     for (int i = 0; i<Nt/2+1; i++) {
@@ -469,6 +469,7 @@ void wavelet_transform_freq_one_layer(struct Wavelets *wdm, int N, double *freqd
 
     int Nf = wdm->NF;
     int Nt = wdm->NT;
+    // TODO: which N are allowed compared to Nt?
 
     double   DX[2*N]; // length N complex array, we will ifft later
     double DX_t[2*N]; // length N complex array, result of ifft
@@ -494,7 +495,7 @@ void wavelet_transform_freq_one_layer(struct Wavelets *wdm, int N, double *freqd
             norm += 2 * phif[i] * phif[i];
     }
     norm *= domega * M_1_PI;
-    norm = sqrtf(norm);
+    norm = sqrt(norm);
     norm *= Nf / 2.0; // forward transform
     for (int i = 0; i <= N/2; i++)
         phif[i] /= norm;
@@ -851,5 +852,100 @@ void wavelet_transform_freq_segment(struct Wavelets *wdm, int N, int layer, doub
     wavelet_transform_freq_one_layer(wdm, N, freqdata, wdmdata, layer);
     for (int i = 0; i < N; i++)
         freqdata[i] = wdmdata[i];
+}
+
+
+// Convert a stationary DFT PSD into the corresponding WDM PSD that whitens
+// the output of wavelet_transform_freq.
+//
+// Convention: dft_psd[k] is interpreted as the discrete variance <|FFT[k]|^2>
+// on a one-sided FFT grid f_k = k/T, length ND/2+1 (ND = NF*NT).
+//
+// We also track edge layers (sqrt(2) difference)
+void stationary_dft_psd_to_wdm_layer_var(struct Wavelets* wdm, double * dft_psd, double * layer_var) {
+    int NF = wdm->NF;
+    int NT = wdm->NT;
+    int ND = NF * NT;
+    int half = NT / 2;
+    int nmax = ND / 2;
+    double *phif = wdm->window_freq_forward;
+
+    memset(layer_var, 0, (NF + 1) * sizeof(double));
+
+    for (int l = -(half - 1); l < half; l++) {
+        double w2 = phif[abs(l)] * phif[abs(l)];
+        for (int m = 0; m <= NF; m++) {
+            // boundary layers truncate one side of the filter support
+            if (m == 0  && l < 0) continue;
+            if (m == NF && l > 0) continue;
+            // boundary layer at l==0 uses phif[0]/2
+            double weight = w2;
+            if (l == 0 && (m == 0 || m == NF)) weight *= 0.25;
+
+            int k = m * half + l;
+            // real signal: S(-f) = S(f); fold k into [0, nmax]
+            k = abs(k);
+            k = k % (2 * nmax);
+            if (k > nmax) k = 2 * nmax - k;
+
+            layer_var[m] += weight * dft_psd[k];
+        }
+    }
+
+    for (int m = 1; m < NF; m++) layer_var[m] /= 2.0 * NT * NT;
+    // sqrt 2 difference for edge layers
+    layer_var[0]  /= (double)NT * NT;
+    layer_var[NF] /= (double)NT * NT;
+}
+
+void stationary_dft_psd_to_wdm_psd(struct Wavelets* wdm, double * dft_psd, double * wdm_psd) {
+    int NF = wdm->NF;
+    int NT = wdm->NT;
+
+    double layer_var[NF + 1];
+    stationary_dft_psd_to_wdm_layer_var(wdm, dft_psd, layer_var);
+
+    memset(wdm_psd, 0, NF * NT * sizeof(double));
+    for (int m = 1; m < NF; m++)
+        for (int n = 0; n < NT; n++)
+            wdm_psd[n + NT * m] = layer_var[m];
+    for (int n = 0; n < NT; n += 2) wdm_psd[n] = layer_var[0];
+    for (int n = 1; n < NT; n += 2) wdm_psd[n] = layer_var[NF];
+}
+
+// Approximate version of stationary_dft_psd_to_wdm_psd. Same convention as that function
+// (dft_psd[k] = <|FFT[k]|^2>), but skips the phif convolution and evaluates the
+// FFT PSD only at the layer-center FFT bin k = m*NT/2. Mirrors the python
+// reference `testwdmpsd_approx = psd(fcenter) / (2*dt)`. The 1/ND factor comes
+// from sum_l phif_C[|l|]^2 ≈ 2*NT/NF, so the exact convolution collapses to
+// psd(f_m) * (2*NT/NF) / (2*NT^2) = psd(f_m) / ND.
+//
+// Good when the FFT PSD varies slowly across one wavelet layer width (wdm->df).
+// Per-layer variance helper for the approximate convention.
+void stationary_dft_psd_to_wdm_layer_var_approx(struct Wavelets* wdm, double * dft_psd, double * layer_var) {
+    int NF = wdm->NF;
+    int NT = wdm->NT;
+    int ND = NF * NT;
+    int half = NT / 2;
+    for (int m = 0; m <= NF; m++)
+        layer_var[m] = dft_psd[m * half] / (double)ND;
+}
+
+// this is the approximate conversion of a stationary FFT PSD into a wavelet PSD
+// This should more or less match the RHS of (19) of Neil's paper: https://arxiv.org/pdf/2009.00043
+// this approximation should be good when the `psd` changes slowly in the bandwith of one wavelet layer (wdm->df)
+void stationary_dft_psd_to_wdm_psd_approx(struct Wavelets* wdm, double * dft_psd, double * wdm_psd) {
+    int NF = wdm->NF;
+    int NT = wdm->NT;
+
+    double layer_var[NF + 1];
+    stationary_dft_psd_to_wdm_layer_var_approx(wdm, dft_psd, layer_var);
+
+    memset(wdm_psd, 0, NF * NT * sizeof(double));
+    for (int m = 1; m < NF; m++)
+        for (int n = 0; n < NT; n++)
+            wdm_psd[n + NT * m] = layer_var[m];
+    for (int n = 0; n < NT; n += 2) wdm_psd[n] = layer_var[0];
+    for (int n = 1; n < NT; n += 2) wdm_psd[n] = layer_var[NF];
 }
 

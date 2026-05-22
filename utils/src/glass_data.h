@@ -28,7 +28,7 @@
 
 #define WAVELET_EDGE_BUFFER 100 //!<number of time slices to leave out of likelihood to avoid edge effects
 #define WAVELET_DURATION 7680.0
-#define WAVELET_BANDWIDTH 6.51041666666667e-5
+#define WAVELET_BANDWIDTH (6.51041666666667e-5)
 //#define WAVELET_DURATION 20480.0 //!<duration of wavelet pixels [s]
 //#define WAVELET_BANDWIDTH 2.44140625e-05 //!<bandwidth of wavelet pixels [Hz]
 //#define WAVELET_DURATION 40960.0 //!<duration of wavelet pixels [s]
@@ -170,7 +170,9 @@ struct Flags
     int NVB;        //!<number of known binaries for `vb_mcmc`
     int DMAX;       //!<`[--sources=INT; default=10]`: max number of sources
     int simNoise;   //!<`[--sim-noise; default=FALSE]`: simulate random noise realization and add to data
-    int stationary; //!<`[--stationary; default=FALSE]`: use stationary noise model in wavelet domain
+    int stationary; //!<`[--stationary; default=FALSE]`: use stationary noise model in wavelet-domain analysis (likelihood)
+    int stationaryConf; //!<`[--stationary-conf; default=FALSE]`: inject confusion noise as stationary (no time modulation). Independent of `stationary` (which controls the analysis model).
+    int coarseQ;    //!<`[--coarse-Q=INT; default=1]`: coarse-graining factor along wavelet time axis. Must divide wdm->NT. Q=1 disables coarse-graining.
     int fixSky;     //!<`[--fix-sky; default=FALSE]`: hold sky location fixed to injection parameters.  Set to `TRUE` if Flags::knownSource=`TRUE`.
     int fixFdot;
     int fixFreq;    //!<`[--fix-freq; default=FALSE]`: hold GW frequency fixed to injection parameters
@@ -181,6 +183,7 @@ struct Flags
     int detached;   //!<`[--detached; default=FALSE]`: assume binary is detached, fdot prior becomes \f$U[\dot{f}(\mathcal{M}_c=0.15),\dot{f}(\mathcal{M}_c=1.00)]\f$
     int triggerTime;//!<`[--trigger; default=Tobs/2]`: trigger for transient analysis. tref prior becomes \f$U[t_{\rm trigger}-\delta_t,t_{\rm trigger}+\delta_t]\f
     int strainData; //!<`[--data=FILENAME; default=FALSE]`: read data from ASCII file instead of simulate internally.
+    bool timeseries;//!<`[--data=FILENAME; default=FALSE]`: whether or not given ASCII file is a timeseries. If false, assumed to be frequency domain.
     int hdf5Data;   //!<'[--hdf5Data=FILENAME; default=FALSE]`: read data from LDC HDF5 file (compatible w/ Sangria dataset).
     int orbit;      //!<`[--orbit=FILENAME; default=FALSE]`: use numerical spacecraft ephemerides supplied in `FILENAME`. `--orbit` argument sets flag to `TRUE`.
     int prior;      //!<`[--prior; default=FALSE]`: set log-likelihood to constant for testing detailed balance.
@@ -194,6 +197,7 @@ struct Flags
     int rj;         //!<--no-rj; default=TRUE]`: flag for determining if trans dimensional MCMC moves (RJMCMC) are enabled.
     int calibration;//!<`[--calibration; default=FALSE]`: flag for determining if model is marginalizing over calibration  uncertainty.
     int confNoise;  //!<`[--conf-noise; default=FALSE]`: include model of confusion noise in \f$S_n(f)\f$, either for simulating noise or as starting value for parameterized noise model.
+    int sgwbTemplate;//!<`[--sgwb-template; default=-1]`: include model of a stochastic background in \f$S_n(f)\f$
     int resume;     //!<`[--resume; default=FALSE]`: restart sampler from run state saved during checkpointing. Starts from scratch if no checkpointing files are found.
     int catalog;    //!<`[--catalog=FILENAME; default=FALSE]`: use list of previously detected sources supplied in `FILENAME` to clean bandwidth padding (`gb_mcmc`) or for building family tree (`gb_catalog`).
     int grid;       //!<`[--ucb-grid=FILENAME; default=FALSE]`: flag indicating if a gridfile was supplied
@@ -357,9 +361,35 @@ struct Noise
     
     double ***C;    //!<Covariance matrix
     double ***invC; //!<Inverse covariance matrix>
-    double *detC;   //!<Determinent of covariance matrix
+    //double *detC;   //!<Determinent of covariance matrix
+    double *logdetC;   //!<Log determinent of covariance matrix
     
     double *transfer;
+    ///@}
+};
+
+/**
+\brief Structure containing the instrument's response to an isotropic SGWB
+ */
+struct SGWBResponse
+{
+    ///@name Each independent channel response 
+    ///@{
+    int N; // length of channel response
+    struct CubicSpline* spline_logRXX;
+    struct CubicSpline* spline_logRYY;
+    struct CubicSpline* spline_logRZZ;
+    struct CubicSpline* spline_asinhRXY;
+    struct CubicSpline* spline_asinhRXZ;
+    struct CubicSpline* spline_asinhRYZ;
+    double *logf;
+    double *logXX;
+    double *logYY;
+    double *logZZ;
+    double *asinhXY;
+    double *asinhXZ;
+    double *asinhYZ;
+    double asinh_scale;
     ///@}
 };
 
@@ -486,6 +516,11 @@ void ReadHDF5(struct Data *data, struct TDI *tdi, struct TDI *tdi_dwt, struct Fl
 void ReadASCII(struct Data *data, struct TDI *tdi);
 
 /**
+ \brief Reads ASCII timeseries data using `--data` flag
+ */
+void ReadASCII_timeseries(struct Data *data, struct TDI *tdi_dft, struct TDI* tdi_dwt);
+
+/**
  \brief Get theoretical noise PSDs for TDI channels
  */
 void GetNoiseModel(struct Data *data, struct Orbit *orbit, struct Flags *flags);
@@ -493,7 +528,9 @@ void GetNoiseModel(struct Data *data, struct Orbit *orbit, struct Flags *flags);
 /** @name Add simulated Gaussian noise realization to data */
 ///@{
 void AddNoise(struct Data *data, struct TDI *tdi);
+void MyAddNoise(struct Data *data, struct TDI *tdi);
 void AddNoiseWavelet(struct Data *data, struct TDI *tdi);
+void MyAddNoiseWavelet(struct Data *data, struct TDI *tdi);
 ///@}
 
 /**
