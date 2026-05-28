@@ -233,7 +233,7 @@ double spline_integration(struct CubicSpline *spline, double xi, double xf)
     return 2.0*simpson_integration_3(yi,ym,yf,dx); //TODO: check this factor of two w.r.t. simpson integration in other places
 }
 
-inline double signed_log_div(double num, double logdetC) {
+static double signed_log_div(double num, double logdetC) {
     return copysign(exp(log(fabs(num))-logdetC), num);
 }
 

@@ -105,8 +105,6 @@ double spline_integration(struct CubicSpline *spline, double xi, double xf);
  */
 void invert_noise_covariance_matrix(struct Noise *noise);
 
-inline double signed_log_div(double num, double logdetC);
-
 /**
 \brief Compute chirp mass from component masses
   

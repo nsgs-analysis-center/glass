@@ -123,6 +123,10 @@ bool test_array_equality_from_index(double* ta, double* tb, int N, int istart, s
     return true;
 }
 
+bool test_array_equality(double* ta, double* tb, int N, struct UnitTestBlockInfo* testinfo, char* test_name) {
+    return test_array_equality_from_index(ta, tb, N, 0, testinfo, test_name);
+}
+
 /* Wilson-Hilferty normal approximation */
 double chi2_sf(double x, int dof) {
     if (x <= 0.0) return 1.0;

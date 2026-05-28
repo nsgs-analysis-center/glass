@@ -343,7 +343,7 @@ void mpi_send_noise(struct Noise *noise, int dest)
     
     for(int n=0; n<N; n++)
     {
-        double_values[n]     = noise->detC[n];
+        double_values[n]     = noise->logdetC[n];
         double_values[n+N]   = noise->transfer[n];
         double_values[n+2*N] = noise->f[n];
     }
@@ -394,7 +394,7 @@ void mpi_receive_noise(struct Noise *noise, int source)
     MPI_Recv(double_values, Nrecv, MPI_DOUBLE, source, 0, MPI_COMM_WORLD, &status);
     for(int n=0; n<N; n++)
     {
-        noise->detC[n]     = double_values[n];
+        noise->logdetC[n]     = double_values[n];
         noise->transfer[n] = double_values[n+N];
         noise->f[n]        = double_values[n+2*N];
     }
