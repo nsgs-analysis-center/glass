@@ -658,6 +658,7 @@ void ReadHDF5(struct Data *data, struct TDI *tdi, struct TDI *tdi_dwt, struct Fl
         
     if(!strcmp(data->format,"frequency"))  LISA_Read_HDF5_LDC_RADLER_TDI(tdi_td, data->fileName);
     if(!strcmp(data->format,"sangria")) LISA_Read_HDF5_LDC_TDI(tdi_td, data->fileName, "/obs/tdi");
+    if(!strcmp(data->format,"CD1L"))    LISA_Read_HDF5_CD1L_TDI(tdi_td, data->fileName, "/tdis/");
     
     
     /* Select time segment of full data set */

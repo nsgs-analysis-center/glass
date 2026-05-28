@@ -328,6 +328,17 @@ void LISA_Read_HDF5_LDC_TDI(struct TDI *tdi, char *fileName, const char *dataNam
 
 /**
  \brief HDF5 parser for LISA Data
+
+ Hard-coded for the CD1L ("lolipops") data format, where each TDI channel
+ (X2, Y2, Z2) is a separate 1D native-double dataset under the group `dataName`
+ (e.g. "/tdis/") and the sample cadence `dt` is an attribute of the
+ `<dataName>sampling` subgroup. Performs a deep copy of the TDI time series
+ into the input TDI structure, deriving the AET channels from XYZ.
+ */
+void LISA_Read_HDF5_CD1L_TDI(struct TDI *tdi, char *fileName, const char *dataName);
+
+/**
+ \brief HDF5 parser for LISA Data
  
  Hard-coded for <a href="https://lisa-ldc.lal.in2p3.fr/challenge1">LDC Radler</a> data format.
  Performs a deep copy of TDI time series data in HDF5 to input TDI structure.

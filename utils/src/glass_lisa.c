@@ -1388,10 +1388,63 @@ void free_tdi(struct TDI *tdi)
     free(tdi);
 }
 
+
+void LISA_Read_HDF5_CD1L_TDI(struct TDI *tdi, char *fileName, const char *dataName)
+{
+    /*
+     * CD1L ("lolipops") format: each TDI channel is stored as its own
+     * 1D native-double dataset under the group given by `dataName`
+     * (e.g. "/tdis/"), as X2, Y2, Z2 (second-generation TDI). The sample
+     * cadence is an attribute `dt` on the `<dataName>sampling` subgroup;
+     * there is no explicit time array.
+     */
+    hid_t file, dataset, dspace; /* identifiers */
+
+    /* Open an existing file. */
+    file = H5Fopen(fileName, H5F_ACC_RDONLY, H5P_DEFAULT);
+
+    /* Path of the X2 channel, used to size the time series */
+    char path[1024];
+    snprintf(path, sizeof(path), "%sX2", dataName);
+
+    /* Get size of dataset */
+    dataset = H5Dopen(file, path, H5P_DEFAULT);
+    dspace = H5Dget_space(dataset);
+    int ndims = H5Sget_simple_extent_ndims(dspace);
+    hsize_t dims[ndims];
+    H5Sget_simple_extent_dims(dspace, dims, NULL);
+    int Nsamples = (int)dims[0];
+    H5Sclose(dspace);
+    H5Dclose(dataset);
+
+    alloc_tdi(tdi, Nsamples, 3);
+
+    /* Read each channel directly into the corresponding ldasoft array */
+    double *channels[6] = {tdi->X, tdi->Y, tdi->Z, tdi->A, tdi->E, tdi->T};
+    const char *names[6]  = {"X2", "Y2", "Z2", "A2", "E2", "T2"};
+
+    for(int c=0; c<6; c++)
+    {
+        snprintf(path, sizeof(path), "%s%s", dataName, names[c]);
+        dataset = H5Dopen(file, path, H5P_DEFAULT);
+        H5Dread(dataset, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, channels[c]);
+        H5Dclose(dataset);
+    }
+
+    /* Read the sampling cadence dt from the sampling subgroup attribute */
+    snprintf(path, sizeof(path), "%ssampling", dataName);
+    hid_t group = H5Gopen(file, path, H5P_DEFAULT);
+    hid_t attr  = H5Aopen(group, "dt", H5P_DEFAULT);
+    H5Aread(attr, H5T_NATIVE_DOUBLE, &tdi->delta);
+    H5Aclose(attr);
+    H5Gclose(group);
+
+    /* Close the file. */
+    H5Fclose(file);
+}
+
 /* LDC HDF5 */
-
 #define DATASET "/obs/tdi"
-
 void LISA_Read_HDF5_LDC_TDI(struct TDI *tdi, char *fileName, const char *dataName)
 {    
     /* LDC-formatted structure for compound HDF5 dataset */
