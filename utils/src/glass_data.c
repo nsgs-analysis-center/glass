@@ -1197,6 +1197,24 @@ void GetNoiseModel(struct Data *data, struct Orbit *orbit, struct Flags *flags)
                     data->noise->C[1][1][n] += GBnoise_FF(data->T, orbit->fstar, f);
                 }
             }
+            else if(strcmp(data->format,"CD1L")==0)
+            {
+                //TODO: reusing Sangria instrument noise levels; implement dedicated mojito (CD1L) noise model
+                get_noise_levels("sangria",f,&Spm,&Sop);
+
+                /* CD1L is 2nd-generation TDI: scale 1st-gen PSD by [2 sin(2x)]^2 */
+                double x = f/orbit->fstar;
+                double secondgen = 4.0*sin(2.0*x)*sin(2.0*x);
+
+                data->noise->C[0][0][n] = secondgen*AEnoise_FF(orbit->L, orbit->fstar, f, Spm, Sop);
+                data->noise->C[1][1][n] = secondgen*AEnoise_FF(orbit->L, orbit->fstar, f, Spm, Sop);
+                data->noise->C[0][1][n] = 0.0;
+                if(flags->confNoise)
+                {
+                    data->noise->C[0][0][n] += secondgen*GBnoise_FF(data->T, orbit->fstar, f);
+                    data->noise->C[1][1][n] += secondgen*GBnoise_FF(data->T, orbit->fstar, f);
+                }
+            }
             else
             {
                 fprintf(stderr,"Unsupported data format %s\n",data->format);
@@ -1208,6 +1226,15 @@ void GetNoiseModel(struct Data *data, struct Orbit *orbit, struct Flags *flags)
             {
                 //TODO: Need a sqrt(2) to match Sangria data/noise
                 get_noise_levels("sangria",f,&Spm,&Sop);
+
+                /* CD1L is 2nd-generation TDI: scale 1st-gen PSD by [2 sin(2x)]^2 */
+                double secondgen = 1.0;
+                if(strcmp(data->format,"CD1L")==0)
+                {
+                    double x = f/orbit->fstar;
+                    secondgen = 4.0*sin(2.0*x)*sin(2.0*x);
+                }
+
                 data->noise->C[0][0][n] = XYZnoise_FF(orbit->L, orbit->fstar, f, Spm, Sop);
                 data->noise->C[1][1][n] = XYZnoise_FF(orbit->L, orbit->fstar, f, Spm, Sop);
                 data->noise->C[2][2][n] = XYZnoise_FF(orbit->L, orbit->fstar, f, Spm, Sop);
@@ -1230,16 +1257,10 @@ void GetNoiseModel(struct Data *data, struct Orbit *orbit, struct Flags *flags)
                     data->noise->C[2][1][n] += -0.5*GBnoise;
                 }
                 
-                /*normalize*/
-                data->noise->C[0][0][n] /= 4.;
-                data->noise->C[0][1][n] /= 4.;
-                data->noise->C[0][2][n] /= 4.;
-                data->noise->C[1][0][n] /= 4.;
-                data->noise->C[1][1][n] /= 4.;
-                data->noise->C[1][2][n] /= 4.;
-                data->noise->C[2][0][n] /= 4.;
-                data->noise->C[2][1][n] /= 4.;
-                data->noise->C[2][2][n] /= 4.;
+                /*normalize (and apply 2nd-gen TDI factor for CD1L; secondgen==1 otherwise)*/
+                for(int i=0; i<3; i++)
+                    for(int j=0; j<3; j++)
+                        data->noise->C[i][j][n] *= secondgen/4.;
             }
         }
         
@@ -1896,6 +1917,7 @@ void parse_data_args(int argc, char **argv, struct Data *data, struct Orbit *orb
         {"coarse-Q",    required_argument, 0, 0 },
         {"phase",       no_argument, 0, 0 },
         {"sangria",     no_argument, 0, 0 },
+        {"CD1L",        no_argument, 0, 0 },
         {"prior",       no_argument, 0, 0 },
         {"no-burnin",   no_argument, 0, 0 },
         {"no-rj",       no_argument, 0, 0 },
@@ -1948,6 +1970,7 @@ void parse_data_args(int argc, char **argv, struct Data *data, struct Orbit *orb
                 if(strcmp("rundir",      long_options[long_index].name) == 0) strcpy(flags->runDir,optarg);
                 if(strcmp("phase",       long_options[long_index].name) == 0) sprintf(data->format,"phase");
                 if(strcmp("sangria",     long_options[long_index].name) == 0) sprintf(data->format,"sangria");
+                if(strcmp("CD1L",        long_options[long_index].name) == 0) sprintf(data->format,"CD1L");
                 if(strcmp("fmin",        long_options[long_index].name) == 0) sscanf(optarg, "%lg", &data->fmin);
                 if(strcmp("fmax",        long_options[long_index].name) == 0)
                 {
