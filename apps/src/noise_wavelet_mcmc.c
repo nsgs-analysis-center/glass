@@ -297,6 +297,22 @@ int main(int argc, char *argv[])
         write_coarse_wdm_data(data, (double*)stats.Pxx, filename, Q);
     }
 
+    /* Welch-Satterthwaite effective dof, frozen at the injected covariance.
+     * Reads data->noise (the full-resolution injected covariance), so it only
+     * makes sense for injection runs. Without this call stats.Qeff stays at Q.
+     */
+    if (flags->ws_approx) {
+        if (!flags->simNoise) {
+            fprintf(stderr,"[ws-approx] requires an injection (--sim-noise); falling back to Qeff=Q\n");
+        } else {
+            precompute_coarse_Qeff(data, &stats);
+            if (Q > 1) {
+                sprintf(filename,"%s/coarse_Qeff.dat", data->dataDir);
+                write_coarse_wdm_data(data, (double*)stats.Qeff, filename, Q);
+            }
+        }
+    }
+
 
     // For now, we are not going to have full wavelet scaleograms stored everywhere!
     // we'll treat these as outer products of the spectrum and modulation

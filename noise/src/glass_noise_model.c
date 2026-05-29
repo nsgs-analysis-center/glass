@@ -1039,8 +1039,13 @@ void alloc_coarse_stats(struct CoarseStats *s, int Nlayer, int Q, int NT)
     double *Pxy = malloc(Pdim*sizeof(double));
     double *Pxz = malloc(Pdim*sizeof(double));
     double *Pyz = malloc(Pdim*sizeof(double));
+    // Default Qeff to the integer Q in every cell, so the likelihood matches
+    // the pre-ws_approx behavior unless precompute_coarse_Qeff overwrites it.
+    double *Qeff = malloc(Pdim*sizeof(double));
+    for(size_t i=0; i<Pdim; i++) Qeff[i] = (double)Q;
     s->Pxx = Pxx; s->Pyy = Pyy; s->Pzz = Pzz;
     s->Pxy = Pxy; s->Pxz = Pxz; s->Pyz = Pyz;
+    s->Qeff = Qeff;
     s->Q = Q;
     s->Ncoarse = Ncoarse;
     s->Nlayer = Nlayer;
@@ -1050,8 +1055,10 @@ void free_coarse_stats(struct CoarseStats *s)
 {
     free((void*)s->Pxx); free((void*)s->Pyy); free((void*)s->Pzz);
     free((void*)s->Pxy); free((void*)s->Pxz); free((void*)s->Pyz);
+    free((void*)s->Qeff);
     s->Pxx = s->Pyy = s->Pzz = NULL;
     s->Pxy = s->Pxz = s->Pyz = NULL;
+    s->Qeff = NULL;
 }
 
 void coarse_grain_wavelet_data(struct Data *data, struct CoarseStats *stats)
@@ -1097,6 +1104,50 @@ void coarse_grain_wavelet_data(struct Data *data, struct CoarseStats *stats)
             Pxy[k_coarse] = sxy*invQ;
             Pxz[k_coarse] = sxz*invQ;
             Pyz[k_coarse] = syz*invQ;
+        }
+    }
+}
+
+void precompute_coarse_Qeff(struct Data *data, struct CoarseStats *stats)
+{
+    struct Wavelets *wdm = data->wdm;
+    struct Noise *noise = data->noise;   // injected, full-resolution (Q=1) covariance
+    int Q = stats->Q;
+    int Ncoarse = stats->Ncoarse;
+    // Populator owns a mutable view of the array it allocated.
+    double *Qeff = (double*)stats->Qeff;
+
+    if (Q <= 1) return; // each cell is one fine pixel: Qeff == Q == 1 already.
+
+    for(int j=data->lmin; j<data->lmax; j++)
+    {
+        int jrel = j - data->lmin;
+        for(int q=0; q<Ncoarse; q++)
+        {
+            // First two moments of the injected per-fine-pixel variance within
+            // the coarse cell, per diagonal channel. With C_a(t_n) the injected
+            // variance at fine pixel n, the heterogeneous-variance sum
+            // sum_n C_a(t_n) z_n^2 (z_n ~ N(0,1)) is moment-matched to a scaled
+            // chi^2 with Welch-Satterthwaite dof (sum_n C_a)^2 / sum_n C_a^2.
+            double s1x=0, s2x=0, s1y=0, s2y=0, s1z=0, s2z=0;
+            for(int i=q*Q; i<(q+1)*Q; i++)
+            {
+                int k_full;
+                wavelet_pixel_to_index(wdm, i, j, &k_full);
+                k_full -= wdm->kmin;
+                double cxx = noise->C[0][0][k_full];
+                double cyy = noise->C[1][1][k_full];
+                double czz = noise->C[2][2][k_full];
+                s1x += cxx; s2x += cxx*cxx;
+                s1y += cyy; s2y += cyy*cyy;
+                s1z += czz; s2z += czz*czz;
+            }
+            double qxx = s1x*s1x/s2x;
+            double qyy = s1y*s1y/s2y;
+            double qzz = s1z*s1z/s2z;
+            // Single scalar dof per cell (the likelihood applies one Qd to all
+            // channels and cross terms), taken as the channel average.
+            Qeff[q + jrel*Ncoarse] = (qxx + qyy + qzz)/3.0;
         }
     }
 }
@@ -1159,6 +1210,15 @@ static inline double wavelet_nwip_linear(const double* __restrict a, const doubl
 //
 // TODO: in practice, the non-stationarity changes this distribution from a Gamma
 // see WDM note. It's an infinite sum of Gammas
+//
+// The dropped pieces are the normalization of the Wishart/Gamma sufficient-
+// statistic density. Treating the cell statistic as A = Qd*P ~ Wishart_p(Cbar, Qd)
+// with p=3 channels, the full log-density is
+//   ((Qd-p-1)/2) log|A| - 1/2 tr(Cbar^-1 A) - (Qd p / 2) log2 - logGamma_p(Qd/2),
+// and only the two terms kept below (-1/2 tr(Cbar^-1 A) and the -Qd/2 log|Cbar|
+// hidden in logdetC) depend on the *model* when Qd is a fixed constant. The
+// commented block restores the remaining Qd-dependent normalization; see the
+// NOTE there for when it is actually needed.
 
 static inline double per_pixel_logL_contribution(
         double Qd,
@@ -1176,6 +1236,37 @@ static inline double per_pixel_logL_contribution(
     s -=     Qd*inv_xz*pxz;
     s -=     Qd*inv_yz*pyz;
     s -= 0.5*Qd*logdetC;
+
+    /* ---------------------------------------------------------------------
+     * Qd-dependent normalization of the Wishart (p=3) sufficient-statistic
+     * density. These terms are CONSTANT across the chain when Qd is fixed --
+     * which it is both for plain coarse-graining (Qd = integer Q) and for the
+     * --ws-approx path (Qeff frozen at the injected covariance) -- so they
+     * cancel in every MCMC acceptance ratio and are omitted by default.
+     *
+     * NOTE: restore this block if Qd ever becomes model-dependent, i.e. if Qeff
+     * is recomputed each step from the *current* noise parameters rather than
+     * frozen at injection. It is also required whenever an absolute, correctly
+     * normalized logL is needed (e.g. thermodynamic-integration evidence, or
+     * comparing models/segments that carry different effective dof). Valid only
+     * for Qd > p-1 = 2 (multivariate gamma domain); the channel-averaged Qeff
+     * can dip below 2 in strongly confusion-dominated cells, so guard before use.
+     *
+     * const double p = 3.0;
+     * double detP = pxx*(pyy*pzz - pyz*pyz)
+     *             - pxy*(pxy*pzz - pyz*pxz)
+     *             + pxz*(pxy*pyz - pyy*pxz);
+     * double x = 0.5*Qd;
+     * double logGamma_p = 1.5*log(M_PI)             // pi^{p(p-1)/4}, p=3 -> pi^{3/2}
+     *                   + lgamma(x)
+     *                   + lgamma(x - 0.5)
+     *                   + lgamma(x - 1.0);
+     * double logdetA = p*log(Qd) + log(detP);       // |A| = Qd^p |P|
+     * s += 0.5*(Qd - p - 1.0)*logdetA;
+     * s -= 0.5*Qd*p*log(2.0);
+     * s -= logGamma_p;
+     * --------------------------------------------------------------------- */
+
     return s;
 }
 
@@ -1213,7 +1304,10 @@ double my_noise_log_likelihood_wavelet_coarse(struct Data *data, struct Noise *c
     const double log2pi = log(2*M_PI);
     int Nlayer = data->Nlayer;
     int Ncoarse = stats->Ncoarse;
-    double Qd = (double)stats->Q;
+    // Per-cell effective dof. Without --ws-approx this array is uniformly the
+    // integer Q (filled in alloc_coarse_stats), so the result is identical to
+    // the old scalar-Q path; with --ws-approx it holds the frozen Qeff <= Q.
+    const double *Qeff = stats->Qeff;
     const double *Pxx = stats->Pxx;
     const double *Pyy = stats->Pyy;
     const double *Pzz = stats->Pzz;
@@ -1225,7 +1319,7 @@ double my_noise_log_likelihood_wavelet_coarse(struct Data *data, struct Noise *c
     for (int j=0; j<Nlayer; j++) {
         for (int q=0; q<Ncoarse; q++) {
             int k = q + j*Ncoarse;
-            logL += per_pixel_logL_contribution(Qd,
+            logL += per_pixel_logL_contribution(Qeff[k],
                     Pxx[k], Pyy[k], Pzz[k],
                     Pxy[k], Pxz[k], Pyz[k],
                     coarse_noise->invC[0][0][k], coarse_noise->invC[1][1][k], coarse_noise->invC[2][2][k],

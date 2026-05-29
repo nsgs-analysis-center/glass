@@ -11,14 +11,15 @@
 #build/apps/src/noise_wavelet_mcmc \
 #OMP_NUM_THREADS=1 lldb -- build/apps/src/noise_wavelet_mcmc \
 build/apps/src/noise_wavelet_mcmc \
-        --steps 10 \
-        --chains 10 \
-        --threads 10 \
+        --steps 2000 \
+        --chains 1 \
+        --threads 1 \
         --cheat \
         --fmin 5e-4 \
         --fmax 8e-3 \
-        --duration $((7680*338)) \
-        --stationary \
+        --duration $((7680*338*24)) \
+        --ws-approx \
+        --coarse-Q 169 \
         --sgwb-template 0 \
         --conf-noise \
         --sim-noise

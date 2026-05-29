@@ -273,6 +273,15 @@ struct CoarseStats
     const double *Pxy;
     const double *Pxz;
     const double *Pyz;
+    /**
+     Per-coarse-cell effective number of degrees of freedom (length
+     `Nlayer * Ncoarse`, same `k = q + j*Ncoarse` indexing as the P arrays).
+     Default-filled with `Q` by `alloc_coarse_stats` so the likelihood is
+     bit-for-bit unchanged unless `precompute_coarse_Qeff` overwrites it.
+     When the `--ws-approx` Welch-Satterthwaite correction is active these hold
+     Qeff <= Q, frozen at the injected covariance. See `precompute_coarse_Qeff`.
+     */
+    const double *Qeff;
     int Q;
     int Ncoarse;
     int Nlayer;
@@ -280,6 +289,18 @@ struct CoarseStats
 
 void alloc_coarse_stats(struct CoarseStats *s, int Nlayer, int Q, int NT);
 void free_coarse_stats(struct CoarseStats *s);
+
+/**
+ \brief Precompute and freeze a Welch-Satterthwaite effective dof (Qeff) per
+ coarse cell from the injected covariance in `data->noise`.
+
+ For each coarse cell and each diagonal channel a, with per-fine-pixel injected
+ variance C_a(t_n), forms Qeff_a = (sum_n C_a)^2 / sum_n C_a^2 (the moment-matched
+ effective dof of the heterogeneous-variance sum) and stores the channel-average
+ (Qeff_xx + Qeff_yy + Qeff_zz)/3 into `stats->Qeff`. Requires `data->noise` to
+ hold the full-resolution (Q=1) injected covariance, i.e. an injection run.
+ */
+void precompute_coarse_Qeff(struct Data *data, struct CoarseStats *stats);
 
 /**
  \brief Build the six channel-pair sufficient statistics P^{(ij)}_{mq} from the
