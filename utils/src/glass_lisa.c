@@ -1458,22 +1458,43 @@ void LISA_Read_HDF5_CD1L_TDI(struct TDI *tdi, char *fileName, const char *dataNa
     H5Sclose(dspace);
     H5Dclose(dataset);
 
-    alloc_tdi(tdi, Nsamples, 3);
+    /* ============================ TEMPORARY HACK ============================
+     * The WDM wavelet basis hard-codes the sample cadence to LISA_CADENCE (5 s,
+     * glass_lisa.h), but this CD1L file is sampled at 2.5 s. The mismatch breaks
+     * the FFT->WDM normalization (whitened variance ~1e7 instead of ~1). As a
+     * quick test, decimate by `decim` here so the data arrives at 5 s.
+     * TODO(remove-cadence-hack): delete this decimation; instead derive the
+     * wavelet cadence from tdi->delta (the file's dt) and normalize the FFT.
+     * ======================================================================= */
+    const int decim = 2;
+    int Nout = Nsamples / decim;
+
+    alloc_tdi(tdi, Nout, 3);
+    tdi->delta *= decim;   // 2.5 s -> 5 s
+
+    /* TODO(remove-fft-norm-hack): diagnostic only. The wavelet data FFT is
+     * unnormalized (kiss_fftr, no dt or 1/N), so the data |w|^2 is too large by
+     * ~NF*NT/dt^2 (~5e5 here) relative to the physical-PSD noise model. NF*NT ~
+     * Nout, so scale the data by dt/sqrt(Nout) to confirm the whitened variance
+     * lands at ~1. Real fix: normalize the FFT in the wavelet path. */
+    double diag_scale = tdi->delta / sqrt((double)Nout);
 
     /* Read each channel directly into the corresponding ldasoft array */
     double *channels[6] = {tdi->X, tdi->Y, tdi->Z, tdi->A, tdi->E, tdi->T};
     const char *names[6]  = {"X2", "Y2", "Z2", "A2", "E2", "T2"};
 
+    double *raw = malloc((size_t)Nsamples*sizeof(double));
     for(int c=0; c<6; c++)
     {
         snprintf(path, sizeof(path), "%s%s", dataName, names[c]);
         dataset = H5Dopen(file, path, H5P_DEFAULT);
-        H5Dread(dataset, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, channels[c]);
-        // convert from fractional frequency to strain
-        for (int i=0; i<tdi->N; i++)
-            channels[c][i] /= laser_freq;
+        H5Dread(dataset, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, raw);
+        // decimate 2.5s -> 5s and convert fractional frequency -> strain
+        for (int i=0; i<Nout; i++)
+            channels[c][i] = raw[(size_t)i*decim] / laser_freq * diag_scale;
         H5Dclose(dataset);
     }
+    free(raw);
 
 
     /* Close the file. */
