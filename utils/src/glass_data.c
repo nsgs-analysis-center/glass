@@ -657,8 +657,8 @@ void ReadHDF5(struct Data *data, struct TDI *tdi, struct TDI *tdi_dwt, struct Fl
     struct TDI *tdi_td = malloc(sizeof(struct TDI));
         
     if(!strcmp(data->format,"frequency"))  LISA_Read_HDF5_LDC_RADLER_TDI(tdi_td, data->fileName);
-    if(!strcmp(data->format,"sangria")) LISA_Read_HDF5_LDC_TDI(tdi_td, data->fileName, "/obs/tdi");
-    if(!strcmp(data->format,"CD1L"))    LISA_Read_HDF5_CD1L_TDI(tdi_td, data->fileName, "/tdis/");
+    if(!strcmp(data->format,"sangria"))    LISA_Read_HDF5_LDC_TDI(tdi_td, data->fileName, "/obs/tdi");
+    if(!strcmp(data->format,"CD1L"))       LISA_Read_HDF5_CD1L_TDI(tdi_td, data->fileName, "/tdis/");
     
     
     /* Select time segment of full data set */
@@ -1199,8 +1199,7 @@ void GetNoiseModel(struct Data *data, struct Orbit *orbit, struct Flags *flags)
             }
             else if(strcmp(data->format,"CD1L")==0)
             {
-                //TODO: reusing Sangria instrument noise levels; implement dedicated mojito (CD1L) noise model
-                get_noise_levels("sangria",f,&Spm,&Sop);
+                get_noise_levels("mojito",f,&Spm,&Sop);
 
                 /* CD1L is 2nd-generation TDI: scale 1st-gen PSD by [2 sin(2x)]^2 */
                 double x = f/orbit->fstar;
@@ -1225,7 +1224,10 @@ void GetNoiseModel(struct Data *data, struct Orbit *orbit, struct Flags *flags)
             if(data->Nchannel==3)
             {
                 //TODO: Need a sqrt(2) to match Sangria data/noise
-                get_noise_levels("sangria",f,&Spm,&Sop);
+                if(strcmp(data->format,"CD1L")==0)
+                    get_noise_levels("mojito",f,&Spm,&Sop);
+                else
+                    get_noise_levels("sangria",f,&Spm,&Sop);
 
                 /* CD1L is 2nd-generation TDI: scale 1st-gen PSD by [2 sin(2x)]^2 */
                 double secondgen = 1.0;
@@ -1257,10 +1259,10 @@ void GetNoiseModel(struct Data *data, struct Orbit *orbit, struct Flags *flags)
                     data->noise->C[2][1][n] += -0.5*GBnoise;
                 }
                 
-                /*normalize (and apply 2nd-gen TDI factor for CD1L; secondgen==1 otherwise)*/
+                /*apply 2nd-gen TDI factor for CD1L; secondgen==1 otherwise*/
                 for(int i=0; i<3; i++)
                     for(int j=0; j<3; j++)
-                        data->noise->C[i][j][n] *= secondgen/4.;
+                        data->noise->C[i][j][n] *= secondgen;
             }
         }
         

@@ -1110,6 +1110,26 @@ void get_noise_levels(char model[], double f, double *Spm, double *Sop)
         *Spm = 5.76e-30 / (PI2*f*CLIGHT)/(PI2*f*CLIGHT) * (1.0 + pow(0.4e-3/f,2)) * (1.0 + pow(f/8.0e-3,4));
         *Sop = 1.28e-22 * (PI2*f/CLIGHT)*(PI2*f/CLIGHT) * (1.0 + pow(2.0e-3/f,4));
     }
+    else if (strcmp(model, "mojito") == 0)
+    {
+        /* CD1L / MOJITO-light secondary noise set: test-mass acceleration noise
+         * (3e-15 m/s^2/rtHz, "original" shape, f_knee=0.4 mHz, f_break=8 mHz) and
+         * OMS science-channel noise (15e-12 m/rtHz, f_knee=2 mHz), in
+         * fractional-frequency units (data is divided by the laser frequency).
+         * These are the same levels as "scirdv1"; verified against the in-file
+         * LISAModels noise_estimates to 0.01% (XX) / 0.2% (AA). */
+        double fonc = PI2*f/CLIGHT;
+
+        double DSoms_d = 2.25e-22; // 15.e-12*15.e-12
+        double DSa_a   = 9.00e-30; //  3.e-15* 3.e-15
+
+        double Sa_a = DSa_a * (1.0 + (0.4e-3/f)*(0.4e-3/f)) * (1.0 + pow(f/8.e-3,4)); // acceleration
+        double Sa_d = Sa_a*pow(PI2*f,-4.);                                            // displacement
+        *Spm = Sa_d*fonc*fonc;
+
+        double Soms_d = DSoms_d*(1.0 + pow(2.e-3/f,4.));
+        *Sop = Soms_d*fonc*fonc;
+    }
     /* more else if clauses */
     else /* default: */
     {
@@ -1392,19 +1412,40 @@ void free_tdi(struct TDI *tdi)
 void LISA_Read_HDF5_CD1L_TDI(struct TDI *tdi, char *fileName, const char *dataName)
 {
     /*
-     * CD1L ("lolipops") format: each TDI channel is stored as its own
+     * CD1L ("mojito") format: each TDI channel is stored as its own
      * 1D native-double dataset under the group given by `dataName`
      * (e.g. "/tdis/"), as X2, Y2, Z2 (second-generation TDI). The sample
      * cadence is an attribute `dt` on the `<dataName>sampling` subgroup;
      * there is no explicit time array.
+     *
+     * The data are assumed to be in fractional frequency and need a division by
+     * the central laser frequency to get to the strain.
+     * This is saved in the root level HDF5 attributes
      */
     hid_t file, dataset, dspace; /* identifiers */
 
     /* Open an existing file. */
     file = H5Fopen(fileName, H5F_ACC_RDONLY, H5P_DEFAULT);
+    char path[1024]; // buffer for dataset names
+
+    /* Read the sampling cadence dt from the sampling subgroup attributes */
+    snprintf(path, sizeof(path), "%ssampling", dataName);
+    hid_t group = H5Gopen(file, path, H5P_DEFAULT);
+    hid_t attr  = H5Aopen(group, "dt", H5P_DEFAULT);
+    H5Aread(attr, H5T_NATIVE_DOUBLE, &tdi->delta);
+    H5Aclose(attr);
+    H5Gclose(group);
+
+    /* Read the laser frequency from the root attributes */
+    double laser_freq;
+    snprintf(path, sizeof(path), "/");
+    group = H5Gopen(file, path, H5P_DEFAULT);
+    attr  = H5Aopen(group, "laser_frequency", H5P_DEFAULT);
+    H5Aread(attr, H5T_NATIVE_DOUBLE, &laser_freq);
+    H5Aclose(attr);
+    H5Gclose(group);
 
     /* Path of the X2 channel, used to size the time series */
-    char path[1024];
     snprintf(path, sizeof(path), "%sX2", dataName);
 
     /* Get size of dataset */
@@ -1428,16 +1469,12 @@ void LISA_Read_HDF5_CD1L_TDI(struct TDI *tdi, char *fileName, const char *dataNa
         snprintf(path, sizeof(path), "%s%s", dataName, names[c]);
         dataset = H5Dopen(file, path, H5P_DEFAULT);
         H5Dread(dataset, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, channels[c]);
+        // convert from fractional frequency to strain
+        for (int i=0; i<tdi->N; i++)
+            channels[c][i] /= laser_freq;
         H5Dclose(dataset);
     }
 
-    /* Read the sampling cadence dt from the sampling subgroup attribute */
-    snprintf(path, sizeof(path), "%ssampling", dataName);
-    hid_t group = H5Gopen(file, path, H5P_DEFAULT);
-    hid_t attr  = H5Aopen(group, "dt", H5P_DEFAULT);
-    H5Aread(attr, H5T_NATIVE_DOUBLE, &tdi->delta);
-    H5Aclose(attr);
-    H5Gclose(group);
 
     /* Close the file. */
     H5Fclose(file);
