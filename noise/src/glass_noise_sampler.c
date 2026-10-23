@@ -562,10 +562,10 @@ void noise_instrument_model_mcmc(struct Orbit *orbit, struct Data *data, struct 
             
             //add foreground noise contribution
             if(flags->confNoise)
-                generate_full_covariance_matrix(psd,galaxy->psd, data->Nchannel);
+                generate_full_covariance_matrix(psd,galaxy->psd);
             //add sgwb contribution
             if(flags->sgwbTemplate>=0) 
-                generate_full_covariance_matrix(psd,sgwb->psd, data->Nchannel);
+                generate_full_covariance_matrix(psd,sgwb->psd);
             
             invert_noise_covariance_matrix(psd);
             
@@ -720,10 +720,10 @@ void noise_foreground_model_mcmc(struct Data *data, struct InstrumentModel *nois
             copy_Cij(model_y->psd->C, psd->C, psd->Nchannel, psd->N);
             
             //add instrument noise contribution
-            generate_full_covariance_matrix(psd, noise->psd, data->Nchannel);
+            generate_full_covariance_matrix(psd, noise->psd);
             //add sgwb contribution
             if(flags->sgwbTemplate>=0) 
-                generate_full_covariance_matrix(psd, sgwb->psd, data->Nchannel);
+                generate_full_covariance_matrix(psd, sgwb->psd);
             
             invert_noise_covariance_matrix(psd);
             
@@ -850,10 +850,10 @@ void noise_sgwb_model_mcmc(struct Data *data, struct InstrumentModel *noise, str
             copy_Cij(model_y->psd->C, psd->C, psd->Nchannel, psd->N);
             
             //add instrument noise contribution
-            generate_full_covariance_matrix(psd, noise->psd, data->Nchannel);
+            generate_full_covariance_matrix(psd, noise->psd);
             //add confusion noise contribution
             if(flags->confNoise) 
-                generate_full_covariance_matrix(psd,galaxy->psd, data->Nchannel);
+                generate_full_covariance_matrix(psd,galaxy->psd);
             
             invert_noise_covariance_matrix(psd);
             

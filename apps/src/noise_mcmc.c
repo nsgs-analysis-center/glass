@@ -163,8 +163,8 @@ int main(int argc, char *argv[])
     /* Combine noise components to form covariance matrix */
     for(int ic=0; ic<chain->NC; ic++)
     {
-        if(flags->confNoise) generate_full_covariance_matrix(inst_model[ic]->psd, conf_model[ic]->psd, data->Nchannel);
-        if(flags->sgwbTemplate>=0) generate_full_covariance_matrix(inst_model[ic]->psd, sgwb_model[ic]->psd, data->Nchannel);
+        if(flags->confNoise) generate_full_covariance_matrix(inst_model[ic]->psd, conf_model[ic]->psd);
+        if(flags->sgwbTemplate>=0) generate_full_covariance_matrix(inst_model[ic]->psd, sgwb_model[ic]->psd);
     }
 
     /* get initial likelihood */
@@ -278,12 +278,12 @@ int main(int argc, char *argv[])
             if(flags->confNoise)
             {
                 generate_galactic_foreground_model(conf_model[chain->index[0]]);
-                generate_full_covariance_matrix(inst_model[chain->index[0]]->psd, conf_model[chain->index[0]]->psd, data->Nchannel);
+                generate_full_covariance_matrix(inst_model[chain->index[0]]->psd, conf_model[chain->index[0]]->psd);
             }
             if(flags->sgwbTemplate>=0) 
             {
                 generate_sgwb_model(sgwb_model[chain->index[0]]);
-                generate_full_covariance_matrix(inst_model[chain->index[0]]->psd,sgwb_model[chain->index[0]]->psd, data->Nchannel);
+                generate_full_covariance_matrix(inst_model[chain->index[0]]->psd,sgwb_model[chain->index[0]]->psd);
             }
             
             for(int n=0; n<data->NFFT; n++)
@@ -310,14 +310,14 @@ int main(int argc, char *argv[])
         generate_galactic_foreground_model(conf_model[chain->index[0]]);
         sprintf(filename,"%s/final_foreground_noise_model.dat",data->dataDir);
         print_noise_model(conf_model[chain->index[0]]->psd, filename);
-        generate_full_covariance_matrix(inst_model[chain->index[0]]->psd, conf_model[chain->index[0]]->psd, data->Nchannel);
+        generate_full_covariance_matrix(inst_model[chain->index[0]]->psd, conf_model[chain->index[0]]->psd);
     }
     if(flags->sgwbTemplate>=0)
     {
         generate_sgwb_model(sgwb_model[chain->index[0]]);
         sprintf(filename,"%s/final_sgwb_noise_model.dat",data->dataDir);
         print_noise_model(sgwb_model[chain->index[0]]->psd, filename);
-        generate_full_covariance_matrix(inst_model[chain->index[0]]->psd, sgwb_model[chain->index[0]]->psd, data->Nchannel);
+        generate_full_covariance_matrix(inst_model[chain->index[0]]->psd, sgwb_model[chain->index[0]]->psd);
     }
     if(flags->confNoise || flags->sgwbTemplate>=0)
     {
@@ -329,7 +329,7 @@ int main(int argc, char *argv[])
 
     sprintf(filename,"%s/whitened_data.dat",data->dataDir);
     // this was here, but it was already added??
-    //if(flags->confNoise)generate_full_covariance_matrix(inst_model[chain->index[0]]->psd,conf_model[chain->index[0]]->psd, data->Nchannel);
+    //if(flags->confNoise)generate_full_covariance_matrix(inst_model[chain->index[0]]->psd,conf_model[chain->index[0]]->psd);
     print_whitened_data(data, inst_model[chain->index[0]]->psd, filename);
 
     

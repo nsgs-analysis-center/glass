@@ -100,13 +100,6 @@ int main(int argc, char *argv[])
     /* Initialize LISA orbit model */
     initialize_orbit(data, orbit, flags);
 
-    /* read data */
-    if(flags->strainData)
-        ReadData(data,orbit,flags);
-    
-    /* noise model */
-    GetNoiseModel(data,orbit,flags);
-
     struct Source **inj=NULL;
     if(flags->NINJ>0)
     {
@@ -124,9 +117,16 @@ int main(int argc, char *argv[])
         data->sine_f_on_fstar = sin((data->fmin + (data->fmax-data->fmin)/2.)/orbit->fstar);
     }
 
-    /* Add Gaussian noise realization */
-    if(flags->simNoise) AddNoise(data,data->tdi);
+    /* noise model */
+    GetNoiseModel(data,orbit,flags);
+
+    /* read data */
+    if(flags->strainData)
+        ReadData(data,orbit,flags);
+    else if (flags->simNoise)
+        SimulateData(data, orbit, flags);
     
+
     /* Store DFT copy of simulated data */
     copy_tdi(data->tdi, data->dft);
 

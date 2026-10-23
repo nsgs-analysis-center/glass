@@ -43,8 +43,9 @@ static void setup_wdm_basis(struct Wavelets *wdm, int NF)
     wdm->Omega = M_PI/wdm->cadence;
     wdm->dOmega = wdm->Omega/(double)wdm->NF;
     wdm->inv_root_dOmega = 1.0/sqrt(wdm->dOmega);
-    wdm->B = wdm->dOmega;
-    wdm->A = (wdm->dOmega-wdm->B)/2.0;
+    // WDM window roll-off: match lisa-analysis-tools dev (A = dOmega/4, B = dOmega - 2A)
+    wdm->A = wdm->dOmega/4.0;
+    wdm->B = wdm->dOmega - 2.0*wdm->A;
     wdm->BW = (wdm->A+wdm->B)/M_PI;
 }
 
@@ -254,7 +255,8 @@ void initialize_wavelet(struct Wavelets *wdm, double T)
     //stores window function and normalization
     wavelet_window_time(wdm);
     wdm->window_freq_forward = double_vector((wdm->NT/2 + 1)); // memory leak
-    build_wdm_filter_freq(wdm->window_freq_forward, wdm->NF, wdm->NT, wdm->A, true);
+    // WDM filter roll-off A = DeltaOmega/4 with DeltaOmega = pi/NF (matches lisa-analysis-tools dev)
+    build_wdm_filter_freq(wdm->window_freq_forward, wdm->NF, wdm->NT, (M_PI/wdm->NF)/4.0, true);
 
     //stores lookup table of wavelet basis functions
     //wavelet_lookup_table(wdm);
@@ -485,7 +487,7 @@ void wavelet_transform_freq_one_layer(struct Wavelets *wdm, int N, double *freqd
     // Build and normalize the filter on this grid
     double phif[N/2 + 1];
     for (int i = 0; i <= N/2; i++)
-        phif[i] = my_phitilde(domega * i, DeltaOmega, wdm->A);
+        phif[i] = my_phitilde(domega * i, DeltaOmega, DeltaOmega/4.0);
     // normalize: same formula as build_wdm_filter_freq
     double norm = 0.0;
     for (int i = 0; i <= N/2; i++) {
@@ -547,11 +549,24 @@ void wavelet_transform_timefreq_by_layers(struct Wavelets* wdm, int jmin, int Nl
     int N = Nt * (Nlayers+1); // length of input data
     double freqdata[N + 2]; // full-length FFT
 
-    // RJR: my understanding of this factor is that it matches how signals
-    // (e.g. sines) scale in the FFT. We need this because we have downsampled and
-    // N here != wdm->NT*wdm->NF. 
-    // TODO: define all FFTs to include a dt factor? That would absorb this!
-    double normalization = sqrt((double)wdm->NF)/(Nlayers+1.0);
+    // Normalize so the pixel amplitudes match the WDM noise convention, i.e.
+    // the full-resolution wavelet_transform_freq applied to *FD-normalized* data
+    // (freq bins scaled by sqrt(2*dt/ND), <|X_k|^2> = S_n), which is what the WDM
+    // per-pixel variance S_n/(NF*NT) is validated against.
+    //
+    // Two effects combine:
+    //   (1) sqrt(NF/(Nlayers+1)) rescales the downsampled/heterodyned transform
+    //       (input length N = NT*(Nlayers+1), unnormalized kiss rFFT, per-layer
+    //       inverse /NT, by-layers window forward factor (Nlayers+1)/2) to the
+    //       full-resolution wavelet_transform_freq amplitude on *raw* FFT data.
+    //   (2) sqrt(2*cadence/(NF*NT)) applies the FFT/PSD normalization the FD data
+    //       carries (rft_norm = sqrt(2*dt/ND) in GetData/MyAddNoise) but which the
+    //       raw time-domain waveform here does not.
+    // Combined: sqrt(NF/(Nlayers+1)) * sqrt(2*cadence/(NF*NT))
+    //         = sqrt(2*cadence/((Nlayers+1)*NT)).
+    // The previous omission of (2) made the wavelet SNR too large by
+    // sqrt(NF*NT/(2*cadence)) relative to the Fourier-domain SNR.
+    double normalization = sqrt(2.0*wdm->cadence/((Nlayers+1.0)*(double)Nt));
 
     // TODO: tukey window was here, removed for invertibility in tests
     /*

@@ -1084,9 +1084,6 @@ void setup_fstatistic_proposal(struct Orbit *orbit, struct Data *data, struct Fl
 
 void build_fstatistic_proposal(struct Orbit *orbit, struct Data *data, struct Flags *flags, struct Proposal *proposal)
 {
-    //matrix to hold maximized extrinsic parameters
-    double *Fparams = calloc(4,sizeof(double));
-
     int n_f     = (int)proposal->matrix[0][0];
     int n_theta = (int)proposal->matrix[1][0];
     int n_phi   = (int)proposal->matrix[2][0];
@@ -1100,49 +1097,44 @@ void build_fstatistic_proposal(struct Orbit *orbit, struct Data *data, struct Fl
 
     double norm = 0.0;
 
+    // Parallelize over the full (frequency x colatitude) grid in a single
+    // parallel region. Previously the parallel-for was on the inner n_theta loop
+    // (only ~20 units) nested inside a serial n_f loop (~1000 iters), which
+    // forked/joined n_f times with poor scaling beyond ~20 threads. collapse(2)
+    // exposes n_f*n_theta (~20k) independent units with one fork and better load
+    // balance. Fparams is declared inside the region so each thread has its own
+    volatile int progress = 0;
+    #pragma omp parallel for collapse(2) num_threads(flags->threads) schedule(dynamic)
     for(int i=0; i<n_f; i++)
     {
-        if(n_f<100)
-        {
-            if(!flags->quiet) printProgress((double)i/(double)n_f);
-        }
-        else
-        {
-            if(i%(n_f/100)==0 && !flags->quiet)printProgress((double)i/(double)n_f);
-        }
-        
-        double f;
-        
-        f = data->fmin + i*d_f;
-
-        f += d_f/2; //evaluate logL in center of cell
-        
-        //parallel loop over colatitude bins
-        #pragma omp parallel for num_threads(flags->threads)
         for (int j=0; j<n_theta; j++)
         {
-            //F-statistic for TDI variabls
+            double Fparams[4];
+
+            //evaluate logL in center of cell
+            double f = data->fmin + i*d_f + d_f/2;
+            double theta = acos((-1. + (double)j*d_theta + d_theta/2));
+
+            //F-statistic for TDI variables
             double logL_X,logL_AE, logLmax;
 
             //loop over longitude bins
             for(int k=0; k<n_phi; k++)
             {
-                double theta = acos((-1. + (double)j*d_theta + d_theta/2)); //evaluate logL in center of cell
                 double phi = (double)k*d_phi + d_phi/2; //evaluate logL in center of cell
-                
 
                 get_Fstat_logL(orbit, data, f, 0, theta, phi, &logL_X, &logL_AE, Fparams);
 
                 logLmax = logL_AE;
-                    
+
                 if(logL_AE>1)
                 {
                     for(int n=0; n<n_fdot; n++)
                     {
                         double fdot = ucb_fdot(0.1+n*d_fdot, f); //get fdot by scanning over chirpmass
-                        
+
                         get_Fstat_logL(orbit, data, f, fdot, theta, phi, &logL_X, &logL_AE, Fparams);
-                        
+
                         if(logL_AE>logLmax) logLmax = logL_AE;
 
                         if(logL_AE<1) break;
@@ -1151,6 +1143,18 @@ void build_fstatistic_proposal(struct Orbit *orbit, struct Data *data, struct Fl
                 proposal->tensor[i][j][k] = logLmax*logLmax;
 
             }//end loop over longitude bins
+
+            //coarse progress indicator (one update per completed (i,j) column pair)
+            if(!flags->quiet)
+            {
+                #pragma omp atomic
+                progress++;
+                #pragma omp critical(fstat_progress)
+                {
+                    int total = n_f*n_theta;
+                    if(total<100 || progress%(total/100)==0) printProgress((double)progress/(double)total);
+                }
+            }
         }//end (parallel) loop over colatitude bins
     }//end loop over sub-bins
 
@@ -1175,8 +1179,6 @@ void build_fstatistic_proposal(struct Orbit *orbit, struct Data *data, struct Fl
         for(int j=0; j<n_theta; j++)
             for(int k=0; k<n_phi; k++)
                 if(proposal->tensor[i][j][k]>proposal->maxp) proposal->maxp = proposal->tensor[i][j][k];
-    
-    free(Fparams);
 }
 
 void rebuild_fstatistic_proposal(struct Orbit *orbit, struct Data *data, struct Model *model, struct Flags *flags, struct Proposal *proposal)

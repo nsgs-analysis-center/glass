@@ -110,13 +110,6 @@ int main(int argc, char *argv[])
     initialize_orbit(data, orbit, flags);
     initialize_interpolated_analytic_orbits(orbit, data->T, data->t0);
 
-    /* read data */
-    if(flags->strainData)
-        ReadData(data,orbit,flags);
-    
-    /* noise model */
-    GetDynamicNoiseModel(data,orbit,flags);
-
     struct Source **inj=NULL;
     if(flags->NINJ>0)
     {
@@ -127,9 +120,15 @@ int main(int argc, char *argv[])
         /* Inject gravitational wave signal */
         MBHInjectSimulatedSource(data,orbit,flags,inj);
     }
-    
-    /* Add Gaussian noise realization */
-    if(flags->simNoise) AddNoiseWavelet(data,data->tdi);
+
+    /* noise model */
+    GetDynamicNoiseModel(data,orbit,flags);
+
+    /* read data */
+    if(flags->strainData)
+        ReadData(data,orbit,flags);
+    else if(flags->simNoise)
+        MyAddNoiseWavelet(data,data->tdi);
     
     /* Store DFT copy of simulated data */
     if(!flags->strainData) wavelet_layer_to_fourier_transform(data);

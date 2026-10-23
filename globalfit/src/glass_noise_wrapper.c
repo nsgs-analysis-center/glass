@@ -365,7 +365,7 @@ int update_noise_sampler(struct NoiseData *noise_data)
     if(flags->confNoise)
     {
         generate_galactic_foreground_model(conf_model[chain->index[0]]);
-        generate_full_covariance_matrix(inst_model[chain->index[0]]->psd,conf_model[chain->index[0]]->psd, data->Nchannel);
+        generate_full_covariance_matrix(inst_model[chain->index[0]]->psd,conf_model[chain->index[0]]->psd);
     }
     invert_noise_covariance_matrix(inst_model[chain->index[0]]->psd);
 

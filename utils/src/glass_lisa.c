@@ -958,8 +958,18 @@ void LISA_spline_response(struct Orbit *orbit, double *tarray, int N, double cos
     cos2psi = cos(2.*psi);  
     sin2psi = sin(2.*psi);
     
-    Aplus = 0.5*(1.+cosi*cosi);
-    Across = -cosi;
+    // Polarization amplitudes match the Fourier-domain ucb_waveform / GBGPU LDC
+    // convention (Aplus = 1+cos^2 i, Across = -2 cos i).
+    //
+    // The extra 1/(2*sqrt(2)) reconciles the *overall response normalization* of
+    // this finite-arm spline TDI with the Fourier-domain ucb_waveform (whose
+    // transfer applies an explicit 0.25*sinc and is the SNR reference calibrated
+    // by analytic_snr). Without it the spline response is louder by 2*sqrt(2),
+    // which made the wavelet-domain UCB SNR 2*sqrt(2) larger than the Fourier SNR
+    // (verified constant across f0 = 0.008-0.015 Hz).
+    double response_norm = 1.0/(2.0*M_SQRT2);
+    Aplus  =  (1.+cosi*cosi) * response_norm;
+    Across = -2.0*cosi       * response_norm;
 
     LISA_polarization_tensor(costh, phi, eplus, ecross, k);
 

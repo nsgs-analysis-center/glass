@@ -238,7 +238,7 @@ void generate_sgwb_model_wavelet(struct Wavelets *wdm, struct SGWBModel *model);
 /**
  \brief Add components to `full` noise covariance matrix `C`
  */
-void generate_full_covariance_matrix(struct Noise *full, struct Noise *component, int Nchannel);
+void generate_full_covariance_matrix(struct Noise *full, struct Noise *component);
 void generate_full_dynamic_covariance_matrix(struct Wavelets *wdm, struct InstrumentModel *inst, struct ForegroundModel *conf, struct SGWBModel *sgwb, struct Noise *full);
 void generate_full_stationary_covariance_matrix(struct Wavelets *wdm, struct InstrumentModel *inst, struct ForegroundModel *conf, struct SGWBModel *sgwb, struct Noise *full);
 

@@ -823,8 +823,13 @@ void ucb_waveform(struct Orbit *orbit, char *format, double T, double t0, double
     sinps	= sin(2.*psi);
     
     //Calculate GW polarization amplitudes
-    Aplus  =  amp*(1.+cosi*cosi)*0.5;
-    Across = -amp*(cosi);
+    //Convention matches lisaanalysistools dev / GBGPU (LDC): no factor of 1/2 on
+    //Aplus and a full factor of 2 on Across. See gbgpu.gbgpu.GBGPU.run_wave and
+    //lisatools cutils lat_tdi_on_the_fly.cu::get_hp_hc. The downstream transfer
+    //function (0.25*sinc, DP/DC) is identical to GBGPU, so no extra
+    //normalization factor is applied here.
+    Aplus  =  amp*(1.+cosi*cosi);
+    Across = -amp*(2.0*cosi);
     
     df = PI2*(((double)q)/T);
     
@@ -1169,8 +1174,9 @@ void ucb_waveform_wavelet(struct Orbit *orbit, struct Wavelets *wdm, double Tobs
 
     // get frequency wavelet window function for downsampled data
     // Nlayers passed instead of NF to get norm right of heterodyned UCB wavefomr
+    // A = DeltaOmega/4 with DeltaOmega = pi/(Nlayers+1) (matches lisa-analysis-tools dev)
     double *window = double_vector((wdm->NT/2+1));
-    build_wdm_filter_freq(window, Nlayers+1, wdm->NT, wdm->A, true);
+    build_wdm_filter_freq(window, Nlayers+1, wdm->NT, (M_PI/(Nlayers+1))/4.0, true);
         
     // wavelet transform on heterodyned data using downsampled windows.
     build_interpolated_waveform(amp_interpolant_X, phase_interpolant_X, time_ds, phase_ds, phase_het, N_ds, wave->X);

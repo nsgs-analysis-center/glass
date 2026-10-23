@@ -46,7 +46,7 @@ static void set_ucb_defaults(struct Data *data)
     data->N        = (int)floor(data->T/WAVELET_DURATION)*data->Nlayer;
     data->NFFT     = data->N/2;    data->Nchannel = 3; //1=X, 2=AE, 3=XYZ
     data->qpad     = 0;
-    data->fmin     = 1e-4; //Hz
+    data->fmin     = 5e-4; //Hz
     sprintf(data->basis,"wavelet");
 }
 
@@ -102,15 +102,8 @@ int main(int argc, char *argv[])
     initialize_orbit(data, orbit, flags);
     initialize_interpolated_analytic_orbits(orbit, data->T, data->t0);
 
-    /* read data */
-    if(flags->strainData)
-        ReadData(data,orbit,flags);
-    
-    /* noise model */
-    GetDynamicNoiseModel(data,orbit,flags);
-
     /*
-    Software injections 
+    Software injections
     */
     struct Source **inj=NULL;
     if(flags->NINJ>0)
@@ -122,9 +115,15 @@ int main(int argc, char *argv[])
         /* Inject gravitational wave signal */
         UCBInjectSimulatedSource(data,orbit,flags,inj);
     }
+    
+    /* noise model */
+    GetDynamicNoiseModel(data,orbit,flags);
 
-    /* Add Gaussian noise realization */
-    if(flags->simNoise) AddNoiseWavelet(data,data->tdi);
+    /* read data */
+    if(flags->strainData)
+        ReadData(data,orbit,flags);
+    else if(flags->simNoise)
+        MyAddNoiseWavelet(data,data->tdi);
 
     /* Store DFT copy of simulated data */
     if(!flags->strainData) wavelet_layer_to_fourier_transform(data);

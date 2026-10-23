@@ -247,7 +247,14 @@ void kf_work(
     const int m=*factors++; /* stage's fft length/p */
     const kiss_fft_cpx * Fout_end = Fout + p*m;
 
-#ifdef _OPENMP
+// GLASS: the whole project is compiled with -fopenmp, which would otherwise
+// make every FFT (called millions of times, e.g. in the F-statistic proposal
+// and per-MCMC-step waveforms) fork an OpenMP parallel region here. For the
+// small narrow-band transforms used by GLASS the fork/join cost dwarfs the FFT,
+// and it also causes nested parallelism inside the already-parallel chain and
+// F-stat loops. Define GLASS_KISS_FFT_NO_OPENMP (set by the build) to keep the
+// FFT strictly serial. Undefine it to restore upstream behavior.
+#if defined(_OPENMP) && !defined(GLASS_KISS_FFT_NO_OPENMP)
     // use openmp extensions at the
     // top-level (not recursive)
     if (fstride==1 && p<=5 && m!=1)

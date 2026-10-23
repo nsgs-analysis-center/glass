@@ -784,7 +784,7 @@ void ReadHDF5(struct Data *data, struct TDI *tdi, struct TDI *tdi_dwt, struct Fl
     glass_forward_real_fft(Z,N);
     
     /* Normalize FD data */
-    double rft_norm = 1.0;//sqrt(Tobs)/(double)N;
+    double rft_norm = sqrt(2.0*LISA_CADENCE/(double)N);
     
     /* Account for losses from windowing
     double tukey_norm = tukey_scale(alpha, N);
@@ -1154,92 +1154,25 @@ void GetNoiseModel(struct Data *data, struct Orbit *orbit, struct Flags *flags)
     //if you are simulating/fitting the noise
     if(!flags->psd)
     {
-        for(int n=0; n<data->NFFT; n++)
+        struct InstrumentModel *inst = malloc(sizeof(struct InstrumentModel));
+        initialize_instrument_model(orbit, data, inst);
+        copy_noise(inst->psd, data->noise);
+        free_instrument_model(inst);
+
+        if(flags->confNoise)
         {
-            double f = data->fmin + (double)(n)/data->T;
-            data->noise->f[n] = f;
-            data->noise->transfer[n] = noise_transfer_function(f/orbit->fstar);
-
-            if(strcmp(data->format,"phase")==0)
-            {
-                data->noise->C[0][0][n] = AEnoise(orbit->L, orbit->fstar, f);
-                data->noise->C[1][1][n] = AEnoise(orbit->L, orbit->fstar, f);
-                data->noise->C[0][1][n] = 0.0;
-                if(flags->confNoise)
-                {
-                    data->noise->C[0][0][n] += GBnoise(data->T,f);
-                    data->noise->C[1][1][n] += GBnoise(data->T,f);
-                }
-            }
-            else if(strcmp(data->format,"frequency")==0)
-            {
-                get_noise_levels("radler",f,&Spm,&Sop);
-                data->noise->C[0][0][n] = AEnoise_FF(orbit->L, orbit->fstar, f, Spm, Sop);
-                data->noise->C[1][1][n] = AEnoise_FF(orbit->L, orbit->fstar, f, Spm, Sop);
-                data->noise->C[0][1][n] = 0.0;
-                if(flags->confNoise)
-                {
-                    data->noise->C[0][0][n] += GBnoise_FF(data->T, orbit->fstar, f);
-                    data->noise->C[1][1][n] += GBnoise_FF(data->T, orbit->fstar, f);
-                }
-            }
-            else if(strcmp(data->format,"sangria")==0)
-            {
-                //TODO: Need a sqrt(2) to match Sangria data/noise
-                get_noise_levels("sangria",f,&Spm,&Sop);
-                data->noise->C[0][0][n] = AEnoise_FF(orbit->L, orbit->fstar, f, Spm, Sop);
-                data->noise->C[1][1][n] = AEnoise_FF(orbit->L, orbit->fstar, f, Spm, Sop);
-                data->noise->C[0][1][n] = 0.0;
-                if(flags->confNoise)
-                {
-                    data->noise->C[0][0][n] += GBnoise_FF(data->T, orbit->fstar, f);
-                    data->noise->C[1][1][n] += GBnoise_FF(data->T, orbit->fstar, f);
-                }
-            }
-            else
-            {
-                fprintf(stderr,"Unsupported data format %s\n",data->format);
-                exit(1);
-            }
-
-            //TODO: 3-channel model only has support for Sangria data conventions
-            if(data->Nchannel==3)
-            {
-                //TODO: Need a sqrt(2) to match Sangria data/noise
-                get_noise_levels("sangria",f,&Spm,&Sop);
-                data->noise->C[0][0][n] = XYZnoise_FF(orbit->L, orbit->fstar, f, Spm, Sop);
-                data->noise->C[1][1][n] = XYZnoise_FF(orbit->L, orbit->fstar, f, Spm, Sop);
-                data->noise->C[2][2][n] = XYZnoise_FF(orbit->L, orbit->fstar, f, Spm, Sop);
-
-                data->noise->C[0][1][n] = data->noise->C[1][0][n] = XYZcross_FF(orbit->L, orbit->fstar, f, Spm, Sop);
-                data->noise->C[0][2][n] = data->noise->C[2][0][n] = XYZcross_FF(orbit->L, orbit->fstar, f, Spm, Sop);
-                data->noise->C[1][2][n] = data->noise->C[2][1][n] = XYZcross_FF(orbit->L, orbit->fstar, f, Spm, Sop);
-
-                if(flags->confNoise)
-                {
-                    double GBnoise=GBnoise_FF(data->T, orbit->fstar, f)/1.5; //GBnoise_FF() is hard-coded for AE channels
-                    data->noise->C[0][0][n] += GBnoise;
-                    data->noise->C[1][1][n] += GBnoise;
-                    data->noise->C[2][2][n] += GBnoise;
-                    data->noise->C[0][1][n] += -0.5*GBnoise;
-                    data->noise->C[0][2][n] += -0.5*GBnoise;
-                    data->noise->C[1][2][n] += -0.5*GBnoise;
-                    data->noise->C[1][0][n] += -0.5*GBnoise;
-                    data->noise->C[2][0][n] += -0.5*GBnoise;
-                    data->noise->C[2][1][n] += -0.5*GBnoise;
-                }
-                
-                /*normalize*/
-                data->noise->C[0][0][n] /= 4.;
-                data->noise->C[0][1][n] /= 4.;
-                data->noise->C[0][2][n] /= 4.;
-                data->noise->C[1][0][n] /= 4.;
-                data->noise->C[1][1][n] /= 4.;
-                data->noise->C[1][2][n] /= 4.;
-                data->noise->C[2][0][n] /= 4.;
-                data->noise->C[2][1][n] /= 4.;
-                data->noise->C[2][2][n] /= 4.;
-            }
+            struct ForegroundModel *conf = malloc(sizeof(struct ForegroundModel));
+            initialize_foreground_model(orbit, data, conf);
+            generate_full_covariance_matrix(data->noise, conf->psd);
+            free_foreground_model(conf);
+        }
+        
+        if(flags->sgwbTemplate>=0)
+        {
+            struct SGWBModel *sgwb = malloc(sizeof(struct SGWBModel));
+            initialize_sgwb_model(orbit, data, sgwb, flags->sgwbTemplate);
+            generate_full_covariance_matrix(data->noise, sgwb->psd);
+            free_sgwb_model(sgwb);
         }
         
         invert_noise_covariance_matrix(data->noise);
@@ -1248,36 +1181,8 @@ void GetNoiseModel(struct Data *data, struct Orbit *orbit, struct Flags *flags)
     //use PSD from file
     else
     {
-        
-        //parse input PSD file
-        FILE *psdFile = fopen(flags->psdFile,"r");
-        int lines=0;
-        double f_temp, SnA_temp, SnE_temp;
-        while(!feof(psdFile))
-        {
-            fscanf(psdFile,"%lg %lg %lg",&f_temp,&SnA_temp,&SnE_temp);
-            lines++;
-        }
-        rewind(psdFile);
-        lines--;
-        
-        double *f   = malloc(lines*sizeof(double));
-        double *SnA = malloc(lines*sizeof(double));
-        double *SnE = malloc(lines*sizeof(double));
-        
-        for(int l=0; l<lines; l++) fscanf(psdFile,"%lg %lg %lg",&f[l],&SnA[l],&SnE[l]);
-        
-        //interpolate input psd onto segment grid
-        double *fint = malloc(data->NFFT*sizeof(double));
-        for(int n=0; n<data->NFFT; n++) fint[n] = data->fmin + (double)(n)/data->T;
-
-        CubicSplineGLASS(lines, f, SnA, data->NFFT, fint, data->noise->C[0][0]);
-        CubicSplineGLASS(lines, f, SnE, data->NFFT, fint, data->noise->C[1][1]);
-        
-        free(f);
-        free(SnA);
-        free(SnE);
-        fclose(psdFile);
+        printf("ERROR: Reading PSD from file needs to be re-implemented\n");
+        exit(1);
     }
 }
 
@@ -1522,16 +1427,31 @@ void SimulateData(struct Data *data, struct Orbit *orbit, struct Flags *flags)
     //Get noise spectrum for data segment
     // TODO: switching here to use inst model
     //GetNoiseModel(data,orbit,flags);
+        
     struct InstrumentModel *inst = malloc(sizeof(struct InstrumentModel));
     initialize_instrument_model(orbit, data, inst);
     copy_noise(inst->psd, data->noise);
     free_instrument_model(inst); 
 
-    //Add Gaussian noise to injection
-    if(flags->simNoise) MyAddNoise(data,tdi);
+    if(flags->confNoise)
+    {
+        struct ForegroundModel *conf = malloc(sizeof(struct ForegroundModel));
+        initialize_foreground_model(orbit, data, conf);
+        generate_full_covariance_matrix(data->noise, conf->psd);
+        free_foreground_model(conf);
+    }
+    
+    if(flags->sgwbTemplate>=0)
+    {
+        struct SGWBModel *sgwb = malloc(sizeof(struct SGWBModel));
+        initialize_sgwb_model(orbit, data, sgwb, flags->sgwbTemplate);
+        generate_full_covariance_matrix(data->noise, sgwb->psd);
+        free_sgwb_model(sgwb);
+    }
+    
 
-    //print various data products for plotting
-    print_data(data, flags);
+    //Add Gaussian noise to injection
+    MyAddNoise(data,tdi);
 }
 
 void print_data(struct Data *data, struct Flags *flags)
@@ -2037,6 +1957,18 @@ void parse_data_args(int argc, char **argv, struct Data *data, struct Orbit *orb
     }
     
     omp_set_num_threads(flags->threads);
+
+    /*
+     * Keep BLAS single-threaded. The only BLAS/LAPACK calls in the samplers are
+     * tiny (e.g. 8x8 Fisher-matrix inversions); OpenBLAS's own thread pool
+     * otherwise spins idle and oversubscribes the cores against the OpenMP chain
+     * pool (seen as many blas_thread_server threads in _pthread_cond_wait while
+     * competing for CPU). Setting it here, in the shared argument parser called
+     * by every sampler before any BLAS call, applies the fix process-wide.
+     * OpenBLAS reads this at its lazy initialization; respect a user-provided
+     * value if present (overwrite flag 0).
+     */
+    setenv("OPENBLAS_NUM_THREADS", "1", 0);
 
     //override size of data if fmax was requested
     if(set_fmax_flag)

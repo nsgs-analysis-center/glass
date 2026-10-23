@@ -62,39 +62,40 @@ void init_A_filters(struct Orbit *orbit, struct Data *data, struct Filter *F_fil
     initialize_XLS(M, F_filter->A2_fX, F_filter->A2_fA, F_filter->A2_fE);
     initialize_XLS(M, F_filter->A3_fX, F_filter->A3_fA, F_filter->A3_fE);
     initialize_XLS(M, F_filter->A4_fX, F_filter->A4_fA, F_filter->A4_fE);
-    
-       get_filters(orbit, data, 1, F_filter);
-       get_filters(orbit, data, 2, F_filter);
-       get_filters(orbit, data, 3, F_filter);
-       get_filters(orbit, data, 4, F_filter);
-    
-    // Make use of a phase shift to quickly generate other filters
-//    get_filters(orbit, data, 3, F_filter);    
-//    // copy  F_filter->A3_fX into F_filter->A1_fX
-//    for (int i=0; i<M; i++)
-//    {
-//        F_filter->A1_fX[2*i+1]   = -F_filter->A3_fX[2*i];
-//        F_filter->A1_fX[2*i] =  F_filter->A3_fX[2*i+1];
-//        
-//        F_filter->A1_fA[2*i+1]   = -F_filter->A3_fA[2*i];
-//        F_filter->A1_fA[2*i] =  F_filter->A3_fA[2*i+1];
-//        
-//        F_filter->A1_fE[2*i+1]   = -F_filter->A3_fE[2*i];
-//        F_filter->A1_fE[2*i] =  F_filter->A3_fE[2*i+1];
-//    }
-//    
-//    get_filters(orbit, data, 4, F_filter);
-//    for (int i=0; i<M; i++)
-//    {
-//        F_filter->A2_fX[2*i+1]    = -F_filter->A4_fX[2*i];
-//        F_filter->A2_fX[2*i] =  F_filter->A4_fX[2*i+1];
-//        
-//        F_filter->A2_fA[2*i+1]    = -F_filter->A4_fA[2*i];
-//        F_filter->A2_fA[2*i] =  F_filter->A4_fA[2*i+1];
-//        
-//        F_filter->A2_fE[2*i+1]    = -F_filter->A4_fE[2*i];
-//        F_filter->A2_fE[2*i] =  F_filter->A4_fE[2*i+1];
-//    }
+
+    // The four F-statistic filters are the same intrinsic waveform (iota=pi/2)
+    // evaluated at four reference phases:
+    //   A1: phase0 = 0        A3: phase0 = 3*pi/2
+    //   A2: phase0 = pi       A4: phase0 = pi/2
+    // The waveform carries e^{-i phase0}, so
+    //   A1 = e^{-i*0}   = e^{+i pi/2} * e^{-i 3pi/2} = (-i) * A3
+    //   A2 = e^{-i pi}  = e^{+i pi/2} * e^{-i pi/2}  = (-i) * A4
+    // With z = re + i*im, (-i)*z = im - i*re, i.e. new_re = old_im, new_im = -old_re.
+    // So we only generate A3 and A4 (two ucb_waveform calls instead of four) and
+    // derive A1,A2 by this exact i-rotation. (Validated to reproduce the direct
+    // 4-waveform proposal tensor within float tolerance.)
+    get_filters(orbit, data, 3, F_filter);
+    get_filters(orbit, data, 4, F_filter);
+
+    for(int i=0; i<M; i++)
+    {
+        int re = 2*i, im = 2*i+1;
+
+        // A1 = (-i) * A3
+        F_filter->A1_fX[re] =  F_filter->A3_fX[im];  F_filter->A1_fX[im] = -F_filter->A3_fX[re];
+        F_filter->A1_fY[re] =  F_filter->A3_fY[im];  F_filter->A1_fY[im] = -F_filter->A3_fY[re];
+        F_filter->A1_fZ[re] =  F_filter->A3_fZ[im];  F_filter->A1_fZ[im] = -F_filter->A3_fZ[re];
+        F_filter->A1_fA[re] =  F_filter->A3_fA[im];  F_filter->A1_fA[im] = -F_filter->A3_fA[re];
+        F_filter->A1_fE[re] =  F_filter->A3_fE[im];  F_filter->A1_fE[im] = -F_filter->A3_fE[re];
+
+        // A2 = (-i) * A4
+        F_filter->A2_fX[re] =  F_filter->A4_fX[im];  F_filter->A2_fX[im] = -F_filter->A4_fX[re];
+        F_filter->A2_fY[re] =  F_filter->A4_fY[im];  F_filter->A2_fY[im] = -F_filter->A4_fY[re];
+        F_filter->A2_fZ[re] =  F_filter->A4_fZ[im];  F_filter->A2_fZ[im] = -F_filter->A4_fZ[re];
+        F_filter->A2_fA[re] =  F_filter->A4_fA[im];  F_filter->A2_fA[im] = -F_filter->A4_fA[re];
+        F_filter->A2_fE[re] =  F_filter->A4_fE[im];  F_filter->A2_fE[im] = -F_filter->A4_fE[re];
+    }
+
 //    
 //    char filename[128];
 //    FILE *fptr;

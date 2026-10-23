@@ -536,11 +536,6 @@ void generate_instrument_noise_model(struct Orbit *orbit, struct InstrumentModel
                 
                 break;
         }
-        
-        //Normalization
-        for(int i=0; i<model->psd->Nchannel; i++)
-            for(int j=0; j<model->psd->Nchannel; j++)
-                model->psd->C[i][j][n] /= 4.0;
     }
 }
 //TODO: is it worth oversampling these very smooth functional forms...?
@@ -645,11 +640,6 @@ void generate_galactic_foreground_model(struct ForegroundModel *model)
                 model->psd->C[1][0][n] = model->psd->C[2][0][n] = model->psd->C[2][1][n] = -0.5*t*Sgal;
                 break;
         }
-        
-        //Normalization
-        for(int i=0; i<model->psd->Nchannel; i++)
-            for(int j=0; j<model->psd->Nchannel; j++)
-                model->psd->C[i][j][n] /= 4.0;
     }
 }
 
@@ -891,13 +881,13 @@ void generate_sgwb_model_wavelet(struct Wavelets* wdm, struct SGWBModel *model)
             }
 }
 
-void generate_full_covariance_matrix(struct Noise *full, struct Noise *component, int Nchannel)
+void generate_full_covariance_matrix(struct Noise *full, struct Noise *component)
 {
     for(int n=0; n<full->N; n++)
     {
-        for(int i=0; i<Nchannel; i++)
+        for(int i=0; i<full->Nchannel; i++)
         {
-            for(int j=0; j<Nchannel; j++)
+            for(int j=0; j<full->Nchannel; j++)
             {
                 full->C[i][j][n] += component->C[i][j][n];
             }
@@ -1598,9 +1588,13 @@ void GetDynamicNoiseModel(struct Data *data, struct Orbit *orbit, struct Flags *
     /**************************************************
      * Compute SGWB noise levels
     **************************************************/
-    struct SGWBModel *sgwb = malloc(sizeof(struct SGWBModel));
-    initialize_sgwb_model_wavelet(orbit, data, sgwb, flags->sgwbTemplate);
-
+    struct SGWBModel *sgwb = NULL;
+    if(flags->sgwbTemplate>=0)
+    {
+        sgwb = malloc(sizeof(struct SGWBModel));
+        initialize_sgwb_model_wavelet(orbit, data, sgwb, flags->sgwbTemplate);
+    }
+    
     /**************************************************
      * Combine noise components
     **************************************************/
@@ -1627,7 +1621,7 @@ void GetDynamicNoiseModel(struct Data *data, struct Orbit *orbit, struct Flags *
 
     free_instrument_model(inst_noise);
     free_foreground_model(conf_noise);
-    free_sgwb_model(sgwb);
+    if(flags->sgwbTemplate>=0)free_sgwb_model(sgwb);
 }
 
 void GetStationaryNoiseModel(struct Data *data, struct Orbit *orbit, struct Flags *flags, struct Noise *noise)

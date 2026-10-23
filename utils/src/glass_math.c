@@ -233,7 +233,7 @@ double spline_integration(struct CubicSpline *spline, double xi, double xf)
     return 2.0*simpson_integration_3(yi,ym,yf,dx); //TODO: check this factor of two w.r.t. simpson integration in other places
 }
 
-inline double signed_log_div(double num, double logdetC) {
+double signed_log_div(double num, double logdetC) {
     return copysign(exp(log(fabs(num))-logdetC), num);
 }
 
@@ -700,9 +700,68 @@ void unpack_fft_output(double *x, double *x_packed, int N)
 }
 
 
+/*
+ * Cached FFT plans.
+ *
+ * kiss_fft/kiss_fftr plans ("cfg") depend only on (N, direction) and are not
+ * modified by the transform, so they can be reused across calls.
+ *
+ * The cache is threadprivate so each OpenMP thread owns its own plans with no
+ * locking or false sharing. Plans are never freed (they are small, one per
+ * distinct (N,dir) per thread, and live for the process)
+ */
+#define GLASS_FFT_PLAN_CACHE_SIZE 32
+
+struct glass_fft_plan_entry { int nfft; int inverse; kiss_fft_cfg cfg; };
+struct glass_fftr_plan_entry { int nfft; int inverse; kiss_fftr_cfg cfg; };
+
+static struct glass_fft_plan_entry  glass_fft_plan_cache[GLASS_FFT_PLAN_CACHE_SIZE];
+static int glass_fft_plan_count = 0;
+static struct glass_fftr_plan_entry glass_fftr_plan_cache[GLASS_FFT_PLAN_CACHE_SIZE];
+static int glass_fftr_plan_count = 0;
+#pragma omp threadprivate(glass_fft_plan_cache, glass_fft_plan_count, \
+                          glass_fftr_plan_cache, glass_fftr_plan_count)
+
+static kiss_fft_cfg glass_get_complex_plan(int N, int inverse)
+{
+    for(int i=0; i<glass_fft_plan_count; i++)
+        if(glass_fft_plan_cache[i].nfft==N && glass_fft_plan_cache[i].inverse==inverse)
+            return glass_fft_plan_cache[i].cfg;
+
+    kiss_fft_cfg cfg = kiss_fft_alloc(N, inverse, NULL, NULL);
+    if(glass_fft_plan_count < GLASS_FFT_PLAN_CACHE_SIZE)
+    {
+        glass_fft_plan_cache[glass_fft_plan_count].nfft    = N;
+        glass_fft_plan_cache[glass_fft_plan_count].inverse = inverse;
+        glass_fft_plan_cache[glass_fft_plan_count].cfg     = cfg;
+        glass_fft_plan_count++;
+    }
+    // if the cache is full we still return a valid (leaked) plan; in practice
+    // GLASS uses only a handful of distinct FFT sizes so this never triggers.
+    return cfg;
+}
+
+static kiss_fftr_cfg glass_get_real_plan(int N, int inverse)
+{
+    for(int i=0; i<glass_fftr_plan_count; i++)
+        if(glass_fftr_plan_cache[i].nfft==N && glass_fftr_plan_cache[i].inverse==inverse)
+            return glass_fftr_plan_cache[i].cfg;
+
+    kiss_fftr_cfg cfg = kiss_fftr_alloc(N, inverse, NULL, NULL);
+    if(glass_fftr_plan_count < GLASS_FFT_PLAN_CACHE_SIZE)
+    {
+        glass_fftr_plan_cache[glass_fftr_plan_count].nfft    = N;
+        glass_fftr_plan_cache[glass_fftr_plan_count].inverse = inverse;
+        glass_fftr_plan_cache[glass_fftr_plan_count].cfg     = cfg;
+        glass_fftr_plan_count++;
+    }
+    return cfg;
+}
+
+
 void glass_forward_complex_fft(double *data, int N)
 {
-    kiss_fft_cfg cfg = kiss_fft_alloc(N, 0, NULL, NULL); // 0 indicates forward FFT;
+    kiss_fft_cfg cfg = glass_get_complex_plan(N, 0); // 0 indicates forward FFT;
     kiss_fft_cpx *freqdata = malloc(N*sizeof(kiss_fft_cpx));
     kiss_fft_cpx *timedata = malloc(N*sizeof(kiss_fft_cpx));
     
@@ -723,8 +782,7 @@ void glass_forward_complex_fft(double *data, int N)
     }
     
     
-    // Clean up and free memory
-    kiss_fft_free(cfg);
+    // Clean up and free memory (plan is cached, not freed)
     free(freqdata);
     free(timedata);
 }
@@ -733,14 +791,13 @@ void glass_forward_complex_fft_outplace(double *timedata, double*freqdata, int N
 {
     static_assert_types_equal(double, kiss_fft_scalar);
     // here N is length of freq data in complexes (so array is length 2N doubles)
-    kiss_fft_cfg cfg = kiss_fft_alloc(N, 0, NULL, NULL); // 0 indicates forward FFT;
+    kiss_fft_cfg cfg = glass_get_complex_plan(N, 0); // 0 indicates forward FFT;
     kiss_fft(cfg, (kiss_fft_cpx*)timedata, (kiss_fft_cpx*)freqdata); 
-    kiss_fft_free(cfg);
 }
 
 void glass_inverse_complex_fft(double *data, int N)
 {
-    kiss_fft_cfg cfg = kiss_fft_alloc(N, 1, NULL, NULL); // 1 indicates backward FFT;
+    kiss_fft_cfg cfg = glass_get_complex_plan(N, 1); // 1 indicates backward FFT;
     kiss_fft_cpx *freqdata = malloc(N*sizeof(kiss_fft_cpx));
     kiss_fft_cpx *timedata = malloc(N*sizeof(kiss_fft_cpx));
 
@@ -760,8 +817,7 @@ void glass_inverse_complex_fft(double *data, int N)
         data[2*i+1] = timedata[i].i/N;
     }
     
-    // Clean up and free memory
-    kiss_fft_free(cfg);
+    // Clean up and free memory (plan is cached, not freed)
     free(freqdata);
     free(timedata);
 }
@@ -769,17 +825,16 @@ void glass_inverse_complex_fft_outplace(double *freqdata, double *timedata, int 
 {
     static_assert_types_equal(double, kiss_fft_scalar);
     // here N is length of freq data in complexes (so array is length 2N doubles)
-    kiss_fft_cfg cfg = kiss_fft_alloc(N, 1, NULL, NULL); // 0 indicates forward FFT;
+    kiss_fft_cfg cfg = glass_get_complex_plan(N, 1); // 1 indicates backward FFT;
     kiss_fft(cfg, (kiss_fft_cpx*)freqdata, (kiss_fft_cpx*)timedata); 
     // fix normalization
     for(int i=0; i<(2*N); i++)  timedata[i] /= N;
-    kiss_fft_free(cfg);
 }
 
 void glass_forward_real_fft(double *data, int N)
 {
     // TODO: try stack allocation here
-    kiss_fftr_cfg cfg = kiss_fftr_alloc(N, 0, NULL, NULL); // 0 indicates forward FFT;
+    kiss_fftr_cfg cfg = glass_get_real_plan(N, 0); // 0 indicates forward FFT;
     kiss_fft_scalar *timedata = malloc(N*sizeof(kiss_fft_scalar));
     kiss_fft_cpx    *freqdata = malloc((N/2+1)*sizeof(kiss_fft_cpx));
     
@@ -797,8 +852,7 @@ void glass_forward_real_fft(double *data, int N)
     }
     
     
-    // Clean up and free memory
-    kiss_fftr_free(cfg);
+    // Clean up and free memory (plan is cached, not freed)
     free(freqdata);
     free(timedata);
 }
@@ -808,30 +862,26 @@ void glass_forward_real_fft(double *data, int N)
 void glass_forward_real_fft_outplace(double* timedata, double *freqdata, int N)
 {
     static_assert_types_equal(double, kiss_fft_scalar);
-    kiss_fftr_cfg cfg = kiss_fftr_alloc(N, 0, NULL, NULL); // 0 indicates forward FFT;
+    kiss_fftr_cfg cfg = glass_get_real_plan(N, 0); // 0 indicates forward FFT;
     
     // Perform the rFFT
     kiss_fftr(cfg, (kiss_fft_scalar*)timedata, (kiss_fft_cpx*)freqdata);
-    
-    // Clean up and free memory
-    kiss_fftr_free(cfg);
 }
 void glass_inverse_real_fft_outplace(double *freqdata, double *timedata, int N)
 {
     static_assert_types_equal(double, kiss_fft_scalar);
     // here N is length of time data!
-    kiss_fftr_cfg cfg = kiss_fftr_alloc(N, 1, NULL, NULL); // 0 indicates forward FFT;
+    kiss_fftr_cfg cfg = glass_get_real_plan(N, 1); // 1 indicates inverse FFT;
     kiss_fftri(cfg, (kiss_fft_cpx*)freqdata, (kiss_fft_scalar*)timedata); 
     // fix normalization
     for(int i=0; i<N; i++)  timedata[i] /= N;
-    kiss_fftr_free(cfg);
 }
 
 void glass_inverse_real_fft(double *data, int N)
 {
     // TODO: this is inplace but doesn't have enough bins for the whole signal
     // should probably force DC bin=0 not Nyquist
-    kiss_fftr_cfg cfg = kiss_fftr_alloc(N, 1, NULL, NULL); // 0 indicates forward FFT;
+    kiss_fftr_cfg cfg = glass_get_real_plan(N, 1); // 1 indicates inverse FFT;
     kiss_fft_scalar *timedata = malloc(N*sizeof(kiss_fft_scalar));
     kiss_fft_cpx    *freqdata = malloc((N/2+1)*sizeof(kiss_fft_cpx));
 
@@ -846,8 +896,7 @@ void glass_inverse_real_fft(double *data, int N)
     
     for(int i=0; i<N; i++)  data[i] = timedata[i]/N;
     
-    // Clean up and free memory
-    kiss_fftr_free(cfg);
+    // Clean up and free memory (plan is cached, not freed)
     free(timedata);
     free(freqdata);
 }
