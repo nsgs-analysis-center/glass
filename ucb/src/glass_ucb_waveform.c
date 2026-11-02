@@ -1062,16 +1062,157 @@ static void build_interpolated_waveform(struct CubicSpline *amp_spline, struct C
 }
 
 
+/*
+ Per-thread reusable scratch workspace for ucb_waveform_wavelet.
+
+ ucb_waveform_wavelet is called on the order of 10^6+ times inside the
+ OpenMP-parallel chain loop (per-step waveform proposals and, via
+ ucb_fisher_wavelet). Previously every call malloc/free'd ~15 buffers
+ (double_vectors, TDI structs, cubic splines), which serializes threads
+ on the allocator lock and hurts OpenMP scaling.
+
+ This workspace is allocated once per thread and reused across all calls on that
+ thread. Buffers whose size depends only on the run (Nspline = orbit->Norb,
+ wdm->NT) are sized from the first call. The downsampled buffers depend on the
+ per-source Nlayers in {1,2,3}, so they are sized for the maximum possible
+ N_ds = NT*(NLAYERS_MAX+1) and only the first N_ds entries are used.
+*/
+#define UCB_WAVELET_NLAYERS_MAX 3
+
+struct UCBWaveletWorkspace
+{
+    int allocated;   //!< 0 until first use on this thread
+    int Nspline;     //!< size of orbit-cadence buffers
+    int N_ds_max;    //!< size of downsampled buffers = NT*(NLAYERS_MAX+1)
+
+    // orbit-cadence (Nspline) buffers
+    double *time_ssb;
+    double *amp_ssb;
+    double *phase_ssb;
+    double *phase_sc;
+    double *time_sc_spline; //!< S/C time shift on the orbit (Nspline) grid
+
+    struct CubicSpline *amp_ssb_spline;
+    struct CubicSpline *phase_ssb_spline;
+
+    struct TDI *tdi_phase;
+    struct TDI *tdi_amp;
+
+    struct CubicSpline *amp_interpolant_X;
+    struct CubicSpline *amp_interpolant_Y;
+    struct CubicSpline *amp_interpolant_Z;
+    struct CubicSpline *phase_interpolant_X;
+    struct CubicSpline *phase_interpolant_Y;
+    struct CubicSpline *phase_interpolant_Z;
+
+    // downsampled (N_ds_max) buffers
+    double *phase_ds;
+    double *time_ds;
+    double *phase_het;
+    double *time_sc_ds;
+    struct TDI *wave;
+
+    double *window; //!< length NT/2+1
+};
+
+static struct UCBWaveletWorkspace ucb_wavelet_ws = {0};
+#pragma omp threadprivate(ucb_wavelet_ws)
+
+static void ucb_wavelet_workspace_init(struct UCBWaveletWorkspace *ws, struct Orbit *orbit, struct Wavelets *wdm)
+{
+    int Nspline  = orbit->Norb;
+    int N_ds_max = wdm->NT*(UCB_WAVELET_NLAYERS_MAX+1);
+
+    ws->Nspline  = Nspline;
+    ws->N_ds_max = N_ds_max;
+
+    ws->time_ssb       = double_vector(Nspline);
+    ws->amp_ssb        = double_vector(Nspline);
+    ws->phase_ssb      = double_vector(Nspline);
+    ws->phase_sc       = double_vector(Nspline);
+    ws->time_sc_spline = double_vector(Nspline);
+
+    ws->amp_ssb_spline   = alloc_cubic_spline(Nspline);
+    ws->phase_ssb_spline = alloc_cubic_spline(Nspline);
+
+    ws->tdi_phase = malloc(sizeof(struct TDI));
+    ws->tdi_amp   = malloc(sizeof(struct TDI));
+    alloc_tdi(ws->tdi_phase,Nspline,3);
+    alloc_tdi(ws->tdi_amp,Nspline,3);
+
+    ws->amp_interpolant_X   = alloc_cubic_spline(Nspline);
+    ws->amp_interpolant_Y   = alloc_cubic_spline(Nspline);
+    ws->amp_interpolant_Z   = alloc_cubic_spline(Nspline);
+    ws->phase_interpolant_X = alloc_cubic_spline(Nspline);
+    ws->phase_interpolant_Y = alloc_cubic_spline(Nspline);
+    ws->phase_interpolant_Z = alloc_cubic_spline(Nspline);
+
+    ws->phase_ds   = double_vector(N_ds_max);
+    ws->time_ds    = double_vector(N_ds_max);
+    ws->phase_het  = double_vector(N_ds_max);
+    ws->time_sc_ds = double_vector(N_ds_max);
+
+    ws->wave = malloc(sizeof(struct TDI));
+    alloc_tdi(ws->wave,N_ds_max,3);
+
+    ws->window = double_vector((wdm->NT/2+1));
+
+    ws->allocated = 1;
+}
+
+static void ucb_wavelet_workspace_free(struct UCBWaveletWorkspace *ws)
+{
+    if(!ws->allocated) return;
+
+    free_double_vector(ws->time_ssb);
+    free_double_vector(ws->amp_ssb);
+    free_double_vector(ws->phase_ssb);
+    free_double_vector(ws->phase_sc);
+    free_double_vector(ws->time_sc_spline);
+
+    free_cubic_spline(ws->amp_ssb_spline);
+    free_cubic_spline(ws->phase_ssb_spline);
+
+    free_tdi(ws->tdi_phase);
+    free_tdi(ws->tdi_amp);
+
+    free_cubic_spline(ws->amp_interpolant_X);
+    free_cubic_spline(ws->amp_interpolant_Y);
+    free_cubic_spline(ws->amp_interpolant_Z);
+    free_cubic_spline(ws->phase_interpolant_X);
+    free_cubic_spline(ws->phase_interpolant_Y);
+    free_cubic_spline(ws->phase_interpolant_Z);
+
+    free_double_vector(ws->phase_ds);
+    free_double_vector(ws->time_ds);
+    free_double_vector(ws->phase_het);
+    free_double_vector(ws->time_sc_ds);
+    free_tdi(ws->wave);
+
+    free_double_vector(ws->window);
+
+    ws->allocated = 0;
+}
+
 /* Heterodyne wavelet transform */
 void ucb_waveform_wavelet(struct Orbit *orbit, struct Wavelets *wdm, double Tobs, double t0, double *params, int *wavelet_list, int *Nwavelet, double *X, double *Y, double *Z)
 {
     int Nspline = orbit->Norb;
     double dt = Tobs/(double)(Nspline-1);
-    
+
+    // Allocate the per-thread scratch workspace on first use. If a later
+    // call needs larger buffers (e.g. a different orbit/wavelet grid is used on
+    // the same thread), reallocate to fit.
+    struct UCBWaveletWorkspace *ws = &ucb_wavelet_ws;
+    int N_ds_max = wdm->NT*(UCB_WAVELET_NLAYERS_MAX+1);
+    if(ws->allocated && (ws->Nspline != Nspline || ws->N_ds_max != N_ds_max))
+        ucb_wavelet_workspace_free(ws);
+    if(!ws->allocated) ucb_wavelet_workspace_init(ws, orbit, wdm);
+
     // get amplitude and phase at Barycenter on the orbit interpolation grid (with margin)...
-    double *time_ssb  = double_vector(Nspline);
-    double *amp_ssb   = double_vector(Nspline);
-    double *phase_ssb = double_vector(Nspline);
+    double *time_ssb  = ws->time_ssb;
+    double *amp_ssb   = ws->amp_ssb;
+    double *phase_ssb = ws->phase_ssb;
     
     // store time array for full data on orbit cadence
     for(int i=0; i< Nspline; i++) time_ssb[i] = t0 + i*dt;
@@ -1087,8 +1228,8 @@ void ucb_waveform_wavelet(struct Orbit *orbit, struct Wavelets *wdm, double Tobs
     /*
     Get spline interpolant for SSB phase and amplitude
     */
-    struct CubicSpline *amp_ssb_spline   = alloc_cubic_spline(Nspline);
-    struct CubicSpline *phase_ssb_spline = alloc_cubic_spline(Nspline);
+    struct CubicSpline *amp_ssb_spline   = ws->amp_ssb_spline;
+    struct CubicSpline *phase_ssb_spline = ws->phase_ssb_spline;
     
     initialize_cubic_spline(amp_ssb_spline,orbit->t,amp_ssb,SPLINE_EVEN_SAMPLED);
     initialize_cubic_spline(phase_ssb_spline,orbit->t,phase_ssb,SPLINE_EVEN_SAMPLED);
@@ -1096,8 +1237,8 @@ void ucb_waveform_wavelet(struct Orbit *orbit, struct Wavelets *wdm, double Tobs
     /*
      Resample SSB phase to reference spacecraft
      */
-    double *phase_sc = double_vector(Nspline);
-    double *time_sc  = double_vector(Nspline);
+    double *phase_sc = ws->phase_sc;
+    double *time_sc  = ws->time_sc_spline;
     
     // shift reference times from Barycenter to S/C 1
     double costh = params[1];
@@ -1108,17 +1249,15 @@ void ucb_waveform_wavelet(struct Orbit *orbit, struct Wavelets *wdm, double Tobs
     for(int i=0; i< Nspline; i++)
         phase_sc[i] = spline_interpolation(phase_ssb_spline, time_sc[i]);
 
-    free(time_sc);
-    
     /*
      Downsample waveform (i.e. shift to lower frequency layer)
      */
     int N_ds     = wdm->NT*(Nlayers+1); //number of downsampled data points
     double dt_ds = wdm->dt/(double)(Nlayers+1); //downsampled data cadence
    
-    double *phase_ds  = double_vector(N_ds);  //downsampled phase
-    double *time_ds   = double_vector(N_ds);  //downsampled time
-    double *phase_het = double_vector(N_ds);  //heterodyne phase
+    double *phase_ds  = ws->phase_ds;  //downsampled phase
+    double *time_ds   = ws->time_ds;   //downsampled time
+    double *phase_het = ws->phase_het; //heterodyne phase
     
     double f0 = (min_layer-1)*wdm->df; //"carrier" frequency
     
@@ -1129,22 +1268,18 @@ void ucb_waveform_wavelet(struct Orbit *orbit, struct Wavelets *wdm, double Tobs
     }
     
     // shift reference times from Barycenter to spacecraft 0
-    time_sc = double_vector(N_ds);
-    LISA_spacecraft_to_barycenter_time(orbit, costh, phi, time_ds, time_sc, N_ds, -1);
+    double *time_sc_ds = ws->time_sc_ds;
+    LISA_spacecraft_to_barycenter_time(orbit, costh, phi, time_ds, time_sc_ds, N_ds, -1);
     
     for(int i=0; i<N_ds; i++)
-        phase_ds[i] = spline_interpolation(phase_ssb_spline, time_sc[i]);
-
-    free(time_sc);
+        phase_ds[i] = spline_interpolation(phase_ssb_spline, time_sc_ds[i]);
 
     
     /*
     Get TDI responses back in terms of phase and amplitude
     */
-    struct TDI *tdi_phase = malloc(sizeof(struct TDI));
-    struct TDI *tdi_amp = malloc(sizeof(struct TDI));
-    alloc_tdi(tdi_phase,Nspline,3);
-    alloc_tdi(tdi_amp,Nspline,3);
+    struct TDI *tdi_phase = ws->tdi_phase;
+    struct TDI *tdi_amp = ws->tdi_amp;
 
     //extract remaining extrinsic parameters from UCB parameter vector
     double cosi  = params[4];
@@ -1155,15 +1290,14 @@ void ucb_waveform_wavelet(struct Orbit *orbit, struct Wavelets *wdm, double Tobs
     /*
     Interpolate amplitude and phase for instrument response of each TDI channel onto wavelet grid
     */
-    struct TDI *wave = malloc(sizeof(struct TDI));
-    alloc_tdi(wave,N_ds,3);
+    struct TDI *wave = ws->wave;
 
-    struct CubicSpline *amp_interpolant_X   = alloc_cubic_spline(Nspline);
-    struct CubicSpline *amp_interpolant_Y   = alloc_cubic_spline(Nspline);
-    struct CubicSpline *amp_interpolant_Z   = alloc_cubic_spline(Nspline);
-    struct CubicSpline *phase_interpolant_X = alloc_cubic_spline(Nspline);
-    struct CubicSpline *phase_interpolant_Y = alloc_cubic_spline(Nspline);
-    struct CubicSpline *phase_interpolant_Z = alloc_cubic_spline(Nspline);
+    struct CubicSpline *amp_interpolant_X   = ws->amp_interpolant_X;
+    struct CubicSpline *amp_interpolant_Y   = ws->amp_interpolant_Y;
+    struct CubicSpline *amp_interpolant_Z   = ws->amp_interpolant_Z;
+    struct CubicSpline *phase_interpolant_X = ws->phase_interpolant_X;
+    struct CubicSpline *phase_interpolant_Y = ws->phase_interpolant_Y;
+    struct CubicSpline *phase_interpolant_Z = ws->phase_interpolant_Z;
 
     initialize_cubic_spline(amp_interpolant_X,   time_ssb, tdi_amp->X,SPLINE_BINARY_SEARCH);
     initialize_cubic_spline(amp_interpolant_Y,   time_ssb, tdi_amp->Y,SPLINE_BINARY_SEARCH);
@@ -1175,7 +1309,7 @@ void ucb_waveform_wavelet(struct Orbit *orbit, struct Wavelets *wdm, double Tobs
     // get frequency wavelet window function for downsampled data
     // Nlayers passed instead of NF to get norm right of heterodyned UCB wavefomr
     // A = DeltaOmega/4 with DeltaOmega = pi/(Nlayers+1) (matches lisa-analysis-tools dev)
-    double *window = double_vector((wdm->NT/2+1));
+    double *window = ws->window;
     build_wdm_filter_freq(window, Nlayers+1, wdm->NT, (M_PI/(Nlayers+1))/4.0, true);
         
     // wavelet transform on heterodyned data using downsampled windows.
@@ -1216,33 +1350,12 @@ void ucb_waveform_wavelet(struct Orbit *orbit, struct Wavelets *wdm, double Tobs
         Y[wavelet_list[n]] = wave->Y[n];
         Z[wavelet_list[n]] = wave->Z[n];
     }
-    
 
-    free_double_vector(time_ssb);
-    free_double_vector(amp_ssb);
-    free_double_vector(phase_ssb);
-
-    free_cubic_spline(amp_ssb_spline);
-    free_cubic_spline(phase_ssb_spline);
-
-    free_double_vector(phase_sc);
-
-    free_double_vector(phase_ds);
-    free_double_vector(time_ds);
-    free_double_vector(phase_het);
-
-    free_tdi(tdi_phase);
-    free_tdi(tdi_amp);
-    free_tdi(wave);
-
-    free_cubic_spline(amp_interpolant_X);
-    free_cubic_spline(amp_interpolant_Y);
-    free_cubic_spline(amp_interpolant_Z);
-    free_cubic_spline(phase_interpolant_X);
-    free_cubic_spline(phase_interpolant_Y);
-    free_cubic_spline(phase_interpolant_Z);
-
-    free_double_vector(window);
+    // NOTE: scratch buffers (time_ssb, splines, tdi_*, wave, window, ...) are
+    // part of the per-thread reusable workspace (ucb_wavelet_ws) and are
+    // intentionally NOT freed here. They persist for the lifetime of the thread
+    // and are reused by subsequent calls to avoid malloc/free churn inside the
+    // OpenMP-parallel MCMC loop.
 }
 
 /* Full sampled UCB wavelet transform */
