@@ -256,7 +256,7 @@ static void XY(double **XYR, double **XYI, double *ca, double *sa, double *cb, d
     
 }
 
-void initialize_galaxy_modulation(struct GalaxyModulation *gm, struct Wavelets *wdm, struct Orbit *orbit, double Tobs, double t0)
+void initialize_galaxy_modulation(struct GalaxyModulation *gm, struct WDM *wdm, struct Orbit *orbit, double Tobs, double t0)
 {
     double *cbx, *sbx;
     double *cby, *sby;
@@ -770,7 +770,7 @@ void galaxy_modulation(struct GalaxyModulation *gm, double *params)
     free_double_vector(yz);
 }
 
-void galaxy_modulation_cache_for_Q(struct GalaxyModulation *gm, struct Wavelets *wdm, int Q)
+void galaxy_modulation_cache_for_Q(struct GalaxyModulation *gm, struct WDM *wdm, int Q)
 {
     int Nt = wdm->NT / Q;
     if (gm->Q_cached == Q && gm->Nt_cached == Nt) return;

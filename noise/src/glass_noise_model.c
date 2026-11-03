@@ -540,7 +540,7 @@ void generate_instrument_noise_model(struct Orbit *orbit, struct InstrumentModel
 }
 //TODO: is it worth oversampling these very smooth functional forms...?
 /*
-void generate_instrument_noise_model_wavelet_coarse(struct Wavelets *wdm, struct Orbit *orbit, struct InstrumentModel *model) {
+void generate_instrument_noise_model_wdm_coarse(struct WDM *wdm, struct Orbit *orbit, struct InstrumentModel *model) {
     // active layers
     int imin = (int)round(model->psd->f[0]/wdm->df);
     int imax = (int)round(model->psd->f[model->psd->N-1]/wdm->df)+1;
@@ -553,10 +553,10 @@ void generate_instrument_noise_model_wavelet_coarse(struct Wavelets *wdm, struct
 }
 */
 
-void generate_instrument_noise_model_wavelet(struct Wavelets *wdm, struct Orbit *orbit, struct InstrumentModel *model)
+void generate_instrument_noise_model_wdm(struct WDM *wdm, struct Orbit *orbit, struct InstrumentModel *model)
 {
     /*
-     * Sample the instrument model directly at the wavelet layer-center
+     * Sample the instrument model directly at the wdm layer-center
      * frequencies of the active band (f_k = (imin+k) * wdm->df). The approx
      * FFT->WDM convolution only reads layer-center bins, and only the active
      * layers are written back to model->psd, so evaluating on either the full
@@ -643,7 +643,7 @@ void generate_galactic_foreground_model(struct ForegroundModel *model)
     }
 }
 
-void generate_galactic_foreground_model_wavelet(struct Wavelets *wdm, struct ForegroundModel *model)
+void generate_galactic_foreground_model_wdm(struct WDM *wdm, struct ForegroundModel *model)
 {
     /*
      * Sample the foreground PSD directly at the active-band layer-center
@@ -830,10 +830,10 @@ void generate_sgwb_model(struct SGWBModel *model)
         }
     }
 }
-void generate_sgwb_model_wavelet(struct Wavelets* wdm, struct SGWBModel *model)
+void generate_sgwb_model_wdm(struct WDM* wdm, struct SGWBModel *model)
 {
     // Sample directly at active-band layer-center frequencies (see comment in
-    // generate_instrument_noise_model_wavelet).
+    // generate_instrument_noise_model_wdm).
     int NF = wdm->NF;
     int NT = wdm->NT;
     int ND = NF * NT;
@@ -897,20 +897,20 @@ void generate_full_covariance_matrix(struct Noise *full, struct Noise *component
 
 
 // Q=1 is the degenerate (full-resolution) case of the coarse path: Ncoarse=NT,
-// k = q + jrel*NT, which equals wavelet_pixel_to_index(i, lmin+jrel) - kmin.
-// The full-res LL (my_noise_log_likelihood_wavelet) reads noise->C[k] via that
+// k = q + jrel*NT, which equals wdm_pixel_to_index(i, lmin+jrel) - kmin.
+// The full-res LL (my_noise_log_likelihood_wdm) reads noise->C[k] via that
 // same linearization, so this delegation is layout-equivalent.
-void generate_full_dynamic_covariance_matrix(struct Wavelets *wdm, struct InstrumentModel *inst, struct ForegroundModel *conf, struct SGWBModel *sgwb, struct Noise *full)
+void generate_full_dynamic_covariance_matrix(struct WDM *wdm, struct InstrumentModel *inst, struct ForegroundModel *conf, struct SGWBModel *sgwb, struct Noise *full)
 {
     generate_full_dynamic_covariance_matrix_coarse(wdm, 1, inst, conf, sgwb, full);
 }
 
-void generate_full_stationary_covariance_matrix(struct Wavelets *wdm, struct InstrumentModel *inst, struct ForegroundModel *conf, struct SGWBModel *sgwb, struct Noise *full)
+void generate_full_stationary_covariance_matrix(struct WDM *wdm, struct InstrumentModel *inst, struct ForegroundModel *conf, struct SGWBModel *sgwb, struct Noise *full)
 {
     generate_full_stationary_covariance_matrix_coarse(wdm, 1, inst, conf, sgwb, full);
 }
 
-void generate_full_dynamic_covariance_matrix_coarse(struct Wavelets *wdm, int Q, struct InstrumentModel *inst, struct ForegroundModel *conf, struct SGWBModel *sgwb, struct Noise *coarse)
+void generate_full_dynamic_covariance_matrix_coarse(struct WDM *wdm, int Q, struct InstrumentModel *inst, struct ForegroundModel *conf, struct SGWBModel *sgwb, struct Noise *coarse)
 {
     int jmin=(int)round(inst->psd->f[0]/wdm->df);
     int jmax=(int)round(inst->psd->f[inst->psd->N-1]/wdm->df)+1;
@@ -970,7 +970,7 @@ void generate_full_dynamic_covariance_matrix_coarse(struct Wavelets *wdm, int Q,
     }
 }
 
-void generate_full_stationary_covariance_matrix_coarse(struct Wavelets *wdm, int Q, struct InstrumentModel *inst, struct ForegroundModel *conf, struct SGWBModel *sgwb, struct Noise *coarse)
+void generate_full_stationary_covariance_matrix_coarse(struct WDM *wdm, int Q, struct InstrumentModel *inst, struct ForegroundModel *conf, struct SGWBModel *sgwb, struct Noise *coarse)
 {
     int jmin=(int)round(inst->psd->f[0]/wdm->df);
     int jmax=(int)round(inst->psd->f[inst->psd->N-1]/wdm->df)+1;
@@ -1044,9 +1044,9 @@ void free_coarse_stats(struct CoarseStats *s)
     s->Pxy = s->Pxz = s->Pyz = NULL;
 }
 
-void coarse_grain_wavelet_data(struct Data *data, struct CoarseStats *stats)
+void coarse_grain_wdm_data(struct Data *data, struct CoarseStats *stats)
 {
-    struct Wavelets *wdm = data->wdm;
+    struct WDM *wdm = data->wdm;
     struct TDI *tdi = data->tdi;
     int Q = stats->Q;
     int Ncoarse = stats->Ncoarse;
@@ -1068,7 +1068,7 @@ void coarse_grain_wavelet_data(struct Data *data, struct CoarseStats *stats)
             for(int i=q*Q; i<(q+1)*Q; i++)
             {
                 int k_full;
-                wavelet_pixel_to_index(wdm, i, j, &k_full);
+                wdm_pixel_to_index(wdm, i, j, &k_full);
                 k_full -= wdm->kmin;
                 double wx = tdi->X[k_full];
                 double wy = tdi->Y[k_full];
@@ -1102,19 +1102,19 @@ double noise_log_likelihood(struct Data *data, struct Noise *noise)
     switch(data->Nchannel)
     {
         case 1:
-            logL += -0.5*fourier_nwip(tdi->X, tdi->X, noise->invC[0][0], N);
+            logL += -0.5*dft_nwip(tdi->X, tdi->X, noise->invC[0][0], N);
             break;
         case 2:
-            logL += -0.5*fourier_nwip(tdi->A, tdi->A, noise->invC[0][0], N);
-            logL += -0.5*fourier_nwip(tdi->E, tdi->E, noise->invC[1][1], N);
+            logL += -0.5*dft_nwip(tdi->A, tdi->A, noise->invC[0][0], N);
+            logL += -0.5*dft_nwip(tdi->E, tdi->E, noise->invC[1][1], N);
             break;
         case 3:
-            logL += -0.5*fourier_nwip(tdi->X, tdi->X, noise->invC[0][0], N);
-            logL += -0.5*fourier_nwip(tdi->Y, tdi->Y, noise->invC[1][1], N);
-            logL += -0.5*fourier_nwip(tdi->Z, tdi->Z, noise->invC[2][2], N);
-            logL += -fourier_nwip(tdi->X, tdi->Y, noise->invC[0][1], N);
-            logL += -fourier_nwip(tdi->X, tdi->Z, noise->invC[0][2], N);
-            logL += -fourier_nwip(tdi->Y, tdi->Z, noise->invC[1][2], N);
+            logL += -0.5*dft_nwip(tdi->X, tdi->X, noise->invC[0][0], N);
+            logL += -0.5*dft_nwip(tdi->Y, tdi->Y, noise->invC[1][1], N);
+            logL += -0.5*dft_nwip(tdi->Z, tdi->Z, noise->invC[2][2], N);
+            logL += -dft_nwip(tdi->X, tdi->Y, noise->invC[0][1], N);
+            logL += -dft_nwip(tdi->X, tdi->Z, noise->invC[0][2], N);
+            logL += -dft_nwip(tdi->Y, tdi->Z, noise->invC[1][2], N);
             break;
     }
     for(int n=0; n<N; n++)
@@ -1123,7 +1123,7 @@ double noise_log_likelihood(struct Data *data, struct Noise *noise)
     return logL;
 }
 
-static inline double wavelet_nwip_linear(const double* __restrict a, const double* __restrict b, const double* __restrict invC, size_t N)
+static inline double wdm_nwip_linear(const double* __restrict a, const double* __restrict b, const double* __restrict invC, size_t N)
 {
     // TODO: use lapack/blas here? this is just a.b.invC
     double arg = 0.0;
@@ -1169,15 +1169,15 @@ static inline double per_pixel_logL_contribution(
     return s;
 }
 
-double my_noise_log_likelihood_wavelet(struct Data *data, struct Noise *noise) {
+double my_noise_log_likelihood_wdm(struct Data *data, struct Noise *noise) {
     struct TDI *tdi = data->tdi;
     const double log2pi = log(2*M_PI);
     int NT = data->wdm->NT;
     int Nlayer = data->Nlayer;
     double logL = 0.0;
     // j outer / i inner so k = i + j*NT increments by 1 in the inner loop
-    // (matches the column-major wavelet layout, equivalent to
-    // wavelet_pixel_to_index(i, lmin+j) - kmin).
+    // (matches the column-major wdm layout, equivalent to
+    // wdm_pixel_to_index(i, lmin+j) - kmin).
     #pragma omp simd reduction(+:logL)
     for (int j=0; j<Nlayer; j++) {
         for (int i=0; i<NT; i++) {
@@ -1198,7 +1198,7 @@ double my_noise_log_likelihood_wavelet(struct Data *data, struct Noise *noise) {
     return logL;
 }
 
-double my_noise_log_likelihood_wavelet_coarse(struct Data *data, struct Noise *coarse_noise, const struct CoarseStats *stats)
+double my_noise_log_likelihood_wdm_coarse(struct Data *data, struct Noise *coarse_noise, const struct CoarseStats *stats)
 {
     const double log2pi = log(2*M_PI);
     int Nlayer = data->Nlayer;
@@ -1262,7 +1262,7 @@ double my_noise_log_likelihood(struct Data *data, struct Noise *noise)
     return logL;
 }
 
-double noise_log_likelihood_wavelet(struct Data *data, struct Noise *noise)
+double noise_log_likelihood_wdm(struct Data *data, struct Noise *noise)
 {
     double logL = 0.0;
     
@@ -1273,19 +1273,19 @@ double noise_log_likelihood_wavelet(struct Data *data, struct Noise *noise)
     switch(data->Nchannel)
     {
         case 1:
-            logL += -0.5*wavelet_nwip_linear(tdi->X, tdi->X, noise->invC[0][0], N);
+            logL += -0.5*wdm_nwip_linear(tdi->X, tdi->X, noise->invC[0][0], N);
             break;
         case 2:
-            logL += -0.5*wavelet_nwip_linear(tdi->A, tdi->A, noise->invC[0][0], N);
-            logL += -0.5*wavelet_nwip_linear(tdi->E, tdi->E, noise->invC[1][1], N);
+            logL += -0.5*wdm_nwip_linear(tdi->A, tdi->A, noise->invC[0][0], N);
+            logL += -0.5*wdm_nwip_linear(tdi->E, tdi->E, noise->invC[1][1], N);
             break;
         case 3:
-            logL += -0.5*wavelet_nwip_linear(tdi->X, tdi->X, noise->invC[0][0], N);
-            logL += -0.5*wavelet_nwip_linear(tdi->Y, tdi->Y, noise->invC[1][1], N);
-            logL += -0.5*wavelet_nwip_linear(tdi->Z, tdi->Z, noise->invC[2][2], N);
-            logL += -wavelet_nwip_linear(tdi->X, tdi->Y, noise->invC[0][1], N);
-            logL += -wavelet_nwip_linear(tdi->X, tdi->Z, noise->invC[0][2], N);
-            logL += -wavelet_nwip_linear(tdi->Y, tdi->Z, noise->invC[1][2], N);
+            logL += -0.5*wdm_nwip_linear(tdi->X, tdi->X, noise->invC[0][0], N);
+            logL += -0.5*wdm_nwip_linear(tdi->Y, tdi->Y, noise->invC[1][1], N);
+            logL += -0.5*wdm_nwip_linear(tdi->Z, tdi->Z, noise->invC[2][2], N);
+            logL += -wdm_nwip_linear(tdi->X, tdi->Y, noise->invC[0][1], N);
+            logL += -wdm_nwip_linear(tdi->X, tdi->Z, noise->invC[0][2], N);
+            logL += -wdm_nwip_linear(tdi->Y, tdi->Z, noise->invC[1][2], N);
             break;
     }
     for(int n=0; n<N; n++)
@@ -1308,14 +1308,14 @@ double noise_delta_log_likelihood(struct Data *data, struct SplineModel *model_x
     if(imin<0)imin=0;
     
     /* remove contribution for current state x */
-    dlogL -= -0.5*fourier_nwip(tdi->A+2*imin, tdi->A+2*imin, psd_x->invC[0][0]+imin, N);
-    dlogL -= -0.5*fourier_nwip(tdi->E+2*imin, tdi->E+2*imin, psd_x->invC[1][1]+imin, N);
+    dlogL -= -0.5*dft_nwip(tdi->A+2*imin, tdi->A+2*imin, psd_x->invC[0][0]+imin, N);
+    dlogL -= -0.5*dft_nwip(tdi->E+2*imin, tdi->E+2*imin, psd_x->invC[1][1]+imin, N);
     for(int n=imin; n<imin+N; n++)
         dlogL += psd_x->logdetC[n];
 
     /* add contribution for proposed state y */
-    dlogL += -0.5*fourier_nwip(tdi->A+2*imin, tdi->A+2*imin, psd_y->invC[0][0]+imin, N);
-    dlogL += -0.5*fourier_nwip(tdi->E+2*imin, tdi->E+2*imin, psd_y->invC[1][1]+imin, N);
+    dlogL += -0.5*dft_nwip(tdi->A+2*imin, tdi->A+2*imin, psd_y->invC[0][0]+imin, N);
+    dlogL += -0.5*dft_nwip(tdi->E+2*imin, tdi->E+2*imin, psd_y->invC[1][1]+imin, N);
     for(int n=imin; n<imin+N; n++)
         dlogL -= psd_y->logdetC[n];
     
@@ -1375,7 +1375,7 @@ void initialize_instrument_model(struct Orbit *orbit, struct Data *data, struct 
         model->psd->f[n] = data->fmin + (double)n/data->T;
 
     // initialize noise levels
-    /* NOTE: changed to match wavelet */
+    /* NOTE: changed to match wdm */
     /*
     for(int i=0; i<model->Nlink; i++)
     {
@@ -1393,10 +1393,10 @@ void initialize_instrument_model(struct Orbit *orbit, struct Data *data, struct 
     generate_instrument_noise_model(orbit,model);
 }
 
-void initialize_instrument_model_wavelet(struct Orbit *orbit, struct Data *data, struct InstrumentModel *model)
+void initialize_instrument_model_wdm(struct Orbit *orbit, struct Data *data, struct InstrumentModel *model)
 {
-    // wavelet basis
-    struct Wavelets *wdm = data->wdm;
+    // wdm basis
+    struct WDM *wdm = data->wdm;
 
     // initialize data models
     alloc_instrument_model(model, data->lmax - data->lmin, data->Nlayer, data->Nchannel);
@@ -1413,7 +1413,7 @@ void initialize_instrument_model_wavelet(struct Orbit *orbit, struct Data *data,
     }
     
     // get noise covariance matrix for initial parameters
-    generate_instrument_noise_model_wavelet(wdm, orbit, model);
+    generate_instrument_noise_model_wdm(wdm, orbit, model);
 }
 
 void initialize_foreground_model(struct Orbit *orbit, struct Data *data, struct ForegroundModel *model)
@@ -1497,9 +1497,9 @@ void initialize_sgwb_model(struct Orbit *orbit, struct Data *data, struct SGWBMo
 
 }
 
-void initialize_sgwb_model_wavelet(struct Orbit *orbit, struct Data *data, struct SGWBModel *model, SGWB_t SGWB_type)
+void initialize_sgwb_model_wdm(struct Orbit *orbit, struct Data *data, struct SGWBModel *model, SGWB_t SGWB_type)
 {
-    struct Wavelets* wdm = data->wdm;
+    struct WDM* wdm = data->wdm;
 
     // initialize data models
     alloc_sgwb_model(model, data->lmax - data->lmin, data->Nlayer, data->Nchannel, SGWB_type);
@@ -1513,14 +1513,14 @@ void initialize_sgwb_model_wavelet(struct Orbit *orbit, struct Data *data, struc
     
     model->Tobs  =  data->T;
     // get covariance matrix for initial parameters
-    generate_sgwb_model_wavelet(wdm, model);
+    generate_sgwb_model_wdm(wdm, model);
 
 }
 
-void initialize_foreground_model_wavelet(struct Orbit *orbit, struct Data *data, struct ForegroundModel *model)
+void initialize_foreground_model_wdm(struct Orbit *orbit, struct Data *data, struct ForegroundModel *model)
 {
-    //wavelet basis
-    struct Wavelets *wdm = data->wdm;
+    //wdm basis
+    struct WDM *wdm = data->wdm;
 
     // initialize data models
     alloc_foreground_model(model, data->lmax - data->lmin, data->Nlayer, data->Nchannel);
@@ -1547,7 +1547,7 @@ void initialize_foreground_model_wavelet(struct Orbit *orbit, struct Data *data,
     map_foreground_params_to_array(model);
     
     // get noise covariance matrix for initial parameters
-    generate_galactic_foreground_model_wavelet(wdm,model);
+    generate_galactic_foreground_model_wdm(wdm,model);
 
     // get galaxy modulation
     model->modulation = malloc(sizeof(struct GalaxyModulation));
@@ -1577,13 +1577,13 @@ void GetDynamicNoiseModel(struct Data *data, struct Orbit *orbit, struct Flags *
      * Compute instrument noise levels
     **************************************************/
     struct InstrumentModel *inst_noise = malloc(sizeof(struct InstrumentModel));
-    initialize_instrument_model_wavelet(orbit, data, inst_noise);
+    initialize_instrument_model_wdm(orbit, data, inst_noise);
 
     /**************************************************
      * Compute galactic foreground noise levels
     **************************************************/
     struct ForegroundModel *conf_noise = malloc(sizeof(struct ForegroundModel));
-    initialize_foreground_model_wavelet(orbit, data, conf_noise);
+    initialize_foreground_model_wdm(orbit, data, conf_noise);
 
     /**************************************************
      * Compute SGWB noise levels
@@ -1592,7 +1592,7 @@ void GetDynamicNoiseModel(struct Data *data, struct Orbit *orbit, struct Flags *
     if(flags->sgwbTemplate>=0)
     {
         sgwb = malloc(sizeof(struct SGWBModel));
-        initialize_sgwb_model_wavelet(orbit, data, sgwb, flags->sgwbTemplate);
+        initialize_sgwb_model_wdm(orbit, data, sgwb, flags->sgwbTemplate);
     }
     
     /**************************************************
@@ -1611,7 +1611,7 @@ void GetDynamicNoiseModel(struct Data *data, struct Orbit *orbit, struct Flags *
         for(int i=0; i<data->wdm->NT; i++)
         {
             double t = i*data->wdm->dt;
-            wavelet_pixel_to_index(data->wdm,i,j,&k);
+            wdm_pixel_to_index(data->wdm,i,j,&k);
             k-=data->wdm->kmin;
             fprintf(fptr,"%lg %lg %.14e\n", t, f, data->noise->C[0][0][k]);
         }
@@ -1630,19 +1630,19 @@ void GetStationaryNoiseModel(struct Data *data, struct Orbit *orbit, struct Flag
      * Compute instrument noise levels
     **************************************************/
     struct InstrumentModel *inst_noise = malloc(sizeof(struct InstrumentModel));
-    initialize_instrument_model_wavelet(orbit, data, inst_noise);
+    initialize_instrument_model_wdm(orbit, data, inst_noise);
 
     /**************************************************
      * Compute galactic foreground noise levels
     **************************************************/
     struct ForegroundModel *conf_noise = malloc(sizeof(struct ForegroundModel));
-    initialize_foreground_model_wavelet(orbit, data, conf_noise);
+    initialize_foreground_model_wdm(orbit, data, conf_noise);
 
     /**************************************************
      * Compute SGWB noise levels
     **************************************************/
     struct SGWBModel *sgwb = malloc(sizeof(struct SGWBModel));
-    initialize_sgwb_model_wavelet(orbit, data, sgwb, flags->sgwbTemplate);
+    initialize_sgwb_model_wdm(orbit, data, sgwb, flags->sgwbTemplate);
 
 
     /**************************************************
@@ -1662,7 +1662,7 @@ void GetStationaryNoiseModel(struct Data *data, struct Orbit *orbit, struct Flag
         for(int i=0; i<data->wdm->NT; i++)
         {
             double t = i*data->wdm->dt;
-            wavelet_pixel_to_index(data->wdm,i,j,&k);
+            wdm_pixel_to_index(data->wdm,i,j,&k);
             k-=data->wdm->kmin;
             fprintf(fptr,"%lg %lg %.14e\n", t, f,noise->C[0][0][k]);
         }

@@ -34,7 +34,7 @@
  in the Model::Source, and creates meta template of all sources in the model.
  */
 void generate_ucb_model(struct Orbit *orbit, struct Data *data, struct Model *model, int source_id);
-void generate_ucb_model_wavelet(struct Orbit *orbit, struct Data *data, struct Model *model, int source_id);
+void generate_ucb_model_wdm(struct Orbit *orbit, struct Data *data, struct Model *model, int source_id);
 
 /**
 \brief Modify galactic binary model waveform
@@ -43,7 +43,7 @@ void generate_ucb_model_wavelet(struct Orbit *orbit, struct Data *data, struct M
  in the Model::Source, and updates meta template of all sources in the model.
  */
 void update_ucb_model(struct Orbit *orbit, struct Data *data, struct Model *model_x, struct Model *model_y, int source_id);
-void update_ucb_model_wavelet(struct Orbit *orbit, struct Data *data, struct Model *model_x, struct Model *model_y, int source_id);
+void update_ucb_model_wdm(struct Orbit *orbit, struct Data *data, struct Model *model_x, struct Model *model_y, int source_id);
 
 /**
 \brief F-statistic maximization of galactic binary parameters
@@ -62,7 +62,7 @@ void maximize_ucb_model(struct Orbit *orbit, struct Data *data, struct Model *mo
  Computes \f$S_n(f)\f$ from Model::noise.
  */
 void generate_noise_model(struct Data *data, struct Model *model);
-void generate_noise_model_wavelet(struct Data *data, struct Model *model);
+void generate_noise_model_wdm(struct Data *data, struct Model *model);
 
 /**
  \brief Converts physical UCB parameters to array expected by glass_ucb_waveform.c
@@ -76,10 +76,10 @@ void map_ucb_params_to_array(struct Source *source, double *params, double T);
 void map_array_to_ucb_params(struct Source *source, double *params, double T);
 
 void remove_ucb_model(struct Data *data, struct Model *model, struct Source *source);
-void remove_ucb_model_wavelet(struct Data *data, struct Model *model, struct Source *source);
+void remove_ucb_model_wdm(struct Data *data, struct Model *model, struct Source *source);
 
 void add_ucb_model(struct Data *data, struct Model *model, struct Source *source);
-void add_ucb_model_wavelet(struct Data *data, struct Model *model, struct Source *source);
+void add_ucb_model_wdm(struct Data *data, struct Model *model, struct Source *source);
 
 /**
 \brief Adds input `sample` to existing catalog entry and increments counters.

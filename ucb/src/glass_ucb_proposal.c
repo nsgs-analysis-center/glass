@@ -1217,7 +1217,7 @@ void rebuild_fstatistic_proposal(struct Orbit *orbit, struct Data *data, struct 
     }
     
     // convert DWT to DFT
-    if(!strcmp(data->basis,"wavelet")) wavelet_layer_to_fourier_transform(data);
+    if(!strcmp(data->basis,"wdm")) wdm_layer_to_dft_transform(data);
     
     build_fstatistic_proposal(orbit, data, flags, proposal);
     

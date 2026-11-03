@@ -27,7 +27,7 @@
 #define NFFT_TEST (1536*30)
 #define NBINS 100
 #define CREATE_DEBUG_FILES (true)
-// Note that for us, NF is essentially harcoded by the choice of WAVELET_DURATION
+// Note that for us, NF is essentially harcoded by the choice of WDM_DURATION
 // these tests were written for an NF=1536
 
 struct UnitTestBlockInfo {
@@ -38,7 +38,7 @@ struct UnitTestBlockInfo {
     char* block_name;
 };
 
-int write_wdm_data(struct Wavelets* wdm, double* data, char* fname) {
+int write_wdm_data(struct WDM* wdm, double* data, char* fname) {
     FILE *fptr = NULL;
     fptr = fopen(fname,"w");
     if (!fptr) {
@@ -50,7 +50,7 @@ int write_wdm_data(struct Wavelets* wdm, double* data, char* fname) {
         double t = i*wdm->dt;
         for (int j=0; j<wdm->NF; j++) {
             double f = j*wdm->df;
-            wavelet_pixel_to_index(wdm, i, j, &k);
+            wdm_pixel_to_index(wdm, i, j, &k);
             fprintf(fptr,"%lg ",t);
             fprintf(fptr,"%lg ",f);
             fprintf(fptr,"%lg",data[k]);
@@ -356,8 +356,8 @@ bool test_whitening_fft_3ch(const struct TDI* tdi, const struct Noise* noise, in
 static void run_coarse_logL_q_sweep(
     const char *scenario_name,
     struct Data *data,
-    void (*build_full_cov)(struct Wavelets *, struct InstrumentModel *, struct ForegroundModel *, struct SGWBModel *, struct Noise *),
-    void (*build_coarse_cov)(struct Wavelets *, int, struct InstrumentModel *, struct ForegroundModel *, struct SGWBModel *, struct Noise *),
+    void (*build_full_cov)(struct WDM *, struct InstrumentModel *, struct ForegroundModel *, struct SGWBModel *, struct Noise *),
+    void (*build_coarse_cov)(struct WDM *, int, struct InstrumentModel *, struct ForegroundModel *, struct SGWBModel *, struct Noise *),
     struct InstrumentModel *inst,
     struct ForegroundModel *conf,
     struct SGWBModel *sgwb,
@@ -369,7 +369,7 @@ static void run_coarse_logL_q_sweep(
 
     build_full_cov(data->wdm, inst, conf, sgwb, data->noise);
     invert_noise_covariance_matrix(data->noise);
-    double logL_full = my_noise_log_likelihood_wavelet(data, data->noise);
+    double logL_full = my_noise_log_likelihood_wdm(data, data->noise);
     //printf("[%s] reference logL_full = %.12g\n", scenario_name, logL_full);
 
     for (int qi = 0; qi < n_Q; qi++) {
@@ -379,14 +379,14 @@ static void run_coarse_logL_q_sweep(
 
         struct CoarseStats stats;
         alloc_coarse_stats(&stats, data->Nlayer, Q, NT);
-        coarse_grain_wavelet_data(data, &stats);
+        coarse_grain_wdm_data(data, &stats);
 
         struct Noise *coarse = malloc(sizeof(struct Noise));
         alloc_noise(coarse, Pdim, data->Nlayer, data->Nchannel);
         build_coarse_cov(data->wdm, Q, inst, conf, sgwb, coarse);
         invert_noise_covariance_matrix(coarse);
 
-        double logL_coarse = my_noise_log_likelihood_wavelet_coarse(data, coarse, &stats);
+        double logL_coarse = my_noise_log_likelihood_wdm_coarse(data, coarse, &stats);
 
         double abs_err = fabs(logL_full - logL_coarse);
         double rel_err = abs_err / fabs(logL_full);
@@ -426,7 +426,7 @@ void fill_with_sines(double* data, int N, double* freqs, int Nfreqs) {
 
 int main(int argc, char *argv[])
 {
-    _Static_assert(WAVELET_DURATION == 7680, "currently we have hardcoded the WAVELET_DURATION. Either fix it or go back");
+    _Static_assert(WDM_DURATION == 7680, "currently we have hardcoded the WDM_DURATION. Either fix it or go back");
 
     print_LISA_ASCII_art(stdout);
     print_version(stdout);
@@ -549,11 +549,11 @@ int main(int argc, char *argv[])
     // timeseries, impulse again
     memset(&test_data, 0, NFFT_TEST*sizeof(double));
     test_data[0] = 1.0;
-    struct Wavelets wdm = {0};
+    struct WDM wdm = {0};
     // NFFT_TEST == NF*NT
     double T = NFFT_TEST*LISA_CADENCE;
-    initialize_wavelet(&wdm, T);
-    wavelet_transform_timefreq(&wdm, test_data);
+    initialize_wdm(&wdm, T);
+    wdm_transform_timefreq(&wdm, test_data);
 
     // Could test window definitions
     // Limits on WD windows are only from Necula et. al eq (7)
@@ -566,7 +566,7 @@ int main(int argc, char *argv[])
     if (CREATE_DEBUG_FILES)
         write_wdm_data(&wdm, test_data, "./dbg_wdm_impulse.dat");
 
-    wavelet_transform_inverse_freq(&wdm, test_data, test_fft_data);
+    wdm_transform_inverse_freq(&wdm, test_data, test_fft_data);
     
     ok = test_array_equality(test_fft_data,
             ref_fft_data,
@@ -587,9 +587,9 @@ int main(int argc, char *argv[])
 
 
     // Need to test
-    // wavelet_transform_from_table
-    // active_wavelet_list
-    // wavelet_window_frequency -- probably remove
+    // wdm_transform_from_table
+    // active_wdm_list
+    // wdm_window_frequency -- probably remove
     // WDM comparison with olitas
     static double olitas_wdm[NFFT_TEST];
     FILE* f = fopen("./olitas_wdm_impulse.dat","r");
@@ -607,7 +607,7 @@ int main(int argc, char *argv[])
         fclose(f);
     }
 
-    // wavelet_transform_segment
+    // wdm_transform_segment
         // this one takes a short freq segment and transforms to wdm
         // assumes it contains only one freq layer
         // is length N. what is N? WDM transform wants length Nt...
@@ -623,7 +623,7 @@ int main(int argc, char *argv[])
         test_wdm_full[k] = olitas_wdm[k];
         test_wdm_layer[i] = olitas_wdm[k];
     }
-    wavelet_transform_inverse_freq(&wdm, test_wdm_full, test_fft_data);
+    wdm_transform_inverse_freq(&wdm, test_wdm_full, test_fft_data);
     if (CREATE_DEBUG_FILES) {
         write_fft_data(1./T, NFFT_TEST/2+1, test_fft_data, "./dbg_wdmfft_onelayer.dat");
     }
@@ -641,23 +641,23 @@ int main(int argc, char *argv[])
             short_fft[2*i + 1] = 0.0;
         }
     }
-    // now forward it with wavelet_transform_segment
-    wavelet_transform_freq_segment(&wdm, Nseg, test_layer, short_fft);
+    // now forward it with wdm_transform_segment
+    wdm_transform_freq_segment(&wdm, Nseg, test_layer, short_fft);
 
     ok = test_array_equality(short_fft,
             test_wdm_layer,
             wdm.NT,
             &wdm_tests,
-            "wavelet_transform_segment (layer 5) vs WDM(impulse) (layer 5)");
+            "wdm_transform_segment (layer 5) vs WDM(impulse) (layer 5)");
 
-    // Build full scalogram by calling my_wavelet_transform_segment on every layer
-    // and compare against the full wavelet_transform_freq result
+    // Build full scalogram by calling my_wdm_transform_segment on every layer
+    // and compare against the full wdm_transform_freq result
     memset(&test_data, 0, NFFT_TEST*sizeof(double));
     test_data[0] = 1.0;
     // get reference full WDM
     static double ref_wdm[NFFT_TEST];
     memcpy(ref_wdm, test_data, NFFT_TEST*sizeof(double));
-    wavelet_transform_timefreq(&wdm, ref_wdm);
+    wdm_transform_timefreq(&wdm, ref_wdm);
     // get full FFT for extracting segments
     static double full_fft[NFFT_TEST+2];
     glass_forward_real_fft_outplace(test_data, full_fft, NFFT_TEST);
@@ -678,7 +678,7 @@ int main(int argc, char *argv[])
                 seg_fft[2*i + 1] = 0.0;
             }
         }
-        wavelet_transform_freq_segment(&wdm, Nseg, m, seg_fft);
+        wdm_transform_freq_segment(&wdm, Nseg, m, seg_fft);
         // DC and Nyquist layers both map into column 0
         if (m == 0) {
             for (int n = 0; n < wdm.NT; n += 2)
@@ -695,7 +695,7 @@ int main(int argc, char *argv[])
             ref_wdm,
             NFFT_TEST,
             &wdm_tests,
-            "layer-by-layer assembly vs full wavelet_transform_freq");
+            "layer-by-layer assembly vs full wdm_transform_freq");
 
 
     print_test_block_stats(&wdm_tests);
@@ -746,7 +746,7 @@ int main(int argc, char *argv[])
     data3.noise = malloc(sizeof(struct Noise));
     alloc_noise(data3.noise, data3.Nlayer*wdm.NT, data3.Nlayer, data3.Nchannel);
 
-    // Build the WDM PSD that whitens wavelet_transform_freq output by passing
+    // Build the WDM PSD that whitens wdm_transform_freq output by passing
     // each FFT-domain channel PSD through the new convolution helper.
     stationary_dft_psd_to_wdm_psd(&wdm, inst_fft->psd->C[0][0], data3.noise->C[0][0]);
     stationary_dft_psd_to_wdm_psd(&wdm, inst_fft->psd->C[1][1], data3.noise->C[1][1]);
@@ -754,7 +754,7 @@ int main(int argc, char *argv[])
 
     struct TDI* testtdi = malloc(sizeof(struct TDI));
     alloc_tdi(testtdi, data3.Nlayer*wdm.NT, data3.Nchannel);
-    MyAddNoiseWavelet(&data3, testtdi);
+    MyAddNoiseWDM(&data3, testtdi);
 
     ok = test_whitening_wdm_3ch(testtdi,
             data3.noise,
@@ -765,9 +765,9 @@ int main(int argc, char *argv[])
 
 
     // now try to whiten FFT data with WDM PSD
-    wavelet_transform_freq(&wdm, testtdi_fft->X, testtdi->X);
-    wavelet_transform_freq(&wdm, testtdi_fft->Y, testtdi->Y);
-    wavelet_transform_freq(&wdm, testtdi_fft->Z, testtdi->Z);
+    wdm_transform_freq(&wdm, testtdi_fft->X, testtdi->X);
+    wdm_transform_freq(&wdm, testtdi_fft->Y, testtdi->Y);
+    wdm_transform_freq(&wdm, testtdi_fft->Z, testtdi->Z);
 
 
     ok = test_whitening_wdm_3ch(testtdi,
@@ -778,10 +778,10 @@ int main(int argc, char *argv[])
             "WDM PSD test: InstrumentModel PSD whitens FFT-generated noise");
 
     // Same FFT->WDM whitening test, but build data3.noise with the production
-    // initialize_instrument_model_wavelet + generate_full_dynamic_covariance_matrix
+    // initialize_instrument_model_wdm + generate_full_dynamic_covariance_matrix
     {
         struct InstrumentModel *inst_w = malloc(sizeof(struct InstrumentModel));
-        initialize_instrument_model_wavelet(orbit, &data3, inst_w);
+        initialize_instrument_model_wdm(orbit, &data3, inst_w);
         generate_full_dynamic_covariance_matrix(data3.wdm, inst_w, NULL, NULL, data3.noise);
 
         ok = test_whitening_wdm_3ch(testtdi,
@@ -820,7 +820,7 @@ int main(int argc, char *argv[])
     coarse_tests.atol = 1e-6;
     coarse_tests.rtol = 1e-10;
 
-    // test on a narrow band similar to noise_wavelet_mcmc
+    // test on a narrow band similar to noise_wdm_mcmc
     data3.lmin = 4;
     data3.lmax = 64;
     data3.Nlayer = data3.lmax - data3.lmin;
@@ -843,16 +843,16 @@ int main(int argc, char *argv[])
     // no confusion noise because we have a very tiny Tobs in these tests, maybe add it later
     {
         struct InstrumentModel *inst_w = malloc(sizeof(struct InstrumentModel));
-        initialize_instrument_model_wavelet(orbit, &data3, inst_w);
+        initialize_instrument_model_wdm(orbit, &data3, inst_w);
 
         struct SGWBModel *sgwb_w = malloc(sizeof(struct SGWBModel));
-        initialize_sgwb_model_wavelet(orbit, &data3, sgwb_w, SGWB_TEMPLATE_POWERLAW);
+        initialize_sgwb_model_wdm(orbit, &data3, sgwb_w, SGWB_TEMPLATE_POWERLAW);
 
         generate_full_dynamic_covariance_matrix(data3.wdm, inst_w, NULL, sgwb_w, data3.noise);
         memset(testtdi->X, 0, data3.N*sizeof(double));
         memset(testtdi->Y, 0, data3.N*sizeof(double));
         memset(testtdi->Z, 0, data3.N*sizeof(double));
-        MyAddNoiseWavelet(&data3, testtdi);
+        MyAddNoiseWDM(&data3, testtdi);
 
         const int Q_list[] = {1, 5};
         run_coarse_logL_q_sweep("dynamic covariance functions", &data3,
@@ -868,16 +868,16 @@ int main(int argc, char *argv[])
 
     {
         struct InstrumentModel *inst_w = malloc(sizeof(struct InstrumentModel));
-        initialize_instrument_model_wavelet(orbit, &data3, inst_w);
+        initialize_instrument_model_wdm(orbit, &data3, inst_w);
 
         struct SGWBModel *sgwb_w = malloc(sizeof(struct SGWBModel));
-        initialize_sgwb_model_wavelet(orbit, &data3, sgwb_w, SGWB_TEMPLATE_POWERLAW);
+        initialize_sgwb_model_wdm(orbit, &data3, sgwb_w, SGWB_TEMPLATE_POWERLAW);
 
         generate_full_stationary_covariance_matrix(data3.wdm, inst_w, NULL, sgwb_w, data3.noise);
         memset(testtdi->X, 0, data3.N*sizeof(double));
         memset(testtdi->Y, 0, data3.N*sizeof(double));
         memset(testtdi->Z, 0, data3.N*sizeof(double));
-        MyAddNoiseWavelet(&data3, testtdi);
+        MyAddNoiseWDM(&data3, testtdi);
 
         const int Q_list[] = {1, 5};
         run_coarse_logL_q_sweep("stationary covariance functions", &data3,

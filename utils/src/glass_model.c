@@ -26,7 +26,7 @@ void alloc_model(struct Data *data, struct Model *model, int NP, int Nmax)
     model->Neff  = 2;
     model->t0 = 0.0;
 
-    //Wavelet bookkeeping
+    //WDM bookkeeping
     model->Nlist = 0;
     model->list = calloc(data->N,sizeof(int));
 
@@ -37,8 +37,8 @@ void alloc_model(struct Data *data, struct Model *model, int NP, int Nmax)
     model->tdi         = malloc(sizeof(struct TDI)         );
     model->residual    = malloc(sizeof(struct TDI)         );
     
-    if(!strcmp(data->basis,"fourier")) alloc_noise(model->noise,data->NFFT, data->Nlayer, data->Nchannel);
-    if(!strcmp(data->basis,"wavelet")) alloc_noise(model->noise,data->N, data->Nlayer, data->Nchannel);
+    if(!strcmp(data->basis,"dft")) alloc_noise(model->noise,data->NFFT, data->Nlayer, data->Nchannel);
+    if(!strcmp(data->basis,"wdm")) alloc_noise(model->noise,data->N, data->Nlayer, data->Nchannel);
 
     alloc_tdi(model->tdi, data->N, data->Nchannel);
     alloc_tdi(model->residual, data->N, data->Nchannel);
@@ -93,7 +93,7 @@ void copy_model(struct Model *origin, struct Model *copy)
     copy->logL           = origin->logL;
     copy->logLnorm       = origin->logLnorm;
 
-    //Wavelet bookkeeping
+    //WDM bookkeeping
     copy->Nlist = origin->Nlist;
     memcpy(copy->list,origin->list,origin->Nlist*sizeof(int));
 
@@ -114,7 +114,7 @@ void copy_model_lite(struct Model *origin, struct Model *copy)
     //Model likelihood
     copy->logL = origin->logL;
 
-    //Wavelet bookkeeping
+    //WDM bookkeeping
     copy->Nlist = origin->Nlist;
     memcpy(copy->list,origin->list,origin->Nlist*sizeof(int));
 }
@@ -415,7 +415,7 @@ void alloc_source(struct Source *source, int N, int NP, int Nchannel)
         source->fisher_evectr[i] = calloc(NP,sizeof(double));
     }
 
-    //Wavelet bookkeeping
+    //WDM bookkeeping
     source->Nlist = 0;
     source->list = calloc(N,sizeof(int));
 };
@@ -641,48 +641,48 @@ double delta_log_likelihood(struct Data *data, struct Model *model_x, struct Mod
     double hh_y=0;
 
     // add the (d|h) contribution to the current likelihood over the pixel list
-    dh_x += wavelet_nwip(d->X, h_x->X, n_x->invC[0][0], list_x, N_x);
-    dh_x += wavelet_nwip(d->Y, h_x->Y, n_x->invC[1][1], list_x, N_x);
-    dh_x += wavelet_nwip(d->Z, h_x->Z, n_x->invC[2][2], list_x, N_x);
-    dh_x += wavelet_nwip(d->X, h_x->Y, n_x->invC[0][1], list_x, N_x);
-    dh_x += wavelet_nwip(d->X, h_x->Z, n_x->invC[0][2], list_x, N_x);
-    dh_x += wavelet_nwip(d->Y, h_x->Z, n_x->invC[1][2], list_x, N_x);
-    dh_x += wavelet_nwip(d->Y, h_x->X, n_x->invC[1][0], list_x, N_x);
-    dh_x += wavelet_nwip(d->Z, h_x->X, n_x->invC[2][0], list_x, N_x);
-    dh_x += wavelet_nwip(d->Z, h_x->Y, n_x->invC[2][1], list_x, N_x);
+    dh_x += wdm_nwip(d->X, h_x->X, n_x->invC[0][0], list_x, N_x);
+    dh_x += wdm_nwip(d->Y, h_x->Y, n_x->invC[1][1], list_x, N_x);
+    dh_x += wdm_nwip(d->Z, h_x->Z, n_x->invC[2][2], list_x, N_x);
+    dh_x += wdm_nwip(d->X, h_x->Y, n_x->invC[0][1], list_x, N_x);
+    dh_x += wdm_nwip(d->X, h_x->Z, n_x->invC[0][2], list_x, N_x);
+    dh_x += wdm_nwip(d->Y, h_x->Z, n_x->invC[1][2], list_x, N_x);
+    dh_x += wdm_nwip(d->Y, h_x->X, n_x->invC[1][0], list_x, N_x);
+    dh_x += wdm_nwip(d->Z, h_x->X, n_x->invC[2][0], list_x, N_x);
+    dh_x += wdm_nwip(d->Z, h_x->Y, n_x->invC[2][1], list_x, N_x);
     
     // add the (h|h) conribution to the current likelihoood over the pixel list
-    hh_x += wavelet_nwip(h_x->X, h_x->X, n_x->invC[0][0], list_x, N_x);
-    hh_x += wavelet_nwip(h_x->Y, h_x->Y, n_x->invC[1][1], list_x, N_x);
-    hh_x += wavelet_nwip(h_x->Z, h_x->Z, n_x->invC[2][2], list_x, N_x);
-    hh_x += wavelet_nwip(h_x->X, h_x->Y, n_x->invC[0][1], list_x, N_x);
-    hh_x += wavelet_nwip(h_x->X, h_x->Z, n_x->invC[0][2], list_x, N_x);
-    hh_x += wavelet_nwip(h_x->Y, h_x->Z, n_x->invC[1][2], list_x, N_x);
-    hh_x += wavelet_nwip(h_x->Y, h_x->X, n_x->invC[1][0], list_x, N_x);
-    hh_x += wavelet_nwip(h_x->Z, h_x->X, n_x->invC[2][0], list_x, N_x);
-    hh_x += wavelet_nwip(h_x->Z, h_x->Y, n_x->invC[2][1], list_x, N_x);
+    hh_x += wdm_nwip(h_x->X, h_x->X, n_x->invC[0][0], list_x, N_x);
+    hh_x += wdm_nwip(h_x->Y, h_x->Y, n_x->invC[1][1], list_x, N_x);
+    hh_x += wdm_nwip(h_x->Z, h_x->Z, n_x->invC[2][2], list_x, N_x);
+    hh_x += wdm_nwip(h_x->X, h_x->Y, n_x->invC[0][1], list_x, N_x);
+    hh_x += wdm_nwip(h_x->X, h_x->Z, n_x->invC[0][2], list_x, N_x);
+    hh_x += wdm_nwip(h_x->Y, h_x->Z, n_x->invC[1][2], list_x, N_x);
+    hh_x += wdm_nwip(h_x->Y, h_x->X, n_x->invC[1][0], list_x, N_x);
+    hh_x += wdm_nwip(h_x->Z, h_x->X, n_x->invC[2][0], list_x, N_x);
+    hh_x += wdm_nwip(h_x->Z, h_x->Y, n_x->invC[2][1], list_x, N_x);
     
     // add the (d|h) contribution to the trial likelihood over the pixel list
-    dh_y += wavelet_nwip(d->X, h_y->X, n_y->invC[0][0], list_y, N_y);
-    dh_y += wavelet_nwip(d->Y, h_y->Y, n_y->invC[1][1], list_y, N_y);
-    dh_y += wavelet_nwip(d->Z, h_y->Z, n_y->invC[2][2], list_y, N_y);
-    dh_y += wavelet_nwip(d->X, h_y->Y, n_y->invC[0][1], list_y, N_y);
-    dh_y += wavelet_nwip(d->X, h_y->Z, n_y->invC[0][2], list_y, N_y);
-    dh_y += wavelet_nwip(d->Y, h_y->Z, n_y->invC[1][2], list_y, N_y);
-    dh_y += wavelet_nwip(d->Y, h_y->X, n_y->invC[1][0], list_y, N_y);
-    dh_y += wavelet_nwip(d->Z, h_y->X, n_y->invC[2][0], list_y, N_y);
-    dh_y += wavelet_nwip(d->Z, h_y->Y, n_y->invC[2][1], list_y, N_y);
+    dh_y += wdm_nwip(d->X, h_y->X, n_y->invC[0][0], list_y, N_y);
+    dh_y += wdm_nwip(d->Y, h_y->Y, n_y->invC[1][1], list_y, N_y);
+    dh_y += wdm_nwip(d->Z, h_y->Z, n_y->invC[2][2], list_y, N_y);
+    dh_y += wdm_nwip(d->X, h_y->Y, n_y->invC[0][1], list_y, N_y);
+    dh_y += wdm_nwip(d->X, h_y->Z, n_y->invC[0][2], list_y, N_y);
+    dh_y += wdm_nwip(d->Y, h_y->Z, n_y->invC[1][2], list_y, N_y);
+    dh_y += wdm_nwip(d->Y, h_y->X, n_y->invC[1][0], list_y, N_y);
+    dh_y += wdm_nwip(d->Z, h_y->X, n_y->invC[2][0], list_y, N_y);
+    dh_y += wdm_nwip(d->Z, h_y->Y, n_y->invC[2][1], list_y, N_y);
     
     // add the (h|h) conribution to the trial likelihoood over the pixel list
-    hh_y += wavelet_nwip(h_y->X, h_y->X, n_y->invC[0][0], list_y, N_y);
-    hh_y += wavelet_nwip(h_y->Y, h_y->Y, n_y->invC[1][1], list_y, N_y);
-    hh_y += wavelet_nwip(h_y->Z, h_y->Z, n_y->invC[2][2], list_y, N_y);
-    hh_y += wavelet_nwip(h_y->X, h_y->Y, n_y->invC[0][1], list_y, N_y);
-    hh_y += wavelet_nwip(h_y->X, h_y->Z, n_y->invC[0][2], list_y, N_y);
-    hh_y += wavelet_nwip(h_y->Y, h_y->Z, n_y->invC[1][2], list_y, N_y);
-    hh_y += wavelet_nwip(h_y->Y, h_y->X, n_y->invC[1][0], list_y, N_y);
-    hh_y += wavelet_nwip(h_y->Z, h_y->X, n_y->invC[2][0], list_y, N_y);
-    hh_y += wavelet_nwip(h_y->Z, h_y->Y, n_y->invC[2][1], list_y, N_y);
+    hh_y += wdm_nwip(h_y->X, h_y->X, n_y->invC[0][0], list_y, N_y);
+    hh_y += wdm_nwip(h_y->Y, h_y->Y, n_y->invC[1][1], list_y, N_y);
+    hh_y += wdm_nwip(h_y->Z, h_y->Z, n_y->invC[2][2], list_y, N_y);
+    hh_y += wdm_nwip(h_y->X, h_y->Y, n_y->invC[0][1], list_y, N_y);
+    hh_y += wdm_nwip(h_y->X, h_y->Z, n_y->invC[0][2], list_y, N_y);
+    hh_y += wdm_nwip(h_y->Y, h_y->Z, n_y->invC[1][2], list_y, N_y);
+    hh_y += wdm_nwip(h_y->Y, h_y->X, n_y->invC[1][0], list_y, N_y);
+    hh_y += wdm_nwip(h_y->Z, h_y->X, n_y->invC[2][0], list_y, N_y);
+    hh_y += wdm_nwip(h_y->Z, h_y->Y, n_y->invC[2][1], list_y, N_y);
     
     double logLx = -0.5*(hh_x - 2.0*dh_x);
     double logLy = -0.5*(hh_y - 2.0*dh_y);
@@ -749,20 +749,20 @@ double gaussian_log_likelihood(struct Data *data, struct Model *model)
     switch(data->Nchannel)
     {
         case 1:
-            chi2 += fourier_nwip(residual->X, residual->X, model->noise->invC[0][0], data->NFFT);
+            chi2 += dft_nwip(residual->X, residual->X, model->noise->invC[0][0], data->NFFT);
             break;
         case 2:
-            chi2 += fourier_nwip(residual->A, residual->A, model->noise->invC[0][0], data->NFFT);
-            chi2 += fourier_nwip(residual->E, residual->E, model->noise->invC[1][1], data->NFFT);
+            chi2 += dft_nwip(residual->A, residual->A, model->noise->invC[0][0], data->NFFT);
+            chi2 += dft_nwip(residual->E, residual->E, model->noise->invC[1][1], data->NFFT);
             break;
         case 3:
-            chi2 += fourier_nwip(residual->X, residual->X, model->noise->invC[0][0], data->NFFT);
-            chi2 += fourier_nwip(residual->Y, residual->Y, model->noise->invC[1][1], data->NFFT);
-            chi2 += fourier_nwip(residual->Z, residual->Z, model->noise->invC[2][2], data->NFFT);
+            chi2 += dft_nwip(residual->X, residual->X, model->noise->invC[0][0], data->NFFT);
+            chi2 += dft_nwip(residual->Y, residual->Y, model->noise->invC[1][1], data->NFFT);
+            chi2 += dft_nwip(residual->Z, residual->Z, model->noise->invC[2][2], data->NFFT);
 
-            chi2 += 2.0*fourier_nwip(residual->X, residual->Y, model->noise->invC[0][1], data->NFFT);
-            chi2 += 2.0*fourier_nwip(residual->X, residual->Z, model->noise->invC[0][2], data->NFFT);
-            chi2 += 2.0*fourier_nwip(residual->Y, residual->Z, model->noise->invC[1][2], data->NFFT);
+            chi2 += 2.0*dft_nwip(residual->X, residual->Y, model->noise->invC[0][1], data->NFFT);
+            chi2 += 2.0*dft_nwip(residual->X, residual->Z, model->noise->invC[0][2], data->NFFT);
+            chi2 += 2.0*dft_nwip(residual->Y, residual->Z, model->noise->invC[1][2], data->NFFT);
 
             break;
         default:
@@ -779,8 +779,8 @@ double gaussian_log_likelihood_constant_norm(struct Data *data, struct Model *mo
     double logLnorm = 0.0;
     
     //loop over time segments
-    if(!strcmp(data->basis,"fourier")) logLnorm -= (double)data->NFFT*model->noise->logdetC[0];
-    if(!strcmp(data->basis,"wavelet")) logLnorm -= 0.5*(double)data->N*model->noise->logdetC[0];
+    if(!strcmp(data->basis,"dft")) logLnorm -= (double)data->NFFT*model->noise->logdetC[0];
+    if(!strcmp(data->basis,"wdm")) logLnorm -= 0.5*(double)data->N*model->noise->logdetC[0];
     
     return logLnorm;
 }
@@ -790,19 +790,19 @@ double gaussian_log_likelihood_model_norm(struct Data *data, struct Model *model
     
     double logLnorm = 0.0;
     int N;
-    if(!strcmp(data->basis,"fourier")) N=data->NFFT;
-    if(!strcmp(data->basis,"wavelet")) N=data->N;
+    if(!strcmp(data->basis,"dft")) N=data->NFFT;
+    if(!strcmp(data->basis,"wdm")) N=data->N;
 
     //loop over time segments
     for(int n=0; n<N; n++)
         logLnorm -= model->noise->logdetC[n];
 
-    if(!strcmp(data->basis,"wavelet")) logLnorm *= 0.5;  //normalization of 1/2 for wavelet domain (sum over N, not N/2)
+    if(!strcmp(data->basis,"wdm")) logLnorm *= 0.5;  //normalization of 1/2 for wdm domain (sum over N, not N/2)
     
     return logLnorm;
 }
 
-double gaussian_log_likelhood_wavelet(struct Data *data, struct Model *model)
+double gaussian_log_likelhood_wdm(struct Data *data, struct Model *model)
 {
     int i,j,k;
     /*
@@ -820,7 +820,7 @@ double gaussian_log_likelhood_wavelet(struct Data *data, struct Model *model)
     for(int n=0; n<model->Nlist; n++)
     {
         k = model->list[n];
-        wavelet_index_to_pixel(data->wdm,&i,&j,k+data->wdm->kmin);
+        wdm_index_to_pixel(data->wdm,&i,&j,k+data->wdm->kmin);
         if(k>=0 && k<data->N)
         {
             residual->X[k] -= waveform->X[k];
@@ -842,13 +842,13 @@ double gaussian_log_likelhood_wavelet(struct Data *data, struct Model *model)
     double XX=0.0;
     double XY=0.0;
 
-    XX += wavelet_nwip(residual->X, residual->X, model->noise->invC[0][0], list, data->N);
-    XX += wavelet_nwip(residual->Y, residual->Y, model->noise->invC[1][1], list, data->N);
-    XX += wavelet_nwip(residual->Z, residual->Z, model->noise->invC[2][2], list, data->N);
+    XX += wdm_nwip(residual->X, residual->X, model->noise->invC[0][0], list, data->N);
+    XX += wdm_nwip(residual->Y, residual->Y, model->noise->invC[1][1], list, data->N);
+    XX += wdm_nwip(residual->Z, residual->Z, model->noise->invC[2][2], list, data->N);
     
-    XY += wavelet_nwip(residual->X, residual->Y, model->noise->invC[0][1], list, data->N);
-    XY += wavelet_nwip(residual->X, residual->Z, model->noise->invC[0][2], list, data->N);
-    XY += wavelet_nwip(residual->Y, residual->Z, model->noise->invC[1][2], list, data->N);
+    XY += wdm_nwip(residual->X, residual->Y, model->noise->invC[0][1], list, data->N);
+    XY += wdm_nwip(residual->X, residual->Z, model->noise->invC[0][2], list, data->N);
+    XY += wdm_nwip(residual->Y, residual->Z, model->noise->invC[1][2], list, data->N);
     
     free_int_vector(list);
     return -0.5*(XX + 2.0*XY);
@@ -1020,7 +1020,7 @@ void print_waveform_draw(struct Data *data, struct Model *model, struct Flags *f
 {
     char filename[128];
     
-    if(!strcmp(data->basis,"fourier"))
+    if(!strcmp(data->basis,"dft"))
     {
         FILE *fptr;
         sprintf(filename,"%s/waveform_draw.dat",data->dataDir);
@@ -1028,12 +1028,12 @@ void print_waveform_draw(struct Data *data, struct Model *model, struct Flags *f
         print_waveform(data, model, fptr);
         fclose(fptr);
     }
-    if(!strcmp(data->basis,"wavelet"))
+    if(!strcmp(data->basis,"wdm"))
     {
         sprintf(filename,"%s/waveform_draw.dat",data->dataDir);
-        print_wavelet_fourier_spectra(data, model->tdi, filename);
+        print_wdm_dft_spectra(data, model->tdi, filename);
         sprintf(filename,"%s/residual_draw.dat",data->dataDir);
-        print_wavelet_fourier_spectra(data, model->residual, filename);
+        print_wdm_dft_spectra(data, model->residual, filename);
     }
     
 }

@@ -59,10 +59,10 @@ double snr_prior(double SNR);
 double waveform_match(struct Source *a, struct Source *b, struct Noise *noise);
 
 /**
-\brief Compute match between waveforms in wavelet domain
+\brief Compute match between waveforms in wdm domain
  @see waveform_match()
  */
-double waveform_match_wavelet(struct Source *a, struct Source *b, struct Noise *noise);
+double waveform_match_wdm(struct Source *a, struct Source *b, struct Noise *noise);
 
 /**
 \brief Compute distance between waveforms
@@ -150,10 +150,10 @@ void ucb_barycenter_waveform(double *params, int N, double *times, double *phase
 void ucb_fisher(struct Orbit *orbit, struct Data *data, struct Source *source, struct Noise *noise);
 
 /**
- \brief computes Fisher Information Matrix for UCB waveform parameters Source::params in wavelet domain
+ \brief computes Fisher Information Matrix for UCB waveform parameters Source::params in wdm domain
  @see ucb_fisher()
  */
-void ucb_fisher_wavelet(struct Orbit *orbit, struct Data *data, struct Source *source, struct Noise *noise);
+void ucb_fisher_wdm(struct Orbit *orbit, struct Data *data, struct Source *source, struct Noise *noise);
 
 /**
  \brief aligns generated UCB waveform with Data array
@@ -210,9 +210,9 @@ int ucb_bandwidth(double L, double fstar, double f, double fdot, double costheta
 void ucb_waveform(struct Orbit *orbit, char *format, double T, double t0, double params[], int NParams, double *X, double *Y, double *Z, double *A, double *E, int BW, int NI);
 
 /**
- \brief Wavelet domain ultra compact binary waveform generators as first described in <a href="https://https://journals.aps.org/prd/abstract/10.1103/PhysRevD.102.124038">Cornish, PRD 102, 124038</a>.
+ \brief WDM domain ultra compact binary waveform generators as first described in <a href="https://https://journals.aps.org/prd/abstract/10.1103/PhysRevD.102.124038">Cornish, PRD 102, 124038</a>.
 
- Computes the wavelet domain TDI response to a circular, slowly evolving, binary with parameters params.  The detector geometry is defined in Orbit.  The format of the TDI data is hard-coded to match the conventions of LDC2.1.
+ Computes the wdm domain TDI response to a circular, slowly evolving, binary with parameters params.  The detector geometry is defined in Orbit.  The format of the TDI data is hard-coded to match the conventions of LDC2.1.
  
  The TDI response is returned for the Michelson-like channels X,Y,Z.
 
@@ -221,21 +221,21 @@ void ucb_waveform(struct Orbit *orbit, char *format, double T, double t0, double
  Extra parameters for non-zero frequency evolution are optional: \f$ \dot{f}T^2, \ddot{f}T^3 \f$.
  
  @param[in] orbit LISA ephemerides
- @param[in] wdm defines wavelet basis
+ @param[in] wdm defines wdm basis
  @param[in] Tobs observation time \f$ T_{\rm obs}\ [{\rm s}]\f$
  @param[in] t0 start time of observations \f$ t_0\ [{\rm s}]\f$
  @param[in] params[] source parameters
- @param[in] wavelet_list list of active wavelet pixels for A and E channel
- @param[out] X,Y,Z wavelet domain TDI channels
+ @param[in] wdm_list list of active wdm pixels for A and E channel
+ @param[out] X,Y,Z wdm domain TDI channels
  */
-void ucb_waveform_wavelet(struct Orbit *orbit, struct Wavelets *wdm, double Tobs, double t0, double *params, int *wavelet_list, int *Nwavelet, double *X, double *Y, double *Z);
+void ucb_waveform_wdm(struct Orbit *orbit, struct WDM *wdm, double Tobs, double t0, double *params, int *wdm_list, int *Nwdm, double *X, double *Y, double *Z);
 
 /**
- * @brief Wavelet domain UCB waveform using lookup table transform.
- * @see ucb_waveform_wavelet()
+ * @brief WDM domain UCB waveform using lookup table transform.
+ * @see ucb_waveform_wdm()
  */
-void ucb_waveform_wavelet_tab(struct Orbit *orbit, struct Wavelets *wdm, double Tobs, double t0, double *params, int *wavelet_list, int *Nwavelet, double *X, double *Y, double *Z);
+void ucb_waveform_wdm_tab(struct Orbit *orbit, struct WDM *wdm, double Tobs, double t0, double *params, int *wdm_list, int *Nwdm, double *X, double *Y, double *Z);
 
-void ucb_waveform_wavelet_slow(struct Orbit *orbit, struct Wavelets *wdm, double Tobs, double t0, double *params, int *wavelet_list, int *Nwavelet, double *X, double *Y, double *Z);
+void ucb_waveform_wdm_slow(struct Orbit *orbit, struct WDM *wdm, double Tobs, double t0, double *params, int *wdm_list, int *Nwdm, double *X, double *Y, double *Z);
 
 #endif /* ucb_waveform_h */

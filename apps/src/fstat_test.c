@@ -1,6 +1,6 @@
 //
 //  fstat_test.c
-//  ucb_wavelet_mcmc
+//  ucb_wdm_mcmc
 //
 //  Created by Tyson Littenberg on 10/8/24.
 //
@@ -23,12 +23,12 @@ int main(int argc, char *argv[])
     struct Data   *data_dwt  = malloc(sizeof(struct Data));
     
     /* Parse command line and set defaults/flags */
-    sprintf(data_dft->basis,"fourier");
-    sprintf(data_dwt->basis,"wavelet");
+    sprintf(data_dft->basis,"dft");
+    sprintf(data_dwt->basis,"wdm");
 
-    parse_data_args(argc,argv,data_dft,orbit_dft,flags_dft,chain_dft,"fourier");
+    parse_data_args(argc,argv,data_dft,orbit_dft,flags_dft,chain_dft,"dft");
     parse_ucb_args(argc,argv,flags_dft);
-    parse_data_args(argc,argv,data_dwt,orbit_dwt,flags_dwt,chain_dwt,"wavelet");
+    parse_data_args(argc,argv,data_dwt,orbit_dwt,flags_dwt,chain_dwt,"wdm");
     parse_ucb_args(argc,argv,flags_dwt);
     
     int DMAX = flags_dft->DMAX;
@@ -86,7 +86,7 @@ int main(int argc, char *argv[])
     double phi = inj_dft[0]->phi;
     
     get_Fstat_logL(orbit_dft, data_dft, f, fdot, theta, phi, &logL_X_dft, &logL_AE_dft, Fparams);
-    logL_AE_dwt = get_Fstat_logL_wavelet(orbit_dwt, data_dwt, f, fdot, theta, phi);
+    logL_AE_dwt = get_Fstat_logL_wdm(orbit_dwt, data_dwt, f, fdot, theta, phi);
     
     printf("logL_AE_dft = %lg, logL_AE_dwt = %lg\n", logL_AE_dft, logL_AE_dwt);
     printf("proposal_dft = %lg, proposal_dwt = %lg\n", exp(sqrt(2*logL_AE_dft)), exp(sqrt(2*logL_AE_dwt)));

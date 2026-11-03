@@ -52,9 +52,9 @@ struct InstrumentModel
     struct Noise *psd; //!< power and cross spectral densities
 
     //!< Reusable scratch model on the FFT-bin grid; populated lazily by
-    //!< generate_instrument_noise_model_wavelet and reused across calls to
+    //!< generate_instrument_noise_model_wdm and reused across calls to
     //!< avoid ~NFFT-sized malloc/free churn in the MCMC inner loop. NULL
-    //!< until the first wavelet-domain generate; freed by free_instrument_model.
+    //!< until the first wdm-domain generate; freed by free_instrument_model.
     struct InstrumentModel *grid_cache;
 
     /** @name Link level noise parameters */
@@ -221,26 +221,26 @@ void generate_spline_noise_model(struct SplineModel *model);
  \brief Compute instrument model contribution to noise covariance matrix based on current state of `model`
  */
 void generate_instrument_noise_model(struct Orbit *orbit, struct InstrumentModel *model);
-void generate_instrument_noise_model_wavelet(struct Wavelets *wdm, struct Orbit *orbit, struct InstrumentModel *model);
+void generate_instrument_noise_model_wdm(struct WDM *wdm, struct Orbit *orbit, struct InstrumentModel *model);
 
 /**
  \brief Compute galactic foreground contribution to covariance matrix based on current state of `model`
  */
 void generate_galactic_foreground_model(struct ForegroundModel *model);
-void generate_galactic_foreground_model_wavelet(struct Wavelets *wdm, struct ForegroundModel *model);
+void generate_galactic_foreground_model_wdm(struct WDM *wdm, struct ForegroundModel *model);
 
 /**
  \brief Compute SGWB contribution to covariance matrix based on current state of `model`
  */
 void generate_sgwb_model(struct SGWBModel *model);
-void generate_sgwb_model_wavelet(struct Wavelets *wdm, struct SGWBModel *model);
+void generate_sgwb_model_wdm(struct WDM *wdm, struct SGWBModel *model);
 
 /**
  \brief Add components to `full` noise covariance matrix `C`
  */
 void generate_full_covariance_matrix(struct Noise *full, struct Noise *component);
-void generate_full_dynamic_covariance_matrix(struct Wavelets *wdm, struct InstrumentModel *inst, struct ForegroundModel *conf, struct SGWBModel *sgwb, struct Noise *full);
-void generate_full_stationary_covariance_matrix(struct Wavelets *wdm, struct InstrumentModel *inst, struct ForegroundModel *conf, struct SGWBModel *sgwb, struct Noise *full);
+void generate_full_dynamic_covariance_matrix(struct WDM *wdm, struct InstrumentModel *inst, struct ForegroundModel *conf, struct SGWBModel *sgwb, struct Noise *full);
+void generate_full_stationary_covariance_matrix(struct WDM *wdm, struct InstrumentModel *inst, struct ForegroundModel *conf, struct SGWBModel *sgwb, struct Noise *full);
 
 /**
  \brief Coarse-grained covariance generators for the WDM time-axis Welch/Bartlett method.
@@ -249,8 +249,8 @@ void generate_full_stationary_covariance_matrix(struct Wavelets *wdm, struct Ins
  `Ncoarse = wdm->NT / Q`. Pixel index is `k = q + (j-jmin)*Ncoarse`.
  Foreground modulation (dynamic only) is sampled at the coarse-cell midpoint.
  */
-void generate_full_dynamic_covariance_matrix_coarse(struct Wavelets *wdm, int Q, struct InstrumentModel *inst, struct ForegroundModel *conf, struct SGWBModel *sgwb, struct Noise *coarse);
-void generate_full_stationary_covariance_matrix_coarse(struct Wavelets *wdm, int Q, struct InstrumentModel *inst, struct ForegroundModel *conf, struct SGWBModel *sgwb, struct Noise *coarse);
+void generate_full_dynamic_covariance_matrix_coarse(struct WDM *wdm, int Q, struct InstrumentModel *inst, struct ForegroundModel *conf, struct SGWBModel *sgwb, struct Noise *coarse);
+void generate_full_stationary_covariance_matrix_coarse(struct WDM *wdm, int Q, struct InstrumentModel *inst, struct ForegroundModel *conf, struct SGWBModel *sgwb, struct Noise *coarse);
 
 /**
  \brief Sufficient statistics for the Welch/Bartlett-like coarse-grained likelihood.
@@ -259,7 +259,7 @@ void generate_full_stationary_covariance_matrix_coarse(struct Wavelets *wdm, int
  (1/Q) sum_{i in cell q} w_{a,mi} w_{b,mi}. Each array has length
  `Nlayer * Ncoarse` (Ncoarse = NT/Q), indexed by `k = q + j*Ncoarse`.
 
- Lifetime contract: populated once via `coarse_grain_wavelet_data` after data
+ Lifetime contract: populated once via `coarse_grain_wdm_data` after data
  injection / read and treated as read-only thereafter. Const-qualified pointer
  fields let multiple MCMC threads share a single instance safely. The owner
  (allocator) must keep non-const handles internally; downstream code passes
@@ -283,9 +283,9 @@ void free_coarse_stats(struct CoarseStats *s);
 
 /**
  \brief Build the six channel-pair sufficient statistics P^{(ij)}_{mq} from the
- wavelet-domain data into `stats` (which must already be allocated for this Q).
+ wdm-domain data into `stats` (which must already be allocated for this Q).
  */
-void coarse_grain_wavelet_data(struct Data *data, struct CoarseStats *stats);
+void coarse_grain_wdm_data(struct Data *data, struct CoarseStats *stats);
 
 /**
 \brief Compute spline model only where interpolant changes
@@ -303,20 +303,20 @@ void update_spline_noise_model(struct SplineModel *model, int new_knot, int min_
  */
 double noise_log_likelihood(struct Data *data, struct Noise *noise);
 double my_noise_log_likelihood(struct Data *data, struct Noise *noise);
-double noise_log_likelihood_wavelet(struct Data *data, struct Noise *noise);
-double my_noise_log_likelihood_wavelet(struct Data *data, struct Noise *noise);
+double noise_log_likelihood_wdm(struct Data *data, struct Noise *noise);
+double my_noise_log_likelihood_wdm(struct Data *data, struct Noise *noise);
 
 /**
- \brief Welch/Bartlett-like coarse-grained wavelet-domain log-likelihood.
+ \brief Welch/Bartlett-like coarse-grained wdm-domain log-likelihood.
 
  Uses the multivariate Gaussian sufficient-statistics form:
    logL = -Q/2 sum_{m,q} [ tr(invC_{mq} * P_{mq}) + log det C_{mq} ] - (3 N_full / 2) log(2 pi)
  where N_full = Nlayer * NT is the original full-grid pixel count.
 
- Reduces algebraically to `my_noise_log_likelihood_wavelet` when the per-pixel
+ Reduces algebraically to `my_noise_log_likelihood_wdm` when the per-pixel
  covariance is constant in each window of Q time pixels (e.g. stationary noise).
  */
-double my_noise_log_likelihood_wavelet_coarse(struct Data *data, struct Noise *coarse_noise, const struct CoarseStats *stats);
+double my_noise_log_likelihood_wdm_coarse(struct Data *data, struct Noise *coarse_noise, const struct CoarseStats *stats);
 
 /**
  \brief Change in log likelihood for noise model.
@@ -337,18 +337,18 @@ void initialize_spline_model(struct Orbit *orbit, struct Data *data, struct Spli
  \brief Set initial state of instrument noise `model`
  */
 void initialize_instrument_model(struct Orbit *orbit, struct Data *data, struct InstrumentModel *model);
-void initialize_instrument_model_wavelet(struct Orbit *orbit, struct Data *data, struct InstrumentModel *model);
+void initialize_instrument_model_wdm(struct Orbit *orbit, struct Data *data, struct InstrumentModel *model);
 /**
  \brief Set initial state of galactic foreground `model`
  */
 void initialize_foreground_model(struct Orbit *orbit, struct Data *data, struct ForegroundModel *model);
-void initialize_foreground_model_wavelet(struct Orbit *orbit, struct Data *data, struct ForegroundModel *model);
+void initialize_foreground_model_wdm(struct Orbit *orbit, struct Data *data, struct ForegroundModel *model);
 
 /**
  \brief Set initial state of sgwb `model`
  */
 void initialize_sgwb_model(struct Orbit *orbit, struct Data *data, struct SGWBModel *model, SGWB_t SGWB_type);
-void initialize_sgwb_model_wavelet(struct Orbit *orbit, struct Data *data, struct SGWBModel *model, SGWB_t SGWB_type);
+void initialize_sgwb_model_wdm(struct Orbit *orbit, struct Data *data, struct SGWBModel *model, SGWB_t SGWB_type);
 
 
 void GetDynamicNoiseModel(struct Data *data, struct Orbit *orbit, struct Flags *flags);

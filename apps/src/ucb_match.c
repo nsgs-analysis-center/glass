@@ -54,7 +54,7 @@ int main(int argc, char *argv[])
     
     
     //   Parse command line and set defaults/flags
-    parse_data_args(argc,argv,data,orbit,flags,chain,"fourier");
+    parse_data_args(argc,argv,data,orbit,flags,chain,"dft");
     parse_ucb_args(argc,argv,flags);
     if(flags->help)print_usage();
     alloc_data(data, flags);

@@ -37,11 +37,11 @@ static void set_noise_defaults(struct Data *data)
     data->t0       = 0.0; /* start time of data segment in seconds */
     data->sqT      = sqrt(data->T);
     data->NFFT     = (int)floor(data->T/LISA_CADENCE);   /* full data set */
-    data->Nlayer   = (int)floor(1/2.0/LISA_CADENCE/WAVELET_BANDWIDTH); /* up to Nyquist */
+    data->Nlayer   = (int)floor(1/2.0/LISA_CADENCE/WDM_BANDWIDTH); /* up to Nyquist */
     data->Nchannel = 3; //1=X, 2=AE, 3=XYZ
     data->qpad     = 0;
     data->fmin     = 1e-4; //Hz
-    sprintf(data->basis,"fourier");
+    sprintf(data->basis,"dft");
 }
 
 int main(int argc, char *argv[])
@@ -64,7 +64,7 @@ int main(int argc, char *argv[])
     struct Chain *chain = malloc(sizeof(struct Chain));
     
     set_noise_defaults(data);
-    parse_data_args(argc,argv,data,orbit,flags,chain,"fourier");
+    parse_data_args(argc,argv,data,orbit,flags,chain,"dft");
     if(flags->help)print_usage();
     
     /*

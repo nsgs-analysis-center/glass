@@ -26,15 +26,15 @@
 #define FILTER_LENGTH 5e3 //seconds
 #define MAXSTRINGSIZE 1024 //!<maximum number of characters for `path+filename` strings
 
-#define WAVELET_EDGE_BUFFER 100 //!<number of time slices to leave out of likelihood to avoid edge effects
-#define WAVELET_DURATION 7680.0
-#define WAVELET_BANDWIDTH (6.51041666666667e-5)
-//#define WAVELET_DURATION 20480.0 //!<duration of wavelet pixels [s]
-//#define WAVELET_BANDWIDTH 2.44140625e-05 //!<bandwidth of wavelet pixels [Hz]
-//#define WAVELET_DURATION 40960.0 //!<duration of wavelet pixels [s]
-//#define WAVELET_BANDWIDTH 1.220703125e-05 //!<bandwidth of wavelet pixels [Hz]
-//#define WAVELET_DURATION 81920.0 //!<duration of wavelet pixels [s]
-//#define WAVELET_BANDWIDTH 6.103515625e-06 //!<bandwidth of wavelet pixels [Hz]
+#define WDM_EDGE_BUFFER 100 //!<number of time slices to leave out of likelihood to avoid edge effects
+#define WDM_DURATION 7680.0
+#define WDM_BANDWIDTH (6.51041666666667e-5)
+//#define WDM_DURATION 20480.0 //!<duration of wdm pixels [s]
+//#define WDM_BANDWIDTH 2.44140625e-05 //!<bandwidth of wdm pixels [Hz]
+//#define WDM_DURATION 40960.0 //!<duration of wdm pixels [s]
+//#define WDM_BANDWIDTH 1.220703125e-05 //!<bandwidth of wdm pixels [Hz]
+//#define WDM_DURATION 81920.0 //!<duration of wdm pixels [s]
+//#define WDM_BANDWIDTH 6.103515625e-06 //!<bandwidth of wdm pixels [Hz]
 
 /*!
  * \brief Analaysis segment and meta data about size of segment, location in full data stream, and LISA observation parameters.
@@ -43,7 +43,7 @@
  * including size of data, where it is located in the full LISA band,
  * information about gaps, etc.
  *
- * The structure stores the Fourier-domain TDI data channels, and a
+ * The structure stores the DFT-domain TDI data channels, and a
  * fiducial model for the instrument noise. It also has memory allocated
  * for storing the reconstructed waveforms, residuals, and noise models.
  */
@@ -72,8 +72,8 @@ struct Data
     double t0;   //!<start times of segments
     ///@}
 
-    /** @name Wavelet Basis */
-    struct Wavelets *wdm;
+    /** @name WDM Basis */
+    struct WDM *wdm;
 
     /** @name Analysis Frequency Segment */
      ///@{
@@ -94,8 +94,8 @@ struct Data
      ///@{
     struct TDI *tdi; //!<TDI data channels as seen by sampler
     struct TDI *raw; //!<TDI data channels unaltered from input
-    struct TDI *dft; //!<Fourier transform of TDI data channels
-    struct TDI *dwt; //!<Wavelet transform of TDI data channels
+    struct TDI *dft; //!<DFT transform of TDI data channels
+    struct TDI *dwt; //!<WDM transform of TDI data channels
     struct Noise *noise; //!<Reference noise model
 
     /**
@@ -111,8 +111,8 @@ struct Data
     /** 
      \brief Basis for analysis
 
-     basis = "fourier" for frequency-domain analysis
-     basis = "wavelet" for WDM wavelet-domain analysis
+     basis = "dft" for frequency-domain analysis
+     basis = "wdm" for WDM wdm-domain analysis
     */
     char basis[16];
 
@@ -170,9 +170,9 @@ struct Flags
     int NVB;        //!<number of known binaries for `vb_mcmc`
     int DMAX;       //!<`[--sources=INT; default=10]`: max number of sources
     int simNoise;   //!<`[--sim-noise; default=FALSE]`: simulate random noise realization and add to data
-    int stationary; //!<`[--stationary; default=FALSE]`: use stationary noise model in wavelet-domain analysis (likelihood)
+    int stationary; //!<`[--stationary; default=FALSE]`: use stationary noise model in wdm-domain analysis (likelihood)
     int stationaryConf; //!<`[--stationary-conf; default=FALSE]`: inject confusion noise as stationary (no time modulation). Independent of `stationary` (which controls the analysis model).
-    int coarseQ;    //!<`[--coarse-Q=INT; default=1]`: coarse-graining factor along wavelet time axis. Must divide wdm->NT. Q=1 disables coarse-graining.
+    int coarseQ;    //!<`[--coarse-Q=INT; default=1]`: coarse-graining factor along wdm time axis. Must divide wdm->NT. Q=1 disables coarse-graining.
     int fixSky;     //!<`[--fix-sky; default=FALSE]`: hold sky location fixed to injection parameters.  Set to `TRUE` if Flags::knownSource=`TRUE`.
     int fixFdot;
     int fixFreq;    //!<`[--fix-freq; default=FALSE]`: hold GW frequency fixed to injection parameters
@@ -339,7 +339,7 @@ struct Noise
     /// Number of data samples fit by noise model
     int N;
 
-    /// Minimum index of wavelet pixels  
+    /// Minimum index of wdm pixels  
     int kmin; 
 
     /// Number of TDI channels
@@ -529,8 +529,8 @@ void GetNoiseModel(struct Data *data, struct Orbit *orbit, struct Flags *flags);
 ///@{
 void AddNoise(struct Data *data, struct TDI *tdi);
 void MyAddNoise(struct Data *data, struct TDI *tdi);
-void AddNoiseWavelet(struct Data *data, struct TDI *tdi);
-void MyAddNoiseWavelet(struct Data *data, struct TDI *tdi);
+void AddNoiseWDM(struct Data *data, struct TDI *tdi);
+void MyAddNoiseWDM(struct Data *data, struct TDI *tdi);
 ///@}
 
 /**
@@ -541,14 +541,14 @@ void SimulateData(struct Data *data, struct Orbit *orbit, struct Flags *flags);
 /** @name Wrapper functions that call data print functions */
 ///@{
 void print_data(struct Data *data, struct Flags *flags);
-void print_wavelet_fourier_spectra(struct Data *data, struct TDI *tdi, char filename[]);
+void print_wdm_dft_spectra(struct Data *data, struct TDI *tdi, char filename[]);
 ///@}
 
 
 /**
  \brief convert DWT of TDI data to DFT
  */
-void wavelet_layer_to_fourier_transform(struct Data *data);
+void wdm_layer_to_dft_transform(struct Data *data);
 
 /**
  \brief Parse command line

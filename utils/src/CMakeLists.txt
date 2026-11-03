@@ -4,7 +4,7 @@ add_library(glass_utils STATIC
             glass_data.h glass_data.c 
             glass_math.c glass_math.h 
             glass_gmm.c glass_gmm.h 
-            glass_wavelet.c glass_wavelet.h 
+            glass_wdm.c glass_wdm.h 
             glass_galaxy.c glass_galaxy.h
             glass_model.c glass_model.h
             glass_sampler.c glass_sampler.h

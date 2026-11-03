@@ -36,7 +36,7 @@ int main(int argc, char *argv[])
     struct Data  *data  = malloc(sizeof(struct Data));
     struct Chain *chain = malloc(sizeof(struct Chain));
     
-    parse_data_args(argc,argv,data,orbit,flags,chain,"fourier");
+    parse_data_args(argc,argv,data,orbit,flags,chain,"dft");
     parse_ucb_args(argc,argv,flags);
     
     /* Load spacecraft ephemerides */

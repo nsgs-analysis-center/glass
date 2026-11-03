@@ -24,10 +24,10 @@ double analytic_snr(double A, double Sn, double Sf, double sqT)
     return A*sqT*Sf/sqrt(Sn); //not exactly what's in paper--calibrated against (h|h)
 }
 
-double waveform_match_wavelet(struct Source *a, struct Source *b, struct Noise *noise)
+double waveform_match_wdm(struct Source *a, struct Source *b, struct Noise *noise)
 {
-    double aa = pow(snr_wavelet(a,noise),2);
-    double bb = pow(snr_wavelet(b,noise),2);
+    double aa = pow(snr_wdm(a,noise),2);
+    double bb = pow(snr_wdm(b,noise),2);
 
     struct TDI *a_full = malloc(sizeof(struct TDI));
     struct TDI *b_full = malloc(sizeof(struct TDI));
@@ -60,15 +60,15 @@ double waveform_match_wavelet(struct Source *a, struct Source *b, struct Noise *
     list_union(a->list,b->list,a->Nlist,b->Nlist,list,&N);
 
     double ab = 0.0;
-    ab += wavelet_nwip(a_full->X, b_full->X, noise->invC[0][0], list, N);
-    ab += wavelet_nwip(a_full->Y, b_full->Y, noise->invC[1][1], list, N);
-    ab += wavelet_nwip(a_full->Z, b_full->Z, noise->invC[2][2], list, N);
-    ab += wavelet_nwip(a_full->X, b_full->Y, noise->invC[0][1], list, N);
-    ab += wavelet_nwip(a_full->X, b_full->Z, noise->invC[0][2], list, N);
-    ab += wavelet_nwip(a_full->Y, b_full->Z, noise->invC[1][2], list, N);
-    ab += wavelet_nwip(a_full->Y, b_full->X, noise->invC[1][0], list, N);
-    ab += wavelet_nwip(a_full->Z, b_full->X, noise->invC[2][0], list, N);
-    ab += wavelet_nwip(a_full->Z, b_full->Y, noise->invC[2][1], list, N);
+    ab += wdm_nwip(a_full->X, b_full->X, noise->invC[0][0], list, N);
+    ab += wdm_nwip(a_full->Y, b_full->Y, noise->invC[1][1], list, N);
+    ab += wdm_nwip(a_full->Z, b_full->Z, noise->invC[2][2], list, N);
+    ab += wdm_nwip(a_full->X, b_full->Y, noise->invC[0][1], list, N);
+    ab += wdm_nwip(a_full->X, b_full->Z, noise->invC[0][2], list, N);
+    ab += wdm_nwip(a_full->Y, b_full->Z, noise->invC[1][2], list, N);
+    ab += wdm_nwip(a_full->Y, b_full->X, noise->invC[1][0], list, N);
+    ab += wdm_nwip(a_full->Z, b_full->X, noise->invC[2][0], list, N);
+    ab += wdm_nwip(a_full->Z, b_full->Y, noise->invC[2][1], list, N);
 
     double match = ab/sqrt(aa*bb);
 
@@ -193,26 +193,26 @@ double waveform_match(struct Source *a, struct Source *b, struct Noise *noise)
     switch(Nchannel)
     {
         case 1:
-            ab = fourier_nwip(a_X, b_X, noise->invC[0][0], N);
-            aa = fourier_nwip(a_X, a_X, noise->invC[0][0], N);
-            bb = fourier_nwip(b_X, b_X, noise->invC[0][0], N);
+            ab = dft_nwip(a_X, b_X, noise->invC[0][0], N);
+            aa = dft_nwip(a_X, a_X, noise->invC[0][0], N);
+            bb = dft_nwip(b_X, b_X, noise->invC[0][0], N);
             break;
         case 2:
-            aa = fourier_nwip(a_A,a_A,noise->invC[0][0],N) + fourier_nwip(a_E,a_E,noise->invC[1][1],N);
-            bb = fourier_nwip(b_A,b_A,noise->invC[0][0],N) + fourier_nwip(b_E,b_E,noise->invC[1][1],N);
-            ab = fourier_nwip(a_A,b_A,noise->invC[0][0],N) + fourier_nwip(a_E,b_E,noise->invC[1][1],N);
+            aa = dft_nwip(a_A,a_A,noise->invC[0][0],N) + dft_nwip(a_E,a_E,noise->invC[1][1],N);
+            bb = dft_nwip(b_A,b_A,noise->invC[0][0],N) + dft_nwip(b_E,b_E,noise->invC[1][1],N);
+            ab = dft_nwip(a_A,b_A,noise->invC[0][0],N) + dft_nwip(a_E,b_E,noise->invC[1][1],N);
             break;
         case 3:
             ab = 0.0;
-            ab += fourier_nwip(a_X, b_X, noise->invC[0][0], N);
-            ab += fourier_nwip(a_Y, b_Y, noise->invC[1][1], N);
-            ab += fourier_nwip(a_Z, b_Z, noise->invC[2][2], N);
-            ab += fourier_nwip(a_X, b_Y, noise->invC[0][1], N);
-            ab += fourier_nwip(a_X, b_Z, noise->invC[0][2], N);
-            ab += fourier_nwip(a_Y, b_Z, noise->invC[1][2], N);
-            ab += fourier_nwip(a_Y, b_X, noise->invC[1][0], N);
-            ab += fourier_nwip(a_Z, b_X, noise->invC[2][0], N);
-            ab += fourier_nwip(a_Z, b_Y, noise->invC[2][1], N);
+            ab += dft_nwip(a_X, b_X, noise->invC[0][0], N);
+            ab += dft_nwip(a_Y, b_Y, noise->invC[1][1], N);
+            ab += dft_nwip(a_Z, b_Z, noise->invC[2][2], N);
+            ab += dft_nwip(a_X, b_Y, noise->invC[0][1], N);
+            ab += dft_nwip(a_X, b_Z, noise->invC[0][2], N);
+            ab += dft_nwip(a_Y, b_Z, noise->invC[1][2], N);
+            ab += dft_nwip(a_Y, b_X, noise->invC[1][0], N);
+            ab += dft_nwip(a_Z, b_X, noise->invC[2][0], N);
+            ab += dft_nwip(a_Z, b_Y, noise->invC[2][1], N);
         
             aa = pow(snr(a,noise),2);
             bb = pow(snr(b,noise),2);
@@ -290,9 +290,9 @@ double waveform_distance(struct Source *a, struct Source *b, struct Noise *noise
   }//loop over waveform bins
 
   
-    double aa = fourier_nwip(a_A,a_A,noise->invC[0][0],N) + fourier_nwip(a_E,a_E,noise->invC[1][1],N);
-    double bb = fourier_nwip(b_A,b_A,noise->invC[0][0],N) + fourier_nwip(b_E,b_E,noise->invC[1][1],N);
-    double ab = fourier_nwip(a_A,b_A,noise->invC[0][0],N) + fourier_nwip(a_E,b_E,noise->invC[1][1],N);
+    double aa = dft_nwip(a_A,a_A,noise->invC[0][0],N) + dft_nwip(a_E,a_E,noise->invC[1][1],N);
+    double bb = dft_nwip(b_A,b_A,noise->invC[0][0],N) + dft_nwip(b_E,b_E,noise->invC[1][1],N);
+    double ab = dft_nwip(a_A,b_A,noise->invC[0][0],N) + dft_nwip(a_E,b_E,noise->invC[1][1],N);
 
   double distance = (aa + bb - 2*ab)/4.;
 
@@ -477,22 +477,22 @@ void ucb_fisher(struct Orbit *orbit, struct Data *data, struct Source *source, s
             switch(source->tdi->Nchannel)
             {
                 case 1:
-                    source->fisher_matrix[i][j] = fourier_nwip(dhdx[i]->X, dhdx[j]->X, noise->invC[0][0], wave_p->BW);
+                    source->fisher_matrix[i][j] = dft_nwip(dhdx[i]->X, dhdx[j]->X, noise->invC[0][0], wave_p->BW);
                     break;
                 case 2:
-                    source->fisher_matrix[i][j] = fourier_nwip(dhdx[i]->A, dhdx[j]->A, noise->invC[0][0], wave_p->BW);
-                    source->fisher_matrix[i][j] += fourier_nwip(dhdx[i]->E, dhdx[j]->E, noise->invC[1][1], wave_p->BW);
+                    source->fisher_matrix[i][j] = dft_nwip(dhdx[i]->A, dhdx[j]->A, noise->invC[0][0], wave_p->BW);
+                    source->fisher_matrix[i][j] += dft_nwip(dhdx[i]->E, dhdx[j]->E, noise->invC[1][1], wave_p->BW);
                     break;
                 case 3:
-                    source->fisher_matrix[i][j] = fourier_nwip(dhdx[i]->X, dhdx[j]->X, noise->invC[0][0], wave_p->BW);
-                    source->fisher_matrix[i][j] += fourier_nwip(dhdx[i]->Y, dhdx[j]->Y, noise->invC[1][1], wave_p->BW);
-                    source->fisher_matrix[i][j] += fourier_nwip(dhdx[i]->Z, dhdx[j]->Z, noise->invC[2][2], wave_p->BW);
-                    source->fisher_matrix[i][j] += fourier_nwip(dhdx[i]->X, dhdx[j]->Y, noise->invC[0][1], wave_p->BW);
-                    source->fisher_matrix[i][j] += fourier_nwip(dhdx[i]->X, dhdx[j]->Z, noise->invC[0][2], wave_p->BW);
-                    source->fisher_matrix[i][j] += fourier_nwip(dhdx[i]->Y, dhdx[j]->Z, noise->invC[1][2], wave_p->BW);
-                    source->fisher_matrix[i][j] += fourier_nwip(dhdx[i]->Y, dhdx[j]->X, noise->invC[1][0], wave_p->BW);
-                    source->fisher_matrix[i][j] += fourier_nwip(dhdx[i]->Z, dhdx[j]->X, noise->invC[2][0], wave_p->BW);
-                    source->fisher_matrix[i][j] += fourier_nwip(dhdx[i]->Z, dhdx[j]->Y, noise->invC[2][1], wave_p->BW);
+                    source->fisher_matrix[i][j] = dft_nwip(dhdx[i]->X, dhdx[j]->X, noise->invC[0][0], wave_p->BW);
+                    source->fisher_matrix[i][j] += dft_nwip(dhdx[i]->Y, dhdx[j]->Y, noise->invC[1][1], wave_p->BW);
+                    source->fisher_matrix[i][j] += dft_nwip(dhdx[i]->Z, dhdx[j]->Z, noise->invC[2][2], wave_p->BW);
+                    source->fisher_matrix[i][j] += dft_nwip(dhdx[i]->X, dhdx[j]->Y, noise->invC[0][1], wave_p->BW);
+                    source->fisher_matrix[i][j] += dft_nwip(dhdx[i]->X, dhdx[j]->Z, noise->invC[0][2], wave_p->BW);
+                    source->fisher_matrix[i][j] += dft_nwip(dhdx[i]->Y, dhdx[j]->Z, noise->invC[1][2], wave_p->BW);
+                    source->fisher_matrix[i][j] += dft_nwip(dhdx[i]->Y, dhdx[j]->X, noise->invC[1][0], wave_p->BW);
+                    source->fisher_matrix[i][j] += dft_nwip(dhdx[i]->Z, dhdx[j]->X, noise->invC[2][0], wave_p->BW);
+                    source->fisher_matrix[i][j] += dft_nwip(dhdx[i]->Z, dhdx[j]->Y, noise->invC[2][1], wave_p->BW);
                     break;
             }
             if(source->fisher_matrix[i][j]!=source->fisher_matrix[i][j])
@@ -521,7 +521,7 @@ void ucb_fisher(struct Orbit *orbit, struct Data *data, struct Source *source, s
     free(dhdx);
 }
 
-void ucb_fisher_wavelet(struct Orbit *orbit, struct Data *data, struct Source *source, struct Noise *noise)
+void ucb_fisher_wdm(struct Orbit *orbit, struct Data *data, struct Source *source, struct Noise *noise)
 {
     //TODO:  ucb_fisher should compute joint Fisher
     int i,j,n;
@@ -590,14 +590,14 @@ void ucb_fisher_wavelet(struct Orbit *orbit, struct Data *data, struct Source *s
 
         
         // compute perturbed waveforms
-        ucb_waveform_wavelet(orbit,data->wdm,data->T, data->t0, wave_p->params, wave_p->list, &wave_p->Nlist, wave_p->tdi->X, wave_p->tdi->Y, wave_p->tdi->Z);
-        ucb_waveform_wavelet(orbit,data->wdm,data->T, data->t0, wave_m->params, wave_m->list, &wave_m->Nlist, wave_m->tdi->X, wave_m->tdi->Y, wave_m->tdi->Z);
+        ucb_waveform_wdm(orbit,data->wdm,data->T, data->t0, wave_p->params, wave_p->list, &wave_p->Nlist, wave_p->tdi->X, wave_p->tdi->Y, wave_p->tdi->Z);
+        ucb_waveform_wdm(orbit,data->wdm,data->T, data->t0, wave_m->params, wave_m->list, &wave_m->Nlist, wave_m->tdi->X, wave_m->tdi->Y, wave_m->tdi->Z);
 
         // central differencing derivatives of waveforms w.r.t. parameters
         for(n=0; n<wave_p->Nlist; n++)
         {
             int k = wave_p->list[n];
-            wavelet_index_to_pixel(data->wdm, &i_wdm, &j_wdm, k+data->wdm->kmin);
+            wdm_index_to_pixel(data->wdm, &i_wdm, &j_wdm, k+data->wdm->kmin);
             if(i_wdm>data->wdm->imin && i_wdm<data->wdm->imax && k>=0 && k<data->N)
             {
                 dhdx[i]->X[k] = (wave_p->tdi->X[k] - wave_m->tdi->X[k])*invstep;
@@ -612,15 +612,15 @@ void ucb_fisher_wavelet(struct Orbit *orbit, struct Data *data, struct Source *s
     {
         for(j=i; j<UCB_MODEL_NP; j++)
         {
-            source->fisher_matrix[i][j]  = wavelet_nwip(dhdx[i]->X, dhdx[j]->X, noise->invC[0][0], list, data->N);
-            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->Y, dhdx[j]->Y, noise->invC[1][1], list, data->N);
-            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->Z, dhdx[j]->Z, noise->invC[2][2], list, data->N);
-            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->X, dhdx[j]->Y, noise->invC[0][1], list, data->N);
-            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->X, dhdx[j]->Z, noise->invC[0][2], list, data->N);
-            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->Y, dhdx[j]->Z, noise->invC[1][2], list, data->N);
-            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->Y, dhdx[j]->X, noise->invC[1][0], list, data->N);
-            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->Z, dhdx[j]->X, noise->invC[2][0], list, data->N);
-            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->Z, dhdx[j]->Y, noise->invC[2][1], list, data->N);
+            source->fisher_matrix[i][j]  = wdm_nwip(dhdx[i]->X, dhdx[j]->X, noise->invC[0][0], list, data->N);
+            source->fisher_matrix[i][j] += wdm_nwip(dhdx[i]->Y, dhdx[j]->Y, noise->invC[1][1], list, data->N);
+            source->fisher_matrix[i][j] += wdm_nwip(dhdx[i]->Z, dhdx[j]->Z, noise->invC[2][2], list, data->N);
+            source->fisher_matrix[i][j] += wdm_nwip(dhdx[i]->X, dhdx[j]->Y, noise->invC[0][1], list, data->N);
+            source->fisher_matrix[i][j] += wdm_nwip(dhdx[i]->X, dhdx[j]->Z, noise->invC[0][2], list, data->N);
+            source->fisher_matrix[i][j] += wdm_nwip(dhdx[i]->Y, dhdx[j]->Z, noise->invC[1][2], list, data->N);
+            source->fisher_matrix[i][j] += wdm_nwip(dhdx[i]->Y, dhdx[j]->X, noise->invC[1][0], list, data->N);
+            source->fisher_matrix[i][j] += wdm_nwip(dhdx[i]->Z, dhdx[j]->X, noise->invC[2][0], list, data->N);
+            source->fisher_matrix[i][j] += wdm_nwip(dhdx[i]->Z, dhdx[j]->Y, noise->invC[2][1], list, data->N);
 
             if(source->fisher_matrix[i][j]!=source->fisher_matrix[i][j])
             {
@@ -649,15 +649,15 @@ void ucb_fisher_wavelet(struct Orbit *orbit, struct Data *data, struct Source *s
             for(int k=0; k<UCB_MODEL_NP; k++)
             {
                 fprintf(stderr,"WARNING: source->params[%i]=%g fisher->matrix[%i][%i]=%lg\n",k,source->params[k],k,k,source->fisher_matrix[k][k]);
-                fprintf(stderr,"WARNING:    XX = %lg\n",wavelet_nwip(dhdx[k]->X, dhdx[k]->X, noise->invC[0][0], list, data->N));
-                fprintf(stderr,"WARNING:    YY = %lg\n",wavelet_nwip(dhdx[k]->Y, dhdx[k]->Y, noise->invC[1][1], list, data->N));
-                fprintf(stderr,"WARNING:    ZZ = %lg\n",wavelet_nwip(dhdx[k]->Z, dhdx[k]->Z, noise->invC[2][2], list, data->N));
-                fprintf(stderr,"WARNING:    XY = %lg\n",wavelet_nwip(dhdx[k]->X, dhdx[k]->Y, noise->invC[0][1], list, data->N));
-                fprintf(stderr,"WARNING:    XZ = %lg\n",wavelet_nwip(dhdx[k]->X, dhdx[k]->Z, noise->invC[0][2], list, data->N));
-                fprintf(stderr,"WARNING:    YZ = %lg\n",wavelet_nwip(dhdx[k]->Y, dhdx[k]->Z, noise->invC[1][2], list, data->N));
-                fprintf(stderr,"WARNING:    YX = %lg\n",wavelet_nwip(dhdx[k]->Y, dhdx[k]->X, noise->invC[1][0], list, data->N));
-                fprintf(stderr,"WARNING:    ZX = %lg\n",wavelet_nwip(dhdx[k]->Z, dhdx[k]->X, noise->invC[2][0], list, data->N));
-                fprintf(stderr,"WARNING:    ZY = %lg\n",wavelet_nwip(dhdx[k]->Z, dhdx[k]->Y, noise->invC[2][1], list, data->N));
+                fprintf(stderr,"WARNING:    XX = %lg\n",wdm_nwip(dhdx[k]->X, dhdx[k]->X, noise->invC[0][0], list, data->N));
+                fprintf(stderr,"WARNING:    YY = %lg\n",wdm_nwip(dhdx[k]->Y, dhdx[k]->Y, noise->invC[1][1], list, data->N));
+                fprintf(stderr,"WARNING:    ZZ = %lg\n",wdm_nwip(dhdx[k]->Z, dhdx[k]->Z, noise->invC[2][2], list, data->N));
+                fprintf(stderr,"WARNING:    XY = %lg\n",wdm_nwip(dhdx[k]->X, dhdx[k]->Y, noise->invC[0][1], list, data->N));
+                fprintf(stderr,"WARNING:    XZ = %lg\n",wdm_nwip(dhdx[k]->X, dhdx[k]->Z, noise->invC[0][2], list, data->N));
+                fprintf(stderr,"WARNING:    YZ = %lg\n",wdm_nwip(dhdx[k]->Y, dhdx[k]->Z, noise->invC[1][2], list, data->N));
+                fprintf(stderr,"WARNING:    YX = %lg\n",wdm_nwip(dhdx[k]->Y, dhdx[k]->X, noise->invC[1][0], list, data->N));
+                fprintf(stderr,"WARNING:    ZX = %lg\n",wdm_nwip(dhdx[k]->Z, dhdx[k]->X, noise->invC[2][0], list, data->N));
+                fprintf(stderr,"WARNING:    ZY = %lg\n",wdm_nwip(dhdx[k]->Z, dhdx[k]->Y, noise->invC[2][1], list, data->N));
 
             }
             fprintf(stderr, "WARNING: try regularization FIM and re-inverting\n");
@@ -769,10 +769,10 @@ void ucb_waveform(struct Orbit *orbit, char *format, double T, double t0, double
     double TR[4][4], TI[4][4];
     //Miscellaneous constants used to speed up calculations
     double df;
-    /*   Fourier coefficients before FFT and after convolution  */
+    /*   DFT coefficients before FFT and after convolution  */
     //Time series of slowly evolving terms at each vertex
     double *data12, *data13, *data21, *data23, *data31, *data32;
-    //Fourier coefficients of slowly evolving terms (numerical)
+    //DFT coefficients of slowly evolving terms (numerical)
     double a12[BW2+3], a13[BW2+3], a21[BW2+3], a23[BW2+3], a31[BW2+3], a32[BW2+3];
     //Package cij's into proper form for TDI subroutines
     double ***d;
@@ -941,7 +941,7 @@ void ucb_waveform(struct Orbit *orbit, char *format, double T, double t0, double
         data13[j] = TI[1][3];   data23[j] = TI[2][3];   data32[j] = TI[3][2];
     }
     
-    /*   Numerical Fourier transform of slowly evolving signal */
+    /*   Numerical DFT transform of slowly evolving signal */
     glass_forward_complex_fft(data12+1, BW);
     glass_forward_complex_fft(data21+1, BW);
     glass_forward_complex_fft(data31+1, BW);
@@ -1005,7 +1005,7 @@ void ucb_waveform(struct Orbit *orbit, char *format, double T, double t0, double
     return;
 }
 
-static void ucb_wavelet_layers(double Tobs, double *params, struct Wavelets *wdm, int *jstart, int *jwidth)
+static void ucb_wdm_layers(double Tobs, double *params, struct WDM *wdm, int *jstart, int *jwidth)
 {
     double fmin, fmax;
     double dfmin, dfmax;
@@ -1063,11 +1063,11 @@ static void build_interpolated_waveform(struct CubicSpline *amp_spline, struct C
 
 
 /*
- Per-thread reusable scratch workspace for ucb_waveform_wavelet.
+ Per-thread reusable scratch workspace for ucb_waveform_wdm.
 
- ucb_waveform_wavelet is called on the order of 10^6+ times inside the
+ ucb_waveform_wdm is called on the order of 10^6+ times inside the
  OpenMP-parallel chain loop (per-step waveform proposals and, via
- ucb_fisher_wavelet). Previously every call malloc/free'd ~15 buffers
+ ucb_fisher_wdm). Previously every call malloc/free'd ~15 buffers
  (double_vectors, TDI structs, cubic splines), which serializes threads
  on the allocator lock and hurts OpenMP scaling.
 
@@ -1077,9 +1077,9 @@ static void build_interpolated_waveform(struct CubicSpline *amp_spline, struct C
  per-source Nlayers in {1,2,3}, so they are sized for the maximum possible
  N_ds = NT*(NLAYERS_MAX+1) and only the first N_ds entries are used.
 */
-#define UCB_WAVELET_NLAYERS_MAX 3
+#define UCB_WDM_NLAYERS_MAX 3
 
-struct UCBWaveletWorkspace
+struct UCBWDMWorkspace
 {
     int allocated;   //!< 0 until first use on this thread
     int Nspline;     //!< size of orbit-cadence buffers
@@ -1115,13 +1115,13 @@ struct UCBWaveletWorkspace
     double *window; //!< length NT/2+1
 };
 
-static struct UCBWaveletWorkspace ucb_wavelet_ws = {0};
-#pragma omp threadprivate(ucb_wavelet_ws)
+static struct UCBWDMWorkspace ucb_wdm_ws = {0};
+#pragma omp threadprivate(ucb_wdm_ws)
 
-static void ucb_wavelet_workspace_init(struct UCBWaveletWorkspace *ws, struct Orbit *orbit, struct Wavelets *wdm)
+static void ucb_wdm_workspace_init(struct UCBWDMWorkspace *ws, struct Orbit *orbit, struct WDM *wdm)
 {
     int Nspline  = orbit->Norb;
-    int N_ds_max = wdm->NT*(UCB_WAVELET_NLAYERS_MAX+1);
+    int N_ds_max = wdm->NT*(UCB_WDM_NLAYERS_MAX+1);
 
     ws->Nspline  = Nspline;
     ws->N_ds_max = N_ds_max;
@@ -1160,7 +1160,7 @@ static void ucb_wavelet_workspace_init(struct UCBWaveletWorkspace *ws, struct Or
     ws->allocated = 1;
 }
 
-static void ucb_wavelet_workspace_free(struct UCBWaveletWorkspace *ws)
+static void ucb_wdm_workspace_free(struct UCBWDMWorkspace *ws)
 {
     if(!ws->allocated) return;
 
@@ -1194,20 +1194,20 @@ static void ucb_wavelet_workspace_free(struct UCBWaveletWorkspace *ws)
     ws->allocated = 0;
 }
 
-/* Heterodyne wavelet transform */
-void ucb_waveform_wavelet(struct Orbit *orbit, struct Wavelets *wdm, double Tobs, double t0, double *params, int *wavelet_list, int *Nwavelet, double *X, double *Y, double *Z)
+/* Heterodyne wdm transform */
+void ucb_waveform_wdm(struct Orbit *orbit, struct WDM *wdm, double Tobs, double t0, double *params, int *wdm_list, int *Nwdm, double *X, double *Y, double *Z)
 {
     int Nspline = orbit->Norb;
     double dt = Tobs/(double)(Nspline-1);
 
     // Allocate the per-thread scratch workspace on first use. If a later
-    // call needs larger buffers (e.g. a different orbit/wavelet grid is used on
+    // call needs larger buffers (e.g. a different orbit/wdm grid is used on
     // the same thread), reallocate to fit.
-    struct UCBWaveletWorkspace *ws = &ucb_wavelet_ws;
-    int N_ds_max = wdm->NT*(UCB_WAVELET_NLAYERS_MAX+1);
+    struct UCBWDMWorkspace *ws = &ucb_wdm_ws;
+    int N_ds_max = wdm->NT*(UCB_WDM_NLAYERS_MAX+1);
     if(ws->allocated && (ws->Nspline != Nspline || ws->N_ds_max != N_ds_max))
-        ucb_wavelet_workspace_free(ws);
-    if(!ws->allocated) ucb_wavelet_workspace_init(ws, orbit, wdm);
+        ucb_wdm_workspace_free(ws);
+    if(!ws->allocated) ucb_wdm_workspace_init(ws, orbit, wdm);
 
     // get amplitude and phase at Barycenter on the orbit interpolation grid (with margin)...
     double *time_ssb  = ws->time_ssb;
@@ -1223,7 +1223,7 @@ void ucb_waveform_wavelet(struct Orbit *orbit, struct Wavelets *wdm, double Tobs
     // get frequency layers containing signal
     int min_layer; //bottom layer
     int Nlayers;   //number of layers
-    ucb_wavelet_layers(Tobs, params, wdm, &min_layer, &Nlayers);
+    ucb_wdm_layers(Tobs, params, wdm, &min_layer, &Nlayers);
     
     /*
     Get spline interpolant for SSB phase and amplitude
@@ -1288,7 +1288,7 @@ void ucb_waveform_wavelet(struct Orbit *orbit, struct Wavelets *wdm, double Tobs
     LISA_spline_response(orbit, time_ssb, Nspline, costh, phi, cosi, psi, amp_ssb_spline, NULL, phase_ssb_spline, phase_sc, tdi_amp, tdi_phase);
 
     /*
-    Interpolate amplitude and phase for instrument response of each TDI channel onto wavelet grid
+    Interpolate amplitude and phase for instrument response of each TDI channel onto wdm grid
     */
     struct TDI *wave = ws->wave;
 
@@ -1306,20 +1306,20 @@ void ucb_waveform_wavelet(struct Orbit *orbit, struct Wavelets *wdm, double Tobs
     initialize_cubic_spline(phase_interpolant_Y, time_ssb, tdi_phase->Y,SPLINE_BINARY_SEARCH);
     initialize_cubic_spline(phase_interpolant_Z, time_ssb, tdi_phase->Z,SPLINE_BINARY_SEARCH);
 
-    // get frequency wavelet window function for downsampled data
+    // get frequency wdm window function for downsampled data
     // Nlayers passed instead of NF to get norm right of heterodyned UCB wavefomr
     // A = DeltaOmega/4 with DeltaOmega = pi/(Nlayers+1) (matches lisa-analysis-tools dev)
     double *window = ws->window;
     build_wdm_filter_freq(window, Nlayers+1, wdm->NT, (M_PI/(Nlayers+1))/4.0, true);
         
-    // wavelet transform on heterodyned data using downsampled windows.
+    // wdm transform on heterodyned data using downsampled windows.
     build_interpolated_waveform(amp_interpolant_X, phase_interpolant_X, time_ds, phase_ds, phase_het, N_ds, wave->X);
     build_interpolated_waveform(amp_interpolant_Y, phase_interpolant_Y, time_ds, phase_ds, phase_het, N_ds, wave->Y);
     build_interpolated_waveform(amp_interpolant_Z, phase_interpolant_Z, time_ds, phase_ds, phase_het, N_ds, wave->Z);
 
-    wavelet_transform_timefreq_by_layers(wdm, min_layer, Nlayers, window, wave->X);
-    wavelet_transform_timefreq_by_layers(wdm, min_layer, Nlayers, window, wave->Y);
-    wavelet_transform_timefreq_by_layers(wdm, min_layer, Nlayers, window, wave->Z);
+    wdm_transform_timefreq_by_layers(wdm, min_layer, Nlayers, window, wave->X);
+    wdm_transform_timefreq_by_layers(wdm, min_layer, Nlayers, window, wave->Y);
+    wdm_transform_timefreq_by_layers(wdm, min_layer, Nlayers, window, wave->Z);
     
     /*
      Properly re-index to undo the heterodyning
@@ -1331,35 +1331,35 @@ void ucb_waveform_wavelet(struct Orbit *orbit, struct Wavelets *wdm, double Tobs
     {
         for(int j=min_layer; j<min_layer+Nlayers; j++)
         {
-            wavelet_pixel_to_index(wdm,i,j,&k);
+            wdm_pixel_to_index(wdm,i,j,&k);
             
             //check that the pixel is in range
             if(k>=wdm->kmin && k<wdm->kmax)
             {
-                wavelet_list[N]=k-wdm->kmin;
+                wdm_list[N]=k-wdm->kmin;
                 N++;
             }
         }
     }
-    *Nwavelet = N;
+    *Nwdm = N;
         
-    //insert non-zero wavelet pixels into correct indicies
-    for(int n=0; n<*Nwavelet; n++)
+    //insert non-zero wdm pixels into correct indicies
+    for(int n=0; n<*Nwdm; n++)
     {
-        X[wavelet_list[n]] = wave->X[n];
-        Y[wavelet_list[n]] = wave->Y[n];
-        Z[wavelet_list[n]] = wave->Z[n];
+        X[wdm_list[n]] = wave->X[n];
+        Y[wdm_list[n]] = wave->Y[n];
+        Z[wdm_list[n]] = wave->Z[n];
     }
 
     // NOTE: scratch buffers (time_ssb, splines, tdi_*, wave, window, ...) are
-    // part of the per-thread reusable workspace (ucb_wavelet_ws) and are
+    // part of the per-thread reusable workspace (ucb_wdm_ws) and are
     // intentionally NOT freed here. They persist for the lifetime of the thread
     // and are reused by subsequent calls to avoid malloc/free churn inside the
     // OpenMP-parallel MCMC loop.
 }
 
-/* Full sampled UCB wavelet transform */
-void ucb_waveform_wavelet_slow(struct Orbit *orbit, struct Wavelets *wdm, double Tobs, double t0, double *params, int *wavelet_list, int *Nwavelet, double *X, double *Y, double *Z)
+/* Full sampled UCB wdm transform */
+void ucb_waveform_wdm_slow(struct Orbit *orbit, struct WDM *wdm, double Tobs, double t0, double *params, int *wdm_list, int *Nwdm, double *X, double *Y, double *Z)
 {
     int Nspline = orbit->Norb;
     double dt = Tobs/(double)(Nspline-1);
@@ -1378,7 +1378,7 @@ void ucb_waveform_wavelet_slow(struct Orbit *orbit, struct Wavelets *wdm, double
     // get frequency layers containing signal
     int min_layer; //bottom layer
     int Nlayers;   //number of layers
-    ucb_wavelet_layers(Tobs, params, wdm, &min_layer, &Nlayers);
+    ucb_wdm_layers(Tobs, params, wdm, &min_layer, &Nlayers);
     
     /*
     Get spline interpolant for SSB phase and amplitude
@@ -1448,7 +1448,7 @@ void ucb_waveform_wavelet_slow(struct Orbit *orbit, struct Wavelets *wdm, double
     LISA_spline_response(orbit, time_ssb, Nspline, costh, phi, cosi, psi, amp_ssb_spline, NULL, phase_ssb_spline, phase_sc, tdi_amp, tdi_phase);
 
     /*
-    Interpolate amplitude and phase for instrument response of each TDI channel onto wavelet grid
+    Interpolate amplitude and phase for instrument response of each TDI channel onto wdm grid
     */
     struct TDI *wave = malloc(sizeof(struct TDI));
     alloc_tdi(wave,N_ds,3);
@@ -1468,7 +1468,7 @@ void ucb_waveform_wavelet_slow(struct Orbit *orbit, struct Wavelets *wdm, double
     initialize_cubic_spline(phase_interpolant_Z, time_ssb, tdi_phase->Z,SPLINE_BINARY_SEARCH);
 
         
-    // wavelet transform on heterodyned data using downsampled windows.
+    // wdm transform on heterodyned data using downsampled windows.
     build_interpolated_waveform(amp_interpolant_X, phase_interpolant_X, time_ds, phase_ds, phase_het, N_ds, wave->X);
     build_interpolated_waveform(amp_interpolant_Y, phase_interpolant_Y, time_ds, phase_ds, phase_het, N_ds, wave->Y);
     build_interpolated_waveform(amp_interpolant_Z, phase_interpolant_Z, time_ds, phase_ds, phase_het, N_ds, wave->Z);
@@ -1477,9 +1477,9 @@ void ucb_waveform_wavelet_slow(struct Orbit *orbit, struct Wavelets *wdm, double
     for(int n=0; n<N_ds; n++) fprintf(temp, "%.12g %.16g\n",n*dt_ds,wave->X[n]);
     fclose(temp);
 
-    wavelet_transform_timefreq(wdm, wave->X);
-    wavelet_transform_timefreq(wdm, wave->Y);
-    wavelet_transform_timefreq(wdm, wave->Z);
+    wdm_transform_timefreq(wdm, wave->X);
+    wdm_transform_timefreq(wdm, wave->Y);
+    wdm_transform_timefreq(wdm, wave->Z);
 
     temp = fopen("Xscale.dat","w");
     int k;
@@ -1487,8 +1487,8 @@ void ucb_waveform_wavelet_slow(struct Orbit *orbit, struct Wavelets *wdm, double
     {
         for(int i=0; i<wdm->NT; i++)
         {
-            wavelet_pixel_to_index(wdm,i,j,&k);
-            fprintf(temp,"%lg %lg %.16e\n", i*wdm->dt, j*wdm->df + WAVELET_BANDWIDTH/2,wave->X[k]*wave->X[k]);
+            wdm_pixel_to_index(wdm,i,j,&k);
+            fprintf(temp,"%lg %lg %.16e\n", i*wdm->dt, j*wdm->df + WDM_BANDWIDTH/2,wave->X[k]*wave->X[k]);
         }
         fprintf(temp,"\n");
     }
@@ -1502,17 +1502,17 @@ void ucb_waveform_wavelet_slow(struct Orbit *orbit, struct Wavelets *wdm, double
     {
         for(int j=0; j<wdm->NF; j++)
         {
-            wavelet_pixel_to_index(wdm,i,j,&k);
+            wdm_pixel_to_index(wdm,i,j,&k);
             waveData[0][k] = wave->X[k];
             waveData[1][k] = wave->Y[k];
             waveData[2][k] = wave->Z[k];
         }
     }
 
-    //wavelet to frequency
-    wavelet_transform_inverse_freq(wdm, waveData[0], freqData[0]);
-    wavelet_transform_inverse_freq(wdm, waveData[1], freqData[1]);
-    wavelet_transform_inverse_freq(wdm, waveData[2], freqData[2]);
+    //wdm to frequency
+    wdm_transform_inverse_freq(wdm, waveData[0], freqData[0]);
+    wdm_transform_inverse_freq(wdm, waveData[1], freqData[1]);
+    wdm_transform_inverse_freq(wdm, waveData[2], freqData[2]);
 
     temp=fopen("Xfreq.dat","w");
     for(int n=0; n<N_ds/2; n++)
@@ -1535,10 +1535,10 @@ void ucb_waveform_wavelet_slow(struct Orbit *orbit, struct Wavelets *wdm, double
     {
         for(int j=min_layer; j<min_layer+Nlayers; j++)
         {
-            wavelet_pixel_to_index(wdm,i,j,&k);
+            wdm_pixel_to_index(wdm,i,j,&k);
             
             //check that the pixel is in range
-            wavelet_list[N]=k-wdm->kmin;
+            wdm_list[N]=k-wdm->kmin;
             X[k-wdm->kmin] = wave->X[k];
             Y[k-wdm->kmin] = wave->Y[k];
             Z[k-wdm->kmin] = wave->Z[k];
@@ -1546,14 +1546,14 @@ void ucb_waveform_wavelet_slow(struct Orbit *orbit, struct Wavelets *wdm, double
             N++;
         }
     }
-    *Nwavelet = N;
+    *Nwdm = N;
         
-//    //insert non-zero wavelet pixels into correct indicies
-//    for(int n=0; n<*Nwavelet; n++)
+//    //insert non-zero wdm pixels into correct indicies
+//    for(int n=0; n<*Nwdm; n++)
 //    {
-//        X[wavelet_list[n]] = wave->X[n];
-//        Y[wavelet_list[n]] = wave->Y[n];
-//        Z[wavelet_list[n]] = wave->Z[n];
+//        X[wdm_list[n]] = wave->X[n];
+//        Y[wdm_list[n]] = wave->Y[n];
+//        Z[wdm_list[n]] = wave->Z[n];
 //    }
 //    
     
@@ -1562,9 +1562,9 @@ void ucb_waveform_wavelet_slow(struct Orbit *orbit, struct Wavelets *wdm, double
     {
         for(int i=0; i<wdm->NT; i++)
         {
-            wavelet_pixel_to_index(wdm,i,j,&k);
+            wdm_pixel_to_index(wdm,i,j,&k);
             k-=wdm->kmin;
-            fprintf(temp,"%lg %lg %.16e\n", i*wdm->dt, j*wdm->df + WAVELET_BANDWIDTH/2,X[k]*X[k]);
+            fprintf(temp,"%lg %lg %.16e\n", i*wdm->dt, j*wdm->df + WDM_BANDWIDTH/2,X[k]*X[k]);
         }
         fprintf(temp,"\n");
     }
@@ -1595,8 +1595,8 @@ void ucb_waveform_wavelet_slow(struct Orbit *orbit, struct Wavelets *wdm, double
     free_cubic_spline(phase_interpolant_Z);
 }
 
-/* Lookup table wavelet transform */
-void ucb_waveform_wavelet_tab(struct Orbit *orbit, struct Wavelets *wdm, double Tobs, double t0, double *params, int *wavelet_list, int *Nwavelet, double *X, double *Y, double *Z)
+/* Lookup table wdm transform */
+void ucb_waveform_wdm_tab(struct Orbit *orbit, struct WDM *wdm, double Tobs, double t0, double *params, int *wdm_list, int *Nwdm, double *X, double *Y, double *Z)
 {
     /*
     Get waveform at solar system barycenter (SSB)
@@ -1637,17 +1637,17 @@ void ucb_waveform_wavelet_tab(struct Orbit *orbit, struct Wavelets *wdm, double 
     /*
     Interpolate SSB phase, frequency, and frequency derivative on wdm time grid
     */
-    double *time_wavelet_grid  = malloc(sizeof(double)*wdm->NT);
-    double *phase_wavelet_grid = malloc(sizeof(double)*wdm->NT);
-    double *freq_wavelet_grid  = malloc(sizeof(double)*wdm->NT);
-    double *fdot_wavelet_grid  = malloc(sizeof(double)*wdm->NT);
+    double *time_wdm_grid  = malloc(sizeof(double)*wdm->NT);
+    double *phase_wdm_grid = malloc(sizeof(double)*wdm->NT);
+    double *freq_wdm_grid  = malloc(sizeof(double)*wdm->NT);
+    double *fdot_wdm_grid  = malloc(sizeof(double)*wdm->NT);
     
     for(int i=0; i<wdm->NT; i++)
     {
-        time_wavelet_grid[i]  = ((double)(i))*wdm->dt;  // time center of the wavelet pixels
-        phase_wavelet_grid[i] = spline_interpolation(phase_ssb_spline, time_wavelet_grid[i]);
-        freq_wavelet_grid[i]  = spline_interpolation_deriv(phase_ssb_spline, time_wavelet_grid[i])/PI2;
-        fdot_wavelet_grid[i]  = spline_interpolation_deriv2(phase_ssb_spline, time_wavelet_grid[i])/PI2;
+        time_wdm_grid[i]  = ((double)(i))*wdm->dt;  // time center of the wdm pixels
+        phase_wdm_grid[i] = spline_interpolation(phase_ssb_spline, time_wdm_grid[i]);
+        freq_wdm_grid[i]  = spline_interpolation_deriv(phase_ssb_spline, time_wdm_grid[i])/PI2;
+        fdot_wdm_grid[i]  = spline_interpolation_deriv2(phase_ssb_spline, time_wdm_grid[i])/PI2;
     }
 
     /*
@@ -1666,7 +1666,7 @@ void ucb_waveform_wavelet_tab(struct Orbit *orbit, struct Wavelets *wdm, double 
     LISA_spline_response(orbit, t, Nspline, costh, phi, cosi, psi, amp_ssb_spline, NULL, phase_ssb_spline, phase_ssb, tdi_amp, tdi_phase);
 
     /*
-    Interpolate amplitude and phase for instrument response of each TDI channel onto wavelet grid
+    Interpolate amplitude and phase for instrument response of each TDI channel onto wdm grid
     */
     struct TDI *phase = malloc(sizeof(struct TDI));
     struct TDI *freq  = malloc(sizeof(struct TDI));
@@ -1686,10 +1686,10 @@ void ucb_waveform_wavelet_tab(struct Orbit *orbit, struct Wavelets *wdm, double 
 
     for(int i=0; i< wdm->NT; i++)
     {
-        amp->X[i]   = spline_interpolation(amp_interpolant, time_wavelet_grid[i]);
-        phase->X[i] = spline_interpolation(phase_interpolant, time_wavelet_grid[i]) + phase_wavelet_grid[i];
-        freq->X[i]  = spline_interpolation_deriv(phase_interpolant, time_wavelet_grid[i])/PI2 + freq_wavelet_grid[i];
-        fdot->X[i]  = spline_interpolation_deriv2(phase_interpolant, time_wavelet_grid[i])/PI2 + fdot_wavelet_grid[i];
+        amp->X[i]   = spline_interpolation(amp_interpolant, time_wdm_grid[i]);
+        phase->X[i] = spline_interpolation(phase_interpolant, time_wdm_grid[i]) + phase_wdm_grid[i];
+        freq->X[i]  = spline_interpolation_deriv(phase_interpolant, time_wdm_grid[i])/PI2 + freq_wdm_grid[i];
+        fdot->X[i]  = spline_interpolation_deriv2(phase_interpolant, time_wdm_grid[i])/PI2 + fdot_wdm_grid[i];
     }
     
     initialize_cubic_spline(amp_interpolant,t,tdi_amp->Y,SPLINE_EVEN_SAMPLED);
@@ -1697,10 +1697,10 @@ void ucb_waveform_wavelet_tab(struct Orbit *orbit, struct Wavelets *wdm, double 
 
     for(int i=0; i< wdm->NT; i++)
     {
-        amp->Y[i]   = spline_interpolation(amp_interpolant, time_wavelet_grid[i]);
-        phase->Y[i] = spline_interpolation(phase_interpolant, time_wavelet_grid[i])+phase_wavelet_grid[i];
-        freq->Y[i]  = spline_interpolation_deriv(phase_interpolant, time_wavelet_grid[i])/PI2 + freq_wavelet_grid[i];
-        fdot->Y[i]  = spline_interpolation_deriv2(phase_interpolant, time_wavelet_grid[i])/PI2 + fdot_wavelet_grid[i];
+        amp->Y[i]   = spline_interpolation(amp_interpolant, time_wdm_grid[i]);
+        phase->Y[i] = spline_interpolation(phase_interpolant, time_wdm_grid[i])+phase_wdm_grid[i];
+        freq->Y[i]  = spline_interpolation_deriv(phase_interpolant, time_wdm_grid[i])/PI2 + freq_wdm_grid[i];
+        fdot->Y[i]  = spline_interpolation_deriv2(phase_interpolant, time_wdm_grid[i])/PI2 + fdot_wdm_grid[i];
     }
     
     initialize_cubic_spline(amp_interpolant,t,tdi_amp->Z,SPLINE_EVEN_SAMPLED);
@@ -1708,14 +1708,14 @@ void ucb_waveform_wavelet_tab(struct Orbit *orbit, struct Wavelets *wdm, double 
 
     for(int i=0; i< wdm->NT; i++)
     {
-        amp->Z[i]   = spline_interpolation(amp_interpolant, time_wavelet_grid[i]);
-        phase->Z[i] = spline_interpolation(phase_interpolant, time_wavelet_grid[i])+phase_wavelet_grid[i];
-        freq->Z[i]  = spline_interpolation_deriv(phase_interpolant, time_wavelet_grid[i])/PI2 + freq_wavelet_grid[i];
-        fdot->Z[i]  = spline_interpolation_deriv2(phase_interpolant, time_wavelet_grid[i])/PI2 + fdot_wavelet_grid[i];
+        amp->Z[i]   = spline_interpolation(amp_interpolant, time_wdm_grid[i]);
+        phase->Z[i] = spline_interpolation(phase_interpolant, time_wdm_grid[i])+phase_wdm_grid[i];
+        freq->Z[i]  = spline_interpolation_deriv(phase_interpolant, time_wdm_grid[i])/PI2 + freq_wdm_grid[i];
+        fdot->Z[i]  = spline_interpolation_deriv2(phase_interpolant, time_wdm_grid[i])/PI2 + fdot_wdm_grid[i];
     }
 
     /*
-    Wavelet transform of interpolated TDI channels
+    WDM transform of interpolated TDI channels
     */
     
     //minimum and maximum frequency layers for each TDI response
@@ -1724,28 +1724,28 @@ void ucb_waveform_wavelet_tab(struct Orbit *orbit, struct Wavelets *wdm, double 
 
     int *reverse_list = malloc(sizeof(int)*(wdm->NF*wdm->NT));
 
-    //get list of non-zero wavelet amplitudes for this signal
-    active_wavelet_list(wdm, freq->X, freq->Y, freq->Z, fdot->X, fdot->Y, fdot->Z, wavelet_list, reverse_list, Nwavelet, min_layer, max_layer);
+    //get list of non-zero wdm amplitudes for this signal
+    active_wdm_list(wdm, freq->X, freq->Y, freq->Z, fdot->X, fdot->Y, fdot->Z, wdm_list, reverse_list, Nwdm, min_layer, max_layer);
 
-    //finally compute wavelet coefficients for signal's TDI response
-    double *Xtemp = double_vector(*Nwavelet);
-    double *Ytemp = double_vector(*Nwavelet);
-    double *Ztemp = double_vector(*Nwavelet);
+    //finally compute wdm coefficients for signal's TDI response
+    double *Xtemp = double_vector(*Nwdm);
+    double *Ytemp = double_vector(*Nwdm);
+    double *Ztemp = double_vector(*Nwdm);
 
-    fprintf(stderr, "Table wavelet transform not currently implemented!");
+    fprintf(stderr, "Table wdm transform not currently implemented!");
     exit(2);
     /*
-    wavelet_transform_from_table(wdm, phase->X, freq->X, fdot->X, amp->X, min_layer, max_layer, Xtemp, wavelet_list, reverse_list, *Nwavelet);
-    wavelet_transform_from_table(wdm, phase->Y, freq->Y, fdot->Y, amp->Y, min_layer, max_layer, Ytemp, wavelet_list, reverse_list, *Nwavelet);
-    wavelet_transform_from_table(wdm, phase->Z, freq->Z, fdot->Z, amp->Z, min_layer, max_layer, Ztemp, wavelet_list, reverse_list, *Nwavelet);
+    wdm_transform_from_table(wdm, phase->X, freq->X, fdot->X, amp->X, min_layer, max_layer, Xtemp, wdm_list, reverse_list, *Nwdm);
+    wdm_transform_from_table(wdm, phase->Y, freq->Y, fdot->Y, amp->Y, min_layer, max_layer, Ytemp, wdm_list, reverse_list, *Nwdm);
+    wdm_transform_from_table(wdm, phase->Z, freq->Z, fdot->Z, amp->Z, min_layer, max_layer, Ztemp, wdm_list, reverse_list, *Nwdm);
     */
 
-    //insert non-zero wavelet pixels into correct indicies
-    for(int n=0; n<*Nwavelet; n++)
+    //insert non-zero wdm pixels into correct indicies
+    for(int n=0; n<*Nwdm; n++)
     {
-        X[wavelet_list[n]] = Xtemp[n];
-        Y[wavelet_list[n]] = Ytemp[n];
-        Z[wavelet_list[n]] = Ztemp[n];
+        X[wdm_list[n]] = Xtemp[n];
+        Y[wdm_list[n]] = Ytemp[n];
+        Z[wdm_list[n]] = Ztemp[n];
     }
 
     free_double_vector(Xtemp);
@@ -1760,10 +1760,10 @@ void ucb_waveform_wavelet_tab(struct Orbit *orbit, struct Wavelets *wdm, double 
     free_cubic_spline(amp_ssb_spline);
     free_cubic_spline(phase_ssb_spline);
 
-    free(time_wavelet_grid);
-    free(phase_wavelet_grid);
-    free(freq_wavelet_grid);
-    free(fdot_wavelet_grid);
+    free(time_wdm_grid);
+    free(phase_wdm_grid);
+    free(freq_wdm_grid);
+    free(fdot_wdm_grid);
 
     free_tdi(tdi_phase);
     free_tdi(tdi_amp);

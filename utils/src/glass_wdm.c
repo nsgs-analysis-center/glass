@@ -19,7 +19,7 @@
 #include "glass_utils.h"
 #include "glass_math.h"
 
-struct TimeFrequencyTrack * malloc_time_frequency_track(struct Wavelets *wdm)
+struct TimeFrequencyTrack * malloc_time_frequency_track(struct WDM *wdm)
 {
     struct TimeFrequencyTrack *track = malloc(sizeof(struct TimeFrequencyTrack));
     track->min_layer = 1;
@@ -36,10 +36,10 @@ void free_time_frequency_track(struct TimeFrequencyTrack *track)
     free(track);
 }
 
-static void setup_wdm_basis(struct Wavelets *wdm, int NF)
+static void setup_wdm_basis(struct WDM *wdm, int NF)
 {
     wdm->NF = NF;
-    wdm->cadence = WAVELET_DURATION/wdm->NF;
+    wdm->cadence = WDM_DURATION/wdm->NF;
     wdm->Omega = M_PI/wdm->cadence;
     wdm->dOmega = wdm->Omega/(double)wdm->NF;
     wdm->inv_root_dOmega = 1.0/sqrt(wdm->dOmega);
@@ -49,7 +49,7 @@ static void setup_wdm_basis(struct Wavelets *wdm, int NF)
     wdm->BW = (wdm->A+wdm->B)/M_PI;
 }
 
-static double phitilde(struct Wavelets *wdm, double omega)
+static double phitilde(struct WDM *wdm, double omega)
 {
     double insDOM = wdm->inv_root_dOmega;
     double A = wdm->A;
@@ -62,7 +62,7 @@ static double phitilde(struct Wavelets *wdm, double omega)
     if(fabs(omega) >= A && fabs(omega) < A+B)
     {
         x = (fabs(omega)-A)/B;
-        y = incomplete_beta_function(WAVELET_FILTER_CONSTANT, WAVELET_FILTER_CONSTANT, x);
+        y = incomplete_beta_function(WDM_FILTER_CONSTANT, WDM_FILTER_CONSTANT, x);
         z = insDOM*cos(y*M_PI/2.0);
     }
     
@@ -72,7 +72,7 @@ static double phitilde(struct Wavelets *wdm, double omega)
     
 }
 
-static void wavelet(struct Wavelets *wdm, int m, double *wave)
+static void wdm_basis_function(struct WDM *wdm, int m, double *wave)
 {
     
     int N = wdm->N;
@@ -125,7 +125,7 @@ static void wavelet(struct Wavelets *wdm, int m, double *wave)
     free(DE);
 }
 
-static void wavelet_window_time(struct Wavelets *wdm)
+static void wdm_window_time(struct WDM *wdm)
 {
     double *DX = (double*)malloc(sizeof(double)*(2*wdm->N));
     
@@ -161,21 +161,21 @@ static void wavelet_window_time(struct Wavelets *wdm)
     free(DX);
 }
 
-static void wavelet_lookup_table(struct Wavelets *wdm)
+static void wdm_lookup_table(struct WDM *wdm)
 {    
-    // it turns out that all the wavelet layers are the same modulo a
+    // it turns out that all the wdm layers are the same modulo a
     // shift in the reference frequency. Just have to do a single layer
     // we pick one far from the boundaries to avoid edge effects
     
     double *wave = (double*)malloc(sizeof(double)*(wdm->N));
     int ref_layer = wdm->NF/2;
-    wavelet(wdm, ref_layer, wave);
+    wdm_basis_function(wdm, ref_layer, wave);
     
-    // The odd wavelets coefficienst can be obtained from the even.
+    // The odd wdm coefficienst can be obtained from the even.
     // odd cosine = -even sine, odd sine = even cosine
-    // each wavelet covers a frequency band of width DW
+    // each wdm covers a frequency band of width DW
 // execept for the first and last wasvelets
-    // there is some overlap. The wavelet pixels are of width
+    // there is some overlap. The wdm pixels are of width
     // DOM/PI, except for the first and last which have width
     // half that
     
@@ -208,18 +208,18 @@ static void wavelet_lookup_table(struct Wavelets *wdm)
     
     free(wave);
 }
-void initialize_wavelet(struct Wavelets *wdm, double T)
+void initialize_wdm(struct WDM *wdm, double T)
 {
-    fprintf(stdout,"\n========= Initialize Wavelet Basis ==========\n");
-    wdm->NT = (int)ceil(T/WAVELET_DURATION);
-    wdm->NF = WAVELET_DURATION/LISA_CADENCE;
-    wdm->df = WAVELET_BANDWIDTH; // Pixel spacing in f
-    wdm->dt = WAVELET_DURATION; // Pixel spacing in t
+    fprintf(stdout,"\n========= Initialize WDM Basis ==========\n");
+    wdm->NT = (int)ceil(T/WDM_DURATION);
+    wdm->NF = WDM_DURATION/LISA_CADENCE;
+    wdm->df = WDM_BANDWIDTH; // Pixel spacing in f
+    wdm->dt = WDM_DURATION; // Pixel spacing in t
 
     //TODO: this needs to be fixed instead of fudged
     //avoid edge effects at start and stop times of segment.
-    wdm->imin = WAVELET_EDGE_BUFFER;
-    wdm->imax = wdm->NT - WAVELET_EDGE_BUFFER;
+    wdm->imin = WDM_EDGE_BUFFER;
+    wdm->imax = wdm->NT - WDM_EDGE_BUFFER;
     
     setup_wdm_basis(wdm, wdm->NF);
 
@@ -253,17 +253,17 @@ void initialize_wavelet(struct Wavelets *wdm, double T)
     }
 
     //stores window function and normalization
-    wavelet_window_time(wdm);
+    wdm_window_time(wdm);
     wdm->window_freq_forward = double_vector((wdm->NT/2 + 1)); // memory leak
     // WDM filter roll-off A = DeltaOmega/4 with DeltaOmega = pi/NF (matches lisa-analysis-tools dev)
     build_wdm_filter_freq(wdm->window_freq_forward, wdm->NF, wdm->NT, (M_PI/wdm->NF)/4.0, true);
 
-    //stores lookup table of wavelet basis functions
-    //wavelet_lookup_table(wdm);
+    //stores lookup table of wdm basis functions
+    //wdm_lookup_table(wdm);
 
     //set defaults for min and maximum pixels
-    wavelet_pixel_to_index(wdm,0,1,&wdm->kmin);         //first pixel of second layer
-    wavelet_pixel_to_index(wdm,0,wdm->NF-1,&wdm->kmax); //first pixel of last layer
+    wdm_pixel_to_index(wdm,0,1,&wdm->kmin);         //first pixel of second layer
+    wdm_pixel_to_index(wdm,0,wdm->NF-1,&wdm->kmax); //first pixel of last layer
 
     fprintf(stdout,"  Number of time pixels:        %i\n", wdm->NT);
     fprintf(stdout,"  Duration of time pixels:      %g [hr]\n", wdm->dt/3600);
@@ -272,7 +272,7 @@ void initialize_wavelet(struct Wavelets *wdm, double T)
     fprintf(stdout,"=============================================\n");
 }
 
-void inline wavelet_index_to_pixel(struct Wavelets *wdm, int *i, int *j, int k)
+void inline wdm_index_to_pixel(struct WDM *wdm, int *i, int *j, int k)
 {
     int NT = wdm->NT;
     
@@ -283,7 +283,7 @@ void inline wavelet_index_to_pixel(struct Wavelets *wdm, int *i, int *j, int k)
     *j = (k - (*i))/NT; //scary integer math
 }
 
-void inline wavelet_pixel_to_index(struct Wavelets *wdm, int i, int j, int *k)
+void inline wdm_pixel_to_index(struct WDM *wdm, int i, int j, int *k)
 {
     int NT = wdm->NT;
     
@@ -292,14 +292,14 @@ void inline wavelet_pixel_to_index(struct Wavelets *wdm, int i, int j, int *k)
 
 // FFT first, then use the fast algorithm for FFT->WDM
 // to the user, appears to be an in-place operation
-void wavelet_transform_timefreq(struct Wavelets *wdm, double *timedata) {
+void wdm_transform_timefreq(struct WDM *wdm, double *timedata) {
     int ND = wdm->NT*wdm->NF;
     double *freqdata = double_vector(ND + 2); // extra complex element
 
     glass_forward_real_fft_outplace(timedata, freqdata, ND);
 
     // note: below will overwrite timedata
-    wavelet_transform_freq(wdm, freqdata, timedata);
+    wdm_transform_freq(wdm, freqdata, timedata);
     
     free_double_vector(freqdata);
 }
@@ -316,7 +316,7 @@ static inline double my_phitilde(double omega, double DeltaOmega, double A)
     if(fabs(omega) >= A && fabs(omega) < A+B)
     {
         x = (fabs(omega)-A)/B;
-        y = incomplete_beta_function(WAVELET_FILTER_CONSTANT, WAVELET_FILTER_CONSTANT, x);
+        y = incomplete_beta_function(WDM_FILTER_CONSTANT, WDM_FILTER_CONSTANT, x);
         z = insDOM*cos(y*M_PI_2);
     }
     
@@ -350,7 +350,7 @@ void build_wdm_filter_freq(double* phif, int Nf, int Nt, double A, bool forward)
     }
 }
 // inverse frequency transform, assumes that freqdata has enough room for ND/2+1 complexes
-void wavelet_transform_inverse_freq(struct Wavelets *wdm, double *wdmdata, double *freqdata) {
+void wdm_transform_inverse_freq(struct WDM *wdm, double *wdmdata, double *freqdata) {
     int Nf = wdm->NF;
     int Nt = wdm->NT;
     int ND = Nf*Nt;
@@ -409,7 +409,7 @@ void wavelet_transform_inverse_freq(struct Wavelets *wdm, double *wdmdata, doubl
 // NOTE: this implementation matches WDMWaveletTransforms by Matt Digman
 // as well as Olitas.jl
 // We assume freqdata has ND+2 elements
-void wavelet_transform_freq(struct Wavelets *wdm, double *freqdata, double *wdmdata) {
+void wdm_transform_freq(struct WDM *wdm, double *freqdata, double *wdmdata) {
 
     int Nf = wdm->NF;
     int Nt = wdm->NT;
@@ -467,7 +467,7 @@ void wavelet_transform_freq(struct Wavelets *wdm, double *freqdata, double *wdmd
 // wdmdata receives N WDM coefficients for this layer.
 // Each output pixel has the same ΔT and ΔF as the full transform;
 // N > Nt gives more time coverage, N < Nt gives less.
-void wavelet_transform_freq_one_layer(struct Wavelets *wdm, int N, double *freqdata, double *wdmdata, int layer) {
+void wdm_transform_freq_one_layer(struct WDM *wdm, int N, double *freqdata, double *wdmdata, int layer) {
 
     int Nf = wdm->NF;
     int Nt = wdm->NT;
@@ -543,14 +543,14 @@ void wavelet_transform_freq_one_layer(struct Wavelets *wdm, int N, double *freqd
 // used only in the UCB waveform
 // expects timedata of length wdm->NT*(Nlayers+1)
 // assumes timedata has been heterodyned and freqs start at jmin
-void wavelet_transform_timefreq_by_layers(struct Wavelets* wdm, int jmin, int Nlayers, double *window, double* timedata) {
+void wdm_transform_timefreq_by_layers(struct WDM* wdm, int jmin, int Nlayers, double *window, double* timedata) {
     int Nf = wdm->NF;
     int Nt = wdm->NT;
     int N = Nt * (Nlayers+1); // length of input data
     double freqdata[N + 2]; // full-length FFT
 
     // Normalize so the pixel amplitudes match the WDM noise convention, i.e.
-    // the full-resolution wavelet_transform_freq applied to *FD-normalized* data
+    // the full-resolution wdm_transform_freq applied to *FD-normalized* data
     // (freq bins scaled by sqrt(2*dt/ND), <|X_k|^2> = S_n), which is what the WDM
     // per-pixel variance S_n/(NF*NT) is validated against.
     //
@@ -558,14 +558,14 @@ void wavelet_transform_timefreq_by_layers(struct Wavelets* wdm, int jmin, int Nl
     //   (1) sqrt(NF/(Nlayers+1)) rescales the downsampled/heterodyned transform
     //       (input length N = NT*(Nlayers+1), unnormalized kiss rFFT, per-layer
     //       inverse /NT, by-layers window forward factor (Nlayers+1)/2) to the
-    //       full-resolution wavelet_transform_freq amplitude on *raw* FFT data.
+    //       full-resolution wdm_transform_freq amplitude on *raw* FFT data.
     //   (2) sqrt(2*cadence/(NF*NT)) applies the FFT/PSD normalization the FD data
     //       carries (rft_norm = sqrt(2*dt/ND) in GetData/MyAddNoise) but which the
     //       raw time-domain waveform here does not.
     // Combined: sqrt(NF/(Nlayers+1)) * sqrt(2*cadence/(NF*NT))
     //         = sqrt(2*cadence/((Nlayers+1)*NT)).
-    // The previous omission of (2) made the wavelet SNR too large by
-    // sqrt(NF*NT/(2*cadence)) relative to the Fourier-domain SNR.
+    // The previous omission of (2) made the wdm SNR too large by
+    // sqrt(NF*NT/(2*cadence)) relative to the DFT-domain SNR.
     double normalization = sqrt(2.0*wdm->cadence/((Nlayers+1.0)*(double)Nt));
 
     // TODO: tukey window was here, removed for invertibility in tests
@@ -625,7 +625,7 @@ void wavelet_transform_timefreq_by_layers(struct Wavelets* wdm, int jmin, int Nl
     }
 }
 
-void wavelet_transform_from_table(struct Wavelets *wdm, double *phase, double *freq, double *freqd, double *amp, int *jmin, int *jmax, double *wave, int *list, int *rlist, int Nmax)
+void wdm_transform_from_table(struct WDM *wdm, double *phase, double *freq, double *freqd, double *amp, int *jmin, int *jmax, double *wave, int *list, int *rlist, int Nmax)
 {
     
     int n, k, jj, kk;
@@ -691,7 +691,7 @@ void wavelet_transform_from_table(struct Wavelets *wdm, double *phase, double *f
             z = (1.0-dy)*z + dy*zz;
 
             // make sure pixel is in range
-            wavelet_pixel_to_index(wdm,i,j,&k);
+            wdm_pixel_to_index(wdm,i,j,&k);
             if(k>=wdm->kmin && k<wdm->kmax)
             {  
                 int n = rlist[k - wdm->kmin];
@@ -702,7 +702,7 @@ void wavelet_transform_from_table(struct Wavelets *wdm, double *phase, double *f
                 }
                 else
                 {
-                    //fprintf(stderr,"Warning, wavelet_transform_from_table tried accessing array out of bounds\n");
+                    //fprintf(stderr,"Warning, wdm_transform_from_table tried accessing array out of bounds\n");
                     //fflush(stderr);
                 }
             }
@@ -712,7 +712,7 @@ void wavelet_transform_from_table(struct Wavelets *wdm, double *phase, double *f
     } //loop over time steps
 }
 
-void active_wavelet_list(struct Wavelets *wdm, double *freqX, double *freqY, double *freqZ, double *fdotX, double *fdotY, double *fdotZ, int *wavelet_list, int *reverse_list, int *Nwavelet, int *jmin, int *jmax)
+void active_wdm_list(struct WDM *wdm, double *freqX, double *freqY, double *freqZ, double *fdotX, double *fdotY, double *fdotZ, int *wdm_list, int *reverse_list, int *Nwdm, int *jmin, int *jmax)
 {
     
     int n;
@@ -810,21 +810,21 @@ void active_wavelet_list(struct Wavelets *wdm, double *freqX, double *freqY, dou
         
         for(int j=jmin[i]; j<=jmax[i]; j++)
         {
-            wavelet_pixel_to_index(wdm,i,j,&k);
+            wdm_pixel_to_index(wdm,i,j,&k);
             
             //check that the pixel is in range
             if(k>=wdm->kmin && k<wdm->kmax)
             {
-                wavelet_list[N]=k-wdm->kmin;
+                wdm_list[N]=k-wdm->kmin;
                 reverse_list[k-wdm->kmin]=N;
                 N++;
             }
         }  
     }
-    *Nwavelet = N;
+    *Nwdm = N;
 }
 
-void wavelet_window_frequency(struct Wavelets *wdm, double *window, int Nlayers)
+void wdm_window_frequency(struct WDM *wdm, double *window, int Nlayers)
 {
     int i;
     int N;
@@ -835,8 +835,8 @@ void wavelet_window_frequency(struct Wavelets *wdm, double *window, int Nlayers)
     
     N = (Nlayers+1);
 
-    //mini wavelet structure for basis covering just N layers
-    struct Wavelets *wdm_temp = malloc(sizeof(struct Wavelets));
+    //mini wdm structure for basis covering just N layers
+    struct WDM *wdm_temp = malloc(sizeof(struct WDM));
     setup_wdm_basis(wdm_temp, N);
     
     T = wdm->dt*wdm->NT;
@@ -860,24 +860,24 @@ void wavelet_window_frequency(struct Wavelets *wdm, double *window, int Nlayers)
     
 }
 
-void wavelet_transform_freq_segment(struct Wavelets *wdm, int N, int layer, double *freqdata)
+void wdm_transform_freq_segment(struct WDM *wdm, int N, int layer, double *freqdata)
 {
     double wdmdata[N];
     memset(wdmdata, 0, N*sizeof(double));
-    wavelet_transform_freq_one_layer(wdm, N, freqdata, wdmdata, layer);
+    wdm_transform_freq_one_layer(wdm, N, freqdata, wdmdata, layer);
     for (int i = 0; i < N; i++)
         freqdata[i] = wdmdata[i];
 }
 
 
 // Convert a stationary DFT PSD into the corresponding WDM PSD that whitens
-// the output of wavelet_transform_freq.
+// the output of wdm_transform_freq.
 //
 // Convention: dft_psd[k] is interpreted as the discrete variance <|FFT[k]|^2>
 // on a one-sided FFT grid f_k = k/T, length ND/2+1 (ND = NF*NT).
 //
 // We also track edge layers (sqrt(2) difference)
-void stationary_dft_psd_to_wdm_layer_var(struct Wavelets* wdm, double * dft_psd, double * layer_var) {
+void stationary_dft_psd_to_wdm_layer_var(struct WDM* wdm, double * dft_psd, double * layer_var) {
     int NF = wdm->NF;
     int NT = wdm->NT;
     int ND = NF * NT;
@@ -913,7 +913,7 @@ void stationary_dft_psd_to_wdm_layer_var(struct Wavelets* wdm, double * dft_psd,
     layer_var[NF] /= (double)NT * NT;
 }
 
-void stationary_dft_psd_to_wdm_psd(struct Wavelets* wdm, double * dft_psd, double * wdm_psd) {
+void stationary_dft_psd_to_wdm_psd(struct WDM* wdm, double * dft_psd, double * wdm_psd) {
     int NF = wdm->NF;
     int NT = wdm->NT;
 
@@ -935,9 +935,9 @@ void stationary_dft_psd_to_wdm_psd(struct Wavelets* wdm, double * dft_psd, doubl
 // from sum_l phif_C[|l|]^2 ≈ 2*NT/NF, so the exact convolution collapses to
 // psd(f_m) * (2*NT/NF) / (2*NT^2) = psd(f_m) / ND.
 //
-// Good when the FFT PSD varies slowly across one wavelet layer width (wdm->df).
+// Good when the FFT PSD varies slowly across one wdm layer width (wdm->df).
 // Per-layer variance helper for the approximate convention.
-void stationary_dft_psd_to_wdm_layer_var_approx(struct Wavelets* wdm, double * dft_psd, double * layer_var) {
+void stationary_dft_psd_to_wdm_layer_var_approx(struct WDM* wdm, double * dft_psd, double * layer_var) {
     int NF = wdm->NF;
     int NT = wdm->NT;
     int ND = NF * NT;
@@ -946,10 +946,10 @@ void stationary_dft_psd_to_wdm_layer_var_approx(struct Wavelets* wdm, double * d
         layer_var[m] = dft_psd[m * half] / (double)ND;
 }
 
-// this is the approximate conversion of a stationary FFT PSD into a wavelet PSD
+// this is the approximate conversion of a stationary FFT PSD into a wdm PSD
 // This should more or less match the RHS of (19) of Neil's paper: https://arxiv.org/pdf/2009.00043
-// this approximation should be good when the `psd` changes slowly in the bandwith of one wavelet layer (wdm->df)
-void stationary_dft_psd_to_wdm_psd_approx(struct Wavelets* wdm, double * dft_psd, double * wdm_psd) {
+// this approximation should be good when the `psd` changes slowly in the bandwith of one wdm layer (wdm->df)
+void stationary_dft_psd_to_wdm_psd_approx(struct WDM* wdm, double * dft_psd, double * wdm_psd) {
     int NF = wdm->NF;
     int NT = wdm->NT;
 

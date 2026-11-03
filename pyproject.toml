@@ -13,5 +13,5 @@ dependencies = [
     "seaborn>=0.13.2",
     "segwo>=1.2.0",
     "snakebar>=0.1.1",
-    "wdmwavelettransforms>=0.0.1",
+    "wdmwdmtransforms>=0.0.1",
 ]

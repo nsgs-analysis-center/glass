@@ -91,7 +91,7 @@ void parse_catalog(int argc, char **argv, struct Data *data, struct Orbit *orbit
     data->Nchannel = 2; //1=X, 2=AE
     data->qpad     = 0;
     data->fmin     = 1e-4; //Hz
-    sprintf(data->basis,"fourier");
+    sprintf(data->basis,"dft");
 
     data->cseed = 150914;
     data->nseed = 151226;

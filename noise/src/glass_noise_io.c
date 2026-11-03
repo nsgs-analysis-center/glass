@@ -43,7 +43,7 @@ inline void print_sgwb_state(struct SGWBModel *model, FILE *fptr)
 
 void print_noise_model_dynamic(struct Data *data, struct Noise *noise, char filename[])
 {
-    struct Wavelets* wdm = data->wdm;
+    struct WDM* wdm = data->wdm;
     FILE *fptr = fopen(filename,"w");
     if (!fptr) {
         fprintf(stderr, "Unable to open file for writing! %s\n", filename);
@@ -58,7 +58,7 @@ void print_noise_model_dynamic(struct Data *data, struct Noise *noise, char file
         for(int j=jmin; j<jmax; j++)
         {
             double f = j*wdm->df;
-            wavelet_pixel_to_index(wdm,i,j,&k);
+            wdm_pixel_to_index(wdm,i,j,&k);
             k-=wdm->kmin;
             fprintf(fptr,"%lg ",t);
             fprintf(fptr,"%lg ",f);
@@ -75,7 +75,7 @@ void print_noise_model_dynamic(struct Data *data, struct Noise *noise, char file
 
 void print_noise_model_dynamic_coarse(struct Data *data, struct Noise *coarse, int Q, char filename[])
 {
-    struct Wavelets* wdm = data->wdm;
+    struct WDM* wdm = data->wdm;
     FILE *fptr = fopen(filename,"w");
     if (!fptr) {
         fprintf(stderr, "Unable to open file for writing! %s\n", filename);
@@ -127,9 +127,9 @@ void print_noise_model(struct Noise *noise, char filename[])
 void print_whitened_data(struct Data *data, struct Noise *noise, char filename[])
 {
     FILE *fptr = fopen(filename,"w");
-    if (!strcmp(data->basis,"wavelet"))
+    if (!strcmp(data->basis,"wdm"))
     {
-        struct Wavelets *wdm = data->wdm;
+        struct WDM *wdm = data->wdm;
         int k;
         for (int i=0; i<wdm->NT; i++)
         {
@@ -137,7 +137,7 @@ void print_whitened_data(struct Data *data, struct Noise *noise, char filename[]
             for (int j=data->lmin; j<data->lmax; j++)
             {
                 double f = j*wdm->df;
-                wavelet_pixel_to_index(wdm, i, j, &k);
+                wdm_pixel_to_index(wdm, i, j, &k);
                 k -= wdm->kmin;
                 double wX = data->dwt->X[k] / sqrt(noise->C[0][0][k]);
                 double wY = data->dwt->Y[k] / sqrt(noise->C[1][1][k]);

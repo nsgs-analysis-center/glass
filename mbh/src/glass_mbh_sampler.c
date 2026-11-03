@@ -89,7 +89,7 @@ void mbh_mcmc(struct Orbit *orbit, struct Data *data, struct Model *model, struc
             (*model_y->generate_signal_model)(orbit, data, model_y, 0);
 
             //rejection sample on SNR?
-            if(snr_wavelet(model_y->source[0], model_y->noise)<10.)
+            if(snr_wdm(model_y->source[0], model_y->noise)<10.)
             {
                 logPy = -INFINITY;
                 logH  = -INFINITY;
@@ -141,8 +141,8 @@ void initialize_mbh_state(struct Data *data, struct Orbit *orbit, struct Flags *
         alloc_model(data,trial[ic],MBH_MODEL_NP,DMAX);
         alloc_model(data,model[ic],MBH_MODEL_NP,DMAX);
         
-        model[ic]->log_likelihood = &gaussian_log_likelhood_wavelet;
-        trial[ic]->log_likelihood = &gaussian_log_likelhood_wavelet;
+        model[ic]->log_likelihood = &gaussian_log_likelhood_wdm;
+        trial[ic]->log_likelihood = &gaussian_log_likelhood_wdm;
         
         model[ic]->generate_signal_model = &generate_mbh_signal_model;
         trial[ic]->generate_signal_model = &generate_mbh_signal_model;
@@ -180,7 +180,7 @@ void initialize_mbh_state(struct Data *data, struct Orbit *orbit, struct Flags *
                 model[ic]->source[n]->cosi     = inj->cosi;
                 map_mbh_params_to_array(model[ic]->source[n], model[ic]->source[n]->params);
                 if(ic==0 && n==0 && flags->stationary)
-                    fprintf(stdout,"   ...stationary SNR for source %i=%g\n",n,snr_wavelet(inj,model[ic]->noise));
+                    fprintf(stdout,"   ...stationary SNR for source %i=%g\n",n,snr_wdm(inj,model[ic]->noise));
             }
             else
             {
@@ -192,7 +192,7 @@ void initialize_mbh_state(struct Data *data, struct Orbit *orbit, struct Flags *
                     if(!check_mbh_prior(model[ic]->source[n]->params,model[ic]->prior))
                     {
                         (*model[ic]->generate_signal_model)(orbit, data,model[ic], 0);
-                        snr = snr_wavelet(model[ic]->source[0], data->noise);
+                        snr = snr_wdm(model[ic]->source[0], data->noise);
                     }
                 } while ( snr<10.);
                 

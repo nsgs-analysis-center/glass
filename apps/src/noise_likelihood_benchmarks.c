@@ -28,8 +28,8 @@
 #define NBINS 20
 #define NFFT_TEST (1536*10)
 
-// TODO this wavelet logic is only actually different in the loop. must be a way to combine them?
-void whitening_test_wavelet(const struct Data* data)
+// TODO this wdm logic is only actually different in the loop. must be a way to combine them?
+void whitening_test_wdm(const struct Data* data)
 {
     // whitening test
     double max_bin = 8.0;
@@ -44,11 +44,11 @@ void whitening_test_wavelet(const struct Data* data)
 
     const double* wdm_data = data->tdi->X;
     const double* psd = data->noise->C[0][0];
-    struct Wavelets* wdm = data->wdm;
+    struct WDM* wdm = data->wdm;
 
     for (int i=0; i<wdm->NT; i++) {
         for (int j=data->lmin; j<data->lmax; j++) {
-            wavelet_pixel_to_index(wdm,i,j,&k);
+            wdm_pixel_to_index(wdm,i,j,&k);
             k -= wdm->kmin;
             double asd = sqrt(psd[k]/2);
             wht = wdm_data[k] / asd;
@@ -65,7 +65,7 @@ void whitening_test_wavelet(const struct Data* data)
     mean /= Nactive ;
     for (int i=0; i<wdm->NT; i++) {
         for (int j=data->lmin; j<data->lmax; j++) {
-            wavelet_pixel_to_index(wdm,i,j,&k);
+            wdm_pixel_to_index(wdm,i,j,&k);
             k -= wdm->kmin;
             double asd = sqrt(psd[k]/2);
             wht = wdm_data[k] / asd;
@@ -128,7 +128,7 @@ void whitening_test(const double* fft_data, const double* psd, int N)//, double 
 
 }
 
-int write_wdm_data(struct Wavelets* wdm, double* data, char* fname) {
+int write_wdm_data(struct WDM* wdm, double* data, char* fname) {
     FILE *fptr = NULL;
     fptr = fopen(fname,"w");
     if (!fptr) {
@@ -140,7 +140,7 @@ int write_wdm_data(struct Wavelets* wdm, double* data, char* fname) {
         double t = i*wdm->dt;
         for (int j=0; j<wdm->NF; j++) {
             double f = j*wdm->df;
-            wavelet_pixel_to_index(wdm,i,j,&k);
+            wdm_pixel_to_index(wdm,i,j,&k);
             k-=wdm->kmin;
             fprintf(fptr,"%lg ",t);
             fprintf(fptr,"%lg ",f);
@@ -190,7 +190,7 @@ int main(int argc, char *argv[])
     print_LISA_ASCII_art(stdout);
     print_version(stdout);
 
-    fprintf(stdout, "\n================= FOURIER LIKELIHOOD BENCHMARKS ================\n");
+    fprintf(stdout, "\n================= DFT LIKELIHOOD BENCHMARKS ================\n");
 
     struct Data data = {0};
     struct Flags flags = {0};
@@ -202,7 +202,7 @@ int main(int argc, char *argv[])
     data.T = 60*60*24*30*1;
     data.sqT = sqrt(data.T);
     data.Nchannel = 3;
-    strcpy(data.basis , "fourier");
+    strcpy(data.basis , "dft");
     strcpy(data.format, "sangria");
     data.NFFT = (int)((data.fmax - data.fmin)*data.T);
     data.N = data.NFFT*2;
@@ -300,8 +300,8 @@ int main(int argc, char *argv[])
     printf("my_noise_log_likelihood (=%g) :\n\t%d evals in %g seconds\n",logL1,NTOT,(double)(stop-start)/CLOCKS_PER_SEC);
     printf("noise_log_likelihood (=%g) :\n\t%d evals in %g seconds\n",logL2,NTOT,(double)(stop2-start2)/CLOCKS_PER_SEC);
     
-    // repeat for wavelets
-    fprintf(stdout, "\n================= WAVELET LIKELIHOOD BENCHMARKS ================\n");
+    // repeat for wdm
+    fprintf(stdout, "\n================= WDM LIKELIHOOD BENCHMARKS ================\n");
 
     // memory leak! reset structures
     memset(&data,0,sizeof(data)); 
@@ -316,7 +316,7 @@ int main(int argc, char *argv[])
     data.t0 = 0.0;
     data.sqT = sqrt(data.T);
     data.Nchannel = 3;
-    strcpy(data.basis , "wavelet");
+    strcpy(data.basis , "wdm");
     strcpy(data.format, "sangria");
     data.N = (int) data.T / LISA_CADENCE;
     flags.simNoise = 1;
@@ -328,18 +328,18 @@ int main(int argc, char *argv[])
     initialize_orbit(&data, &orbit, &flags);
     initialize_interpolated_analytic_orbits(&orbit, data.T, data.t0);
 
-    // fix wavelet members of struct
+    // fix wdm members of struct
     data.lmin = (int)floor(data.fmin / data.wdm->df);
     data.lmax =  (int)ceil(data.fmax / data.wdm->df);
     data.Nlayer = data.lmax - data.lmin;
-    //reset wavelet basis max and min ranges
-    wavelet_pixel_to_index(data.wdm,0,data.lmin,&data.wdm->kmin); 
-    wavelet_pixel_to_index(data.wdm,0,data.lmax,&data.wdm->kmax); 
+    //reset wdm basis max and min ranges
+    wdm_pixel_to_index(data.wdm,0,data.lmin,&data.wdm->kmin); 
+    wdm_pixel_to_index(data.wdm,0,data.lmax,&data.wdm->kmax); 
     // this points kmin/kmax to first time pixel of first/last freq layer
     
     //recompute fmin and fmax so they align with a bin
-    data.fmin = data.lmin*WAVELET_BANDWIDTH;
-    data.fmax = data.lmax*WAVELET_BANDWIDTH;
+    data.fmin = data.lmin*WDM_BANDWIDTH;
+    data.fmax = data.lmax*WDM_BANDWIDTH;
 
 
     // simulate data
@@ -350,45 +350,45 @@ int main(int argc, char *argv[])
     int k;
     for (size_t i = 0; i < data.wdm->NT; i++)
         for (size_t j=0; j < data.wdm->NF; j++) {
-            wavelet_pixel_to_index(data.wdm,i,j,&k); 
+            wdm_pixel_to_index(data.wdm,i,j,&k); 
             scaleogram.f[k] = (data.lmin + j)*data.wdm->df;
         }
     */
     // TODO: note normalization of cov is /= 8. here
-    initialize_instrument_model_wavelet(&orbit, &data, &inst);
+    initialize_instrument_model_wdm(&orbit, &data, &inst);
     generate_full_dynamic_covariance_matrix(data.wdm, &inst, NULL, NULL, data.noise);
     alloc_tdi(data.tdi, data.N, 3);
-    // TODO: are we handling real/imag parts of wavelets correctly?
+    // TODO: are we handling real/imag parts of wdm correctly?
     // see https://arxiv.org/pdf/2511.10632
-    MyAddNoiseWavelet(&data,data.tdi);
-    whitening_test_wavelet(&data);
+    MyAddNoiseWDM(&data,data.tdi);
+    whitening_test_wdm(&data);
 
     /* get initial likelihood */
     invert_noise_covariance_matrix(data.noise);
-    inst.logL = my_noise_log_likelihood_wavelet(&data, data.noise); 
+    inst.logL = my_noise_log_likelihood_wdm(&data, data.noise); 
 
     printf("Running likelihood benchmarks...\n");
     start = clock();
     for (int i=0; i<NTOT; i++) {
-        inst.logL = my_noise_log_likelihood_wavelet(&data, data.noise);
+        inst.logL = my_noise_log_likelihood_wdm(&data, data.noise);
     }
     stop = clock();
     logL1 = inst.logL;
     start2 = clock();
     for (int i=0; i<NTOT; i++) {
-        inst.logL = noise_log_likelihood_wavelet(&data, data.noise);
+        inst.logL = noise_log_likelihood_wdm(&data, data.noise);
     }
     stop2 = clock();
     logL2 = inst.logL;
 
-    print_noise_model_dynamic(&data, data.noise, "./debug-data/dbg_wavelet_input_scaleogram.dat");
+    print_noise_model_dynamic(&data, data.noise, "./debug-data/dbg_wdm_input_scaleogram.dat");
     strcpy(data.dataDir, "./debug-data/");
     data.qmin = data.lmin;
-    if(!flags.strainData) wavelet_layer_to_fourier_transform(&data);
+    if(!flags.strainData) wdm_layer_to_dft_transform(&data);
     print_data(&data, &flags);
 
-    printf("my_noise_log_likelihood_wavelet (=%g) :\n\t%d evals in %g seconds\n",logL1,NTOT,(double)(stop-start)/CLOCKS_PER_SEC);
-    printf("noise_log_likelihood_wavelet (=%g) :\n\t%d evals in %g seconds\n",logL2,NTOT,(double)(stop2-start2)/CLOCKS_PER_SEC);
+    printf("my_noise_log_likelihood_wdm (=%g) :\n\t%d evals in %g seconds\n",logL1,NTOT,(double)(stop-start)/CLOCKS_PER_SEC);
+    printf("noise_log_likelihood_wdm (=%g) :\n\t%d evals in %g seconds\n",logL2,NTOT,(double)(stop2-start2)/CLOCKS_PER_SEC);
 
 
 

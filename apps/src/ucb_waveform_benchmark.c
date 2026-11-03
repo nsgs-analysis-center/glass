@@ -18,15 +18,15 @@
 #include <glass_ucb.h>
 #include <glass_noise.h>
 
-static void print_wavelet_pixels(struct Wavelets *wdm, struct TDI *tdi, FILE *fptr)
+static void print_wdm_pixels(struct WDM *wdm, struct TDI *tdi, FILE *fptr)
 {
     for(int j=0; j<wdm->NF; j++)
     {
         for(int i=0; i<wdm->NT; i++)
         {
             int k;
-            wavelet_pixel_to_index(wdm, i, j, &k);
-            fprintf(fptr,"%.12g %.12g ",i*WAVELET_DURATION,j*WAVELET_BANDWIDTH + WAVELET_BANDWIDTH/2);
+            wdm_pixel_to_index(wdm, i, j, &k);
+            fprintf(fptr,"%.12g %.12g ",i*WDM_DURATION,j*WDM_BANDWIDTH + WDM_BANDWIDTH/2);
             fprintf(fptr,"%.12g ",tdi->X[k]);
             fprintf(fptr,"%.12g ",tdi->Y[k]);
             fprintf(fptr,"%.12g ",tdi->Z[k]);
@@ -58,10 +58,10 @@ int main(int argc, char* argv[])
     initialize_analytic_orbit(orbit);
 
     /*
-    Define and set up Wavelets structure which contains metadata for wavelet basis
+    Define and set up WDM structure which contains metadata for wdm basis
     */
-    struct Wavelets *wdm = malloc(sizeof(struct Wavelets));
-    initialize_wavelet(wdm, Tobs);
+    struct WDM *wdm = malloc(sizeof(struct WDM));
+    initialize_wdm(wdm, Tobs);
 
     printf("NF = %i, NT=%i\n", wdm->NF, wdm->NT);
 
@@ -90,14 +90,14 @@ int main(int argc, char* argv[])
 
     
     /*
-    Generate wavelet domain waveform with fast LISA response
+    Generate wdm domain waveform with fast LISA response
     */
 
     // get spacecraft ephemerides on the spline time grid
     initialize_interpolated_analytic_orbits(orbit, Tobs, t0);
     
-    int Nwavelet;                          // number of non-zero wavelet pixels that hold the signal
-    int *wavelet_list = int_vector(N);     // list of non-zero wavelet pixels that hold the signal
+    int Nwdm;                          // number of non-zero wdm pixels that hold the signal
+    int *wdm_list = int_vector(N);     // list of non-zero wdm pixels that hold the signal
     struct TDI *tdi = malloc(sizeof(struct TDI));
     alloc_tdi(tdi,N,3);
 
@@ -115,39 +115,39 @@ int main(int argc, char* argv[])
 //    params[7] = -3.667077368701908;
     //315356.8757188157 -0.3314182857663456 2.679373660852499 -53.18000649622642 0.4077044806479031 2.025080440894665 5.307507556802117 -3.667077368701908 0.000405848
     
-    ucb_waveform_wavelet(orbit, wdm, Tobs, 0.0, params, wavelet_list, &Nwavelet, tdi->X, tdi->Y, tdi->Z);
-    FILE *out = fopen("wavelet_het.dat","w");
-    print_wavelet_pixels(wdm, tdi, out);
+    ucb_waveform_wdm(orbit, wdm, Tobs, 0.0, params, wdm_list, &Nwdm, tdi->X, tdi->Y, tdi->Z);
+    FILE *out = fopen("wdm_het.dat","w");
+    print_wdm_pixels(wdm, tdi, out);
     fclose(out);
     
     start = clock();
     int Nwaveforms = 1000;
     for(int mc=0; mc<Nwaveforms; mc++)
     {
-        ucb_waveform_wavelet(orbit, wdm, Tobs, 0.0, params, wavelet_list, &Nwavelet, tdi->X, tdi->Y, tdi->Z);
+        ucb_waveform_wdm(orbit, wdm, Tobs, 0.0, params, wdm_list, &Nwdm, tdi->X, tdi->Y, tdi->Z);
     }
     end = clock();
     double cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
-    printf("het wavelet calculation took %f seconds\n", cpu_time_used/(double)Nwaveforms);
+    printf("het wdm calculation took %f seconds\n", cpu_time_used/(double)Nwaveforms);
 
     free_tdi(tdi);
     tdi = malloc(sizeof(struct TDI));
     alloc_tdi(tdi,N,3);
 
     /*
-    ucb_waveform_wavelet_tab(orbit, wdm, Tobs, 0.0, params, wavelet_list, &Nwavelet, tdi->X, tdi->Y, tdi->Z);
-    out = fopen("wavelet_tab.dat","w");
-    print_wavelet_pixels(wdm, tdi, out);
+    ucb_waveform_wdm_tab(orbit, wdm, Tobs, 0.0, params, wdm_list, &Nwdm, tdi->X, tdi->Y, tdi->Z);
+    out = fopen("wdm_tab.dat","w");
+    print_wdm_pixels(wdm, tdi, out);
     fclose(out);
 
     start = clock();
     for(int mc=0; mc<Nwaveforms; mc++)
     {
-        ucb_waveform_wavelet_tab(orbit, wdm, Tobs, 0.0, params, wavelet_list, &Nwavelet, tdi->X, tdi->Y, tdi->Z);
+        ucb_waveform_wdm_tab(orbit, wdm, Tobs, 0.0, params, wdm_list, &Nwdm, tdi->X, tdi->Y, tdi->Z);
     }
     end = clock();
     cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
-    printf("tab wavelet calculation took %f seconds\n", cpu_time_used/(double)Nwaveforms);
+    printf("tab wdm calculation took %f seconds\n", cpu_time_used/(double)Nwaveforms);
     
 
     free_tdi(tdi);
@@ -164,7 +164,7 @@ int main(int argc, char* argv[])
     }
     end = clock();
 
-    out = fopen("fourier.dat","w");
+    out = fopen("dft.dat","w");
     for(int n=0; n<BW; n++)
     {
         fprintf(out,"%.12g %.12g %.12g %.12g %.12g %.12g\n",
@@ -175,7 +175,7 @@ int main(int argc, char* argv[])
     fclose(out);
     
     cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
-    printf("fourier domain calculation took %f seconds\n", cpu_time_used/(double)Nwaveforms);
+    printf("dft domain calculation took %f seconds\n", cpu_time_used/(double)Nwaveforms);
 
     
     return 0;

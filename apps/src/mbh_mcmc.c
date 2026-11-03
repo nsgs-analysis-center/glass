@@ -46,13 +46,13 @@ static void set_mbh_defaults(struct Data *data)
     data->qpad     = 0;
     data->fmin     = 2e-4; //Hz
     data->fmax     = 2e-2; //Hz
-    data->lmin     = (int)floor(data->fmin/WAVELET_BANDWIDTH);
-    data->lmax     = (int)ceil(data->fmax/WAVELET_BANDWIDTH);
+    data->lmin     = (int)floor(data->fmin/WDM_BANDWIDTH);
+    data->lmax     = (int)ceil(data->fmax/WDM_BANDWIDTH);
     data->Nlayer   = data->lmax-data->lmin;
-    data->N        = (int)floor(data->T/WAVELET_DURATION) * data->Nlayer;
+    data->N        = (int)floor(data->T/WDM_DURATION) * data->Nlayer;
     data->NFFT     = data->N/2;
     data->Nlayer  -= 2; //parse_data_args() will pad this by 2
-    sprintf(data->basis,"wavelet");
+    sprintf(data->basis,"wdm");
 }
 
 /**
@@ -80,7 +80,7 @@ int main(int argc, char *argv[])
     
     /* Parse command line and set defaults/flags */
     set_mbh_defaults(data);
-    parse_data_args(argc,argv,data,orbit,flags,chain,"wavelet");
+    parse_data_args(argc,argv,data,orbit,flags,chain,"wdm");
     parse_mbh_args(argc,argv,flags);
     if(flags->help) print_usage();
 
@@ -128,10 +128,10 @@ int main(int argc, char *argv[])
     if(flags->strainData)
         ReadData(data,orbit,flags);
     else if(flags->simNoise)
-        MyAddNoiseWavelet(data,data->tdi);
+        MyAddNoiseWDM(data,data->tdi);
     
     /* Store DFT copy of simulated data */
-    if(!flags->strainData) wavelet_layer_to_fourier_transform(data);
+    if(!flags->strainData) wdm_layer_to_dft_transform(data);
     
     /* print various data products for plotting */
     print_data(data, flags);
@@ -143,12 +143,12 @@ int main(int argc, char *argv[])
         list[n] = n;
     }
     data->SNR2 = 0;
-    data->SNR2 += wavelet_nwip(data->tdi->X, data->tdi->X, data->noise->invC[0][0], list, data->N);
-    data->SNR2 += wavelet_nwip(data->tdi->Y, data->tdi->Y, data->noise->invC[1][1], list, data->N);
-    data->SNR2 += wavelet_nwip(data->tdi->Z, data->tdi->Z, data->noise->invC[2][2], list, data->N);
-    data->SNR2 += wavelet_nwip(data->tdi->X, data->tdi->Y, data->noise->invC[0][1], list, data->N)*2;
-    data->SNR2 += wavelet_nwip(data->tdi->X, data->tdi->Z, data->noise->invC[0][2], list, data->N)*2;
-    data->SNR2 += wavelet_nwip(data->tdi->Y, data->tdi->Z, data->noise->invC[1][2], list, data->N)*2;
+    data->SNR2 += wdm_nwip(data->tdi->X, data->tdi->X, data->noise->invC[0][0], list, data->N);
+    data->SNR2 += wdm_nwip(data->tdi->Y, data->tdi->Y, data->noise->invC[1][1], list, data->N);
+    data->SNR2 += wdm_nwip(data->tdi->Z, data->tdi->Z, data->noise->invC[2][2], list, data->N);
+    data->SNR2 += wdm_nwip(data->tdi->X, data->tdi->Y, data->noise->invC[0][1], list, data->N)*2;
+    data->SNR2 += wdm_nwip(data->tdi->X, data->tdi->Z, data->noise->invC[0][2], list, data->N)*2;
+    data->SNR2 += wdm_nwip(data->tdi->Y, data->tdi->Z, data->noise->invC[1][2], list, data->N)*2;
     data->SNR2 *= -0.5;
     free_int_vector(list);
     

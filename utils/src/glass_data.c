@@ -192,20 +192,20 @@ void alloc_data(struct Data *data, struct Flags *flags)
     alloc_tdi(data->raw, data->N, data->Nchannel);
     alloc_tdi(data->dft, data->N, data->Nchannel);
     alloc_tdi(data->dwt, data->N, data->Nchannel);
-    if(!strcmp(data->basis,"fourier")) alloc_noise(data->noise, data->NFFT, data->Nlayer, data->Nchannel);
-    if(!strcmp(data->basis,"wavelet")) alloc_noise(data->noise, data->N, data->Nlayer, data->Nchannel);
+    if(!strcmp(data->basis,"dft")) alloc_noise(data->noise, data->NFFT, data->Nlayer, data->Nchannel);
+    if(!strcmp(data->basis,"wdm")) alloc_noise(data->noise, data->N, data->Nlayer, data->Nchannel);
     
     //reconstructed signal model
     int i_re,i_im;
     data->h_rec = malloc(data->N*sizeof(double **));
     data->h_res = malloc(data->N*sizeof(double **));
-    if(!strcmp(data->basis,"fourier"))
+    if(!strcmp(data->basis,"dft"))
     {
         data->r_pow = malloc(data->NFFT*sizeof(double **));
         data->h_pow = malloc(data->NFFT*sizeof(double **));
         data->S_pow = malloc(data->NFFT*sizeof(double **));
     }
-    if(!strcmp(data->basis,"wavelet"))
+    if(!strcmp(data->basis,"wdm"))
     {
         data->r_pow = malloc(data->N*sizeof(double **));
         data->h_pow = malloc(data->N*sizeof(double **));
@@ -219,7 +219,7 @@ void alloc_data(struct Data *data, struct Flags *flags)
     data->downsample = NMCMC/data->Nwave;
     if (!data->downsample) data->downsample=1;
     
-    if(!strcmp(data->basis,"fourier"))
+    if(!strcmp(data->basis,"dft"))
     {
         for(int i=0; i<data->NFFT; i++)
         {
@@ -246,7 +246,7 @@ void alloc_data(struct Data *data, struct Flags *flags)
         }
     }
 
-    if(!strcmp(data->basis,"wavelet"))
+    if(!strcmp(data->basis,"wdm"))
     {
         for(int i=0; i<data->N; i++)
         {
@@ -270,11 +270,11 @@ void alloc_data(struct Data *data, struct Flags *flags)
     //Spectrum proposal
     data->p = calloc(data->N,sizeof(double));
 
-    // Setup wavelet basis
-    if(!strcmp(data->basis,"wavelet"))
+    // Setup wdm basis
+    if(!strcmp(data->basis,"wdm"))
     {
-        data->wdm = malloc(sizeof(struct Wavelets));
-        initialize_wavelet(data->wdm, data->T);
+        data->wdm = malloc(sizeof(struct WDM));
+        initialize_wdm(data->wdm, data->T);
     }
 }
 
@@ -456,7 +456,7 @@ void copy_data(struct Data *origin, struct Data *copy)
     copy->nseed=origin->nseed;
     copy->iseed=origin->iseed;
     copy->t0=origin->t0;
-    //TODO: need copy_wavelet
+    //TODO: need copy_wdm
 }
 
 void mpi_send_data(struct Data *data, int dest)
@@ -687,7 +687,7 @@ void ReadHDF5(struct Data *data, struct TDI *tdi, struct TDI *tdi_dwt, struct Fl
     double *Ytime = malloc(N*sizeof(double));
     double *Ztime = malloc(N*sizeof(double));
 
-    /* Allocate data->tdi structure for Fourier transform output */
+    /* Allocate data->tdi structure for DFT transform output */
     alloc_tdi(tdi, N, N_TDI_CHANNELS);
     alloc_tdi(tdi_dwt, N, N_TDI_CHANNELS);
     tdi->delta = 1./Tobs;
@@ -771,7 +771,7 @@ void ReadHDF5(struct Data *data, struct TDI *tdi, struct TDI *tdi_dwt, struct Fl
     tukey(Ytime, alpha, N);
     tukey(Ztime, alpha, N);
     
-    /* Fourier transform time-domain TDI channels */
+    /* DFT transform time-domain TDI channels */
     for(int n=0; n<N; n++)
     {
         X[n] = Xtime[n];
@@ -836,7 +836,7 @@ void ReadHDF5(struct Data *data, struct TDI *tdi, struct TDI *tdi_dwt, struct Fl
         glass_forward_real_fft(Zgal, N);
 
         
-        /* Allocate data->tdi structure for Fourier transform output */
+        /* Allocate data->tdi structure for DFT transform output */
         struct TDI *tdi_gal = malloc(sizeof(struct TDI));
         alloc_tdi(tdi_gal, N, N_TDI_CHANNELS);
         tdi_gal->delta = 1./Tobs;
@@ -876,8 +876,8 @@ void ReadHDF5(struct Data *data, struct TDI *tdi, struct TDI *tdi_dwt, struct Fl
     for(int n=0; n<N; n++) XYZ2AET(tdi->X[n], tdi->Y[n], tdi->Z[n], &tdi->A[n], &tdi->E[n], &tdi->T[n]);
 
 
-    /* Wavelet transform time-domain TDI channels */
-    if(!strcmp(data->basis,"wavelet"))
+    /* WDM transform time-domain TDI channels */
+    if(!strcmp(data->basis,"wdm"))
     {
         for(int n=0; n<N; n++)
         {
@@ -886,9 +886,9 @@ void ReadHDF5(struct Data *data, struct TDI *tdi, struct TDI *tdi_dwt, struct Fl
             Z[n] = Ztime[n];
         }
 
-        wavelet_transform_timefreq(data->wdm, X);
-        wavelet_transform_timefreq(data->wdm, Y);
-        wavelet_transform_timefreq(data->wdm, Z);
+        wdm_transform_timefreq(data->wdm, X);
+        wdm_transform_timefreq(data->wdm, Y);
+        wdm_transform_timefreq(data->wdm, Z);
         
         for(int n=0; n<N; n++)
         {
@@ -915,7 +915,7 @@ void ReadHDF5(struct Data *data, struct TDI *tdi, struct TDI *tdi_dwt, struct Fl
 
 void ReadASCII(struct Data *data, struct TDI *tdi)
 {
-    // for now, assume the data is saved as ascii fft, then convert to wavelet if needed
+    // for now, assume the data is saved as ascii fft, then convert to wdm if needed
 
     double f;
     double junk;
@@ -1037,13 +1037,13 @@ void ReadASCII_timeseries(struct Data* data, struct TDI* tdi_dft, struct TDI* td
     glass_forward_real_fft_outplace(tdi_td.Z, tdi_dft->Z, Nsamples);
 
 
-    /* Wavelet transform time-domain TDI channels */
-    if(!strcmp(data->basis,"wavelet"))
+    /* WDM transform time-domain TDI channels */
+    if(!strcmp(data->basis,"wdm"))
     {
 
-        wavelet_transform_freq(data->wdm, tdi_dft->X, tdi_dwt->X); 
-        wavelet_transform_freq(data->wdm, tdi_dft->Y, tdi_dwt->Y); 
-        wavelet_transform_freq(data->wdm, tdi_dft->Z, tdi_dwt->Z); 
+        wdm_transform_freq(data->wdm, tdi_dft->X, tdi_dwt->X); 
+        wdm_transform_freq(data->wdm, tdi_dft->Y, tdi_dwt->Y); 
+        wdm_transform_freq(data->wdm, tdi_dft->Z, tdi_dwt->Z); 
         
         /* populate AET channels because I can't let go */
         for(int n=0; n<Nsamples; n++) XYZ2AET(tdi_dwt->X[n], tdi_dwt->Y[n], tdi_dwt->Z[n], &tdi_dwt->A[n], &tdi_dwt->E[n], &tdi_dwt->T[n]);
@@ -1090,19 +1090,19 @@ void ReadData(struct Data *data, struct Orbit *orbit, struct Flags *flags)
         data->dft->T[n] = tdi_full_dft->T[m];
     }
     
-    /* select wavelet layers */
-    if(!strcmp(data->basis,"wavelet"))
+    /* select wdm layers */
+    if(!strcmp(data->basis,"wdm"))
     {
         //set lmin and lmax to represent frequency layer instead of bin
-        data->lmin = (int)floor(data->fmin/WAVELET_BANDWIDTH);
+        data->lmin = (int)floor(data->fmin/WDM_BANDWIDTH);
         data->lmax = data->lmin + data->Nlayer;
 
         printf("  Minimum frequency layer=%i, maximum layer=%i\n",data->lmin,data->lmax-1);
         printf("  fmin=%lg, fmax=%lg\n",data->fmin,data->fmax);
 
-        //reset wavelet basis max and min ranges
-        wavelet_pixel_to_index(data->wdm,0,data->lmin,&data->wdm->kmin);
-        wavelet_pixel_to_index(data->wdm,0,data->lmax,&data->wdm->kmax);
+        //reset wdm basis max and min ranges
+        wdm_pixel_to_index(data->wdm,0,data->lmin,&data->wdm->kmin);
+        wdm_pixel_to_index(data->wdm,0,data->lmax,&data->wdm->kmax);
 
         //store frequency segment in TDI structure
         for(int n=0; n<data->N; n++)
@@ -1120,7 +1120,7 @@ void ReadData(struct Data *data, struct Orbit *orbit, struct Flags *flags)
     /* copy correct representation of data into the main tdi structure */
     for(int n=0; n<data->N; n++)
     {
-        if(!strcmp(data->basis,"fourier"))
+        if(!strcmp(data->basis,"dft"))
         {
             data->tdi->X[n] = data->dft->X[n];
             data->tdi->Y[n] = data->dft->Y[n];
@@ -1129,7 +1129,7 @@ void ReadData(struct Data *data, struct Orbit *orbit, struct Flags *flags)
             data->tdi->E[n] = data->dft->E[n];
             data->tdi->T[n] = data->dft->T[n];
         }
-        else if(!strcmp(data->basis,"wavelet"))
+        else if(!strcmp(data->basis,"wdm"))
         {
             data->tdi->X[n] = data->dwt->X[n];
             data->tdi->Y[n] = data->dwt->Y[n];
@@ -1306,7 +1306,7 @@ void AddNoise(struct Data *data, struct TDI *tdi)
     free(L);
     free(C);
 }
-void MyAddNoiseWavelet(struct Data *data, struct TDI *tdi)
+void MyAddNoiseWDM(struct Data *data, struct TDI *tdi)
 {
     printf("   ...adding (Robbie's version of a) Gaussian noise realization\n");
     double L[3][3] = {0}; // will be Cholesky decomposition of covariance
@@ -1316,7 +1316,7 @@ void MyAddNoiseWavelet(struct Data *data, struct TDI *tdi)
     for (int i=0; i<data->wdm->NT; i++) {
         for (int j=data->lmin; j<data->lmax; j++) {
             int k;
-            wavelet_pixel_to_index(data->wdm,i,j,&k);
+            wdm_pixel_to_index(data->wdm,i,j,&k);
             k -= data->wdm->kmin;
             for (int m=0; m<3; m++)
                 for (int n=0; n<3; n++) {
@@ -1324,7 +1324,7 @@ void MyAddNoiseWavelet(struct Data *data, struct TDI *tdi)
                 }
             my_cholesky_decomp(3, C, L);
             for (int m=0; m<3; m++)
-                n[m] = rand_r_N_0_1(&r); // real wavelet coefficient gets full variance, no sqrt(2) factor
+                n[m] = rand_r_N_0_1(&r); // real wdm coefficient gets full variance, no sqrt(2) factor
             for (int m=0; m<3; m++) {
                 tdi->X[k] += L[0][m] * n[m];
                 tdi->Y[k] += L[1][m] * n[m];
@@ -1334,7 +1334,7 @@ void MyAddNoiseWavelet(struct Data *data, struct TDI *tdi)
     }
 }
 
-void AddNoiseWavelet(struct Data *data, struct TDI *tdi)
+void AddNoiseWDM(struct Data *data, struct TDI *tdi)
 {
     
     printf("   ...adding Gaussian noise realization\n");
@@ -1356,12 +1356,12 @@ void AddNoiseWavelet(struct Data *data, struct TDI *tdi)
     
     
     int k;
-    struct Wavelets *wdm = data->wdm;
+    struct WDM *wdm = data->wdm;
     for(int i=0; i<wdm->NT; i++)
     {
         for(int j=data->lmin; j<data->lmax; j++)
         {
-            wavelet_pixel_to_index(wdm,i,j,&k);
+            wdm_pixel_to_index(wdm,i,j,&k);
             k-=data->wdm->kmin;
 
             for(int a=0; a<data->Nchannel; a++)
@@ -1488,7 +1488,7 @@ void print_data(struct Data *data, struct Flags *flags)
     fclose(fptr);
 
     /* Scaleogram */
-    if(!strcmp("wavelet",data->basis))
+    if(!strcmp("wdm",data->basis))
     {
         tdi = data->dwt;
         sprintf(filename,"%s/scaleogram_data.dat",data->dataDir);
@@ -1498,7 +1498,7 @@ void print_data(struct Data *data, struct Flags *flags)
         {
             for(int j=data->lmin; j<data->lmax; j++)
             {
-                wavelet_pixel_to_index(data->wdm,i,j,&k);
+                wdm_pixel_to_index(data->wdm,i,j,&k);
                 k-=data->wdm->kmin;
                 fprintf(fptr,"%lg %lg %.14e %.14e %.14e\n", i*data->wdm->dt, j*data->wdm->df, tdi->X[k]*tdi->X[k], tdi->Y[k]*tdi->Y[k], tdi->Z[k]*tdi->Z[k]);
             }
@@ -1528,7 +1528,7 @@ void print_data(struct Data *data, struct Flags *flags)
     }
     fclose(fptr);
 
-    if(!strcmp("wavelet",data->basis))
+    if(!strcmp("wdm",data->basis))
     {
         tdi = data->dwt;
         sprintf(filename,"%s/dwt_data.dat",data->dataDir);
@@ -1537,7 +1537,7 @@ void print_data(struct Data *data, struct Flags *flags)
         {
             for(int j=data->lmin; j<data->lmax; j++)
             {
-                wavelet_pixel_to_index(data->wdm,i,j,&k);
+                wdm_pixel_to_index(data->wdm,i,j,&k);
                 k-=data->wdm->kmin;
                 fprintf(fptr,"%lg %lg %.14e %.14e %.14e\n", i*data->wdm->dt, j*data->wdm->df,tdi->X[k], tdi->Y[k], tdi->Z[k]);   
             }
@@ -1547,10 +1547,10 @@ void print_data(struct Data *data, struct Flags *flags)
     }
 }
 
-void print_wavelet_fourier_spectra(struct Data *data, struct TDI *tdi, char filename[])
+void print_wdm_dft_spectra(struct Data *data, struct TDI *tdi, char filename[])
 {
     int k;
-    struct Wavelets *wdm = data->wdm;
+    struct WDM *wdm = data->wdm;
     int N = wdm->NF*wdm->NT;
     double T = N*LISA_CADENCE;
 
@@ -1562,7 +1562,7 @@ void print_wavelet_fourier_spectra(struct Data *data, struct TDI *tdi, char file
     {
         for(int j=0; j<wdm->NF; j++)
         {
-            wavelet_pixel_to_index(wdm,i,j,&k);
+            wdm_pixel_to_index(wdm,i,j,&k);
             if(k>=wdm->kmin && k<wdm->kmax)
             {
                 waveData[0][k] = tdi->X[k-wdm->kmin];
@@ -1572,10 +1572,10 @@ void print_wavelet_fourier_spectra(struct Data *data, struct TDI *tdi, char file
         }
     }
 
-    //wavelet to frequency
-    wavelet_transform_inverse_freq(wdm, waveData[0], freqData[0]);
-    wavelet_transform_inverse_freq(wdm, waveData[1], freqData[1]);
-    wavelet_transform_inverse_freq(wdm, waveData[2], freqData[2]);
+    //wdm to frequency
+    wdm_transform_inverse_freq(wdm, waveData[0], freqData[0]);
+    wdm_transform_inverse_freq(wdm, waveData[1], freqData[1]);
+    wdm_transform_inverse_freq(wdm, waveData[2], freqData[2]);
 
     FILE *fptr=fopen(filename,"w");
     for(int n=0; n<N/2; n++) 
@@ -1592,10 +1592,10 @@ void print_wavelet_fourier_spectra(struct Data *data, struct TDI *tdi, char file
     free_double_matrix(waveData,3);
 }
 
-void wavelet_layer_to_fourier_transform(struct Data *data)
+void wdm_layer_to_dft_transform(struct Data *data)
 {
     int k;
-    struct Wavelets *wdm = data->wdm;
+    struct WDM *wdm = data->wdm;
     int N = wdm->NF*wdm->NT;
 
     double **freqData = double_matrix(3,N+2); //needs DF & Nyq. bins for norms
@@ -1611,7 +1611,7 @@ void wavelet_layer_to_fourier_transform(struct Data *data)
     {
         for(int j=0; j<wdm->NF; j++)
         {
-            wavelet_pixel_to_index(wdm,i,j,&k);
+            wdm_pixel_to_index(wdm,i,j,&k);
             if(k>=wdm->kmin && k<wdm->kmax)
             {
                 waveData[0][k] = data->dwt->X[k-wdm->kmin];
@@ -1622,9 +1622,9 @@ void wavelet_layer_to_fourier_transform(struct Data *data)
     }
 
     /* out-place DWT->DFT transform */
-    wavelet_transform_inverse_freq(wdm, waveData[0], freqData[0]);
-    wavelet_transform_inverse_freq(wdm, waveData[1], freqData[1]);
-    wavelet_transform_inverse_freq(wdm, waveData[2], freqData[2]);
+    wdm_transform_inverse_freq(wdm, waveData[0], freqData[0]);
+    wdm_transform_inverse_freq(wdm, waveData[1], freqData[1]);
+    wdm_transform_inverse_freq(wdm, waveData[2], freqData[2]);
 
     /* copy active frequency bins into DFT struct */
     for(int n=0; n<data->NFFT; n++)
@@ -1876,7 +1876,7 @@ void parse_data_args(int argc, char **argv, struct Data *data, struct Orbit *orb
                 if(strcmp("duration",    long_options[long_index].name) == 0)
                 {   
                     data->T   = (double)atof(optarg);
-                    if(!strcmp(data->basis,"wavelet")) data->T = floor(data->T/WAVELET_DURATION)*WAVELET_DURATION;
+                    if(!strcmp(data->basis,"wdm")) data->T = floor(data->T/WDM_DURATION)*WDM_DURATION;
                     data->sqT = sqrt(data->T);
                 }
                 if(strcmp("steps",       long_options[long_index].name) == 0)
@@ -1973,43 +1973,43 @@ void parse_data_args(int argc, char **argv, struct Data *data, struct Orbit *orb
     //override size of data if fmax was requested
     if(set_fmax_flag)
     {
-        if(!strcmp(data->basis,"fourier")) data->NFFT = (int)floor((data->fmax - data->fmin)*data->T); //number of frequency bins
-        if(!strcmp(data->basis,"wavelet")) data->Nlayer = (int)( (ceil(data->fmax/WAVELET_BANDWIDTH) - floor(data->fmin/WAVELET_BANDWIDTH)) ); //number of frequency layers
+        if(!strcmp(data->basis,"dft")) data->NFFT = (int)floor((data->fmax - data->fmin)*data->T); //number of frequency bins
+        if(!strcmp(data->basis,"wdm")) data->Nlayer = (int)( (ceil(data->fmax/WDM_BANDWIDTH) - floor(data->fmin/WDM_BANDWIDTH)) ); //number of frequency layers
     }
 
     //pad data
-    if(!strcmp(data->basis,"fourier"))
+    if(!strcmp(data->basis,"dft"))
     {
         data->NFFT += 2*data->qpad;
         data->fmin -= data->qpad/data->T;
     }
-    if(!strcmp(data->basis,"wavelet")) 
+    if(!strcmp(data->basis,"wdm")) 
     {
         data->Nlayer += 2; // pad with layers above and below
-        data->fmin -= WAVELET_BANDWIDTH;
+        data->fmin -= WDM_BANDWIDTH;
     }
 
     
     
     //map fmin to nearest bin
-    if(!strcmp(data->basis,"fourier"))
+    if(!strcmp(data->basis,"dft"))
     {
         data->fmin = floor(data->fmin*data->T)/data->T;
         data->fmax = data->fmin + (double)data->NFFT/data->T;
     }
-    if(!strcmp(data->basis,"wavelet"))
+    if(!strcmp(data->basis,"wdm"))
     {
-        data->fmin = floor(data->fmin/WAVELET_BANDWIDTH)*WAVELET_BANDWIDTH;
-        data->fmax = data->fmin + (double)(data->Nlayer)*WAVELET_BANDWIDTH;
+        data->fmin = floor(data->fmin/WDM_BANDWIDTH)*WDM_BANDWIDTH;
+        data->fmax = data->fmin + (double)(data->Nlayer)*WDM_BANDWIDTH;
 
     }
     //printf("old fmin=%lg, fmax=%lg\n",data->fmin,data->fmax);
 
     //after all of that resize data
-    if(!strcmp(data->basis,"fourier")) data->N = data->NFFT*2;
-    if(!strcmp(data->basis,"wavelet")) 
+    if(!strcmp(data->basis,"dft")) data->N = data->NFFT*2;
+    if(!strcmp(data->basis,"wdm")) 
     {
-        data->N = data->Nlayer*(int)floor(data->T / WAVELET_DURATION);
+        data->N = data->Nlayer*(int)floor(data->T / WDM_DURATION);
         data->NFFT = data->N/2.;
     }
 
@@ -2027,11 +2027,11 @@ void parse_data_args(int argc, char **argv, struct Data *data, struct Orbit *orb
     //reset opt counter
     optind = 0;
 
-    // double check wavelet fmin
-    if(!strcmp(data->basis,"wavelet")) 
+    // double check wdm fmin
+    if(!strcmp(data->basis,"wdm")) 
     {
-        if (floor(data->fmin/WAVELET_BANDWIDTH) == 0) {
-            fprintf(stderr, "Error, your minimum frequency (after padding) includes the DC wavelet frequency bin!\nThis bin goes until %g Hz\nYou almost certainly don't want to do this. Recommended fix: increase fmin\n", WAVELET_BANDWIDTH);
+        if (floor(data->fmin/WDM_BANDWIDTH) == 0) {
+            fprintf(stderr, "Error, your minimum frequency (after padding) includes the DC wdm frequency bin!\nThis bin goes until %g Hz\nYou almost certainly don't want to do this. Recommended fix: increase fmin\n", WDM_BANDWIDTH);
             exit(-2);
         }
     }

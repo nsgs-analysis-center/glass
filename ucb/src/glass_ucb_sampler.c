@@ -51,8 +51,8 @@ void noise_model_mcmc(struct Orbit *orbit, struct Data *data, struct Model *mode
     if(!flags->prior)
     {
         //  Form master template
-        if(!strcmp("fourier",data->basis)) generate_noise_model(data, model_y);
-        if(!strcmp("wavelet",data->basis)) generate_noise_model_wavelet(data, model_y);
+        if(!strcmp("dft",data->basis)) generate_noise_model(data, model_y);
+        if(!strcmp("wdm",data->basis)) generate_noise_model_wdm(data, model_y);
         
         //get likelihood for y
         model_y->logL = (*model_y->log_likelihood)(data, model_y);
@@ -140,8 +140,8 @@ void ucb_mcmc(struct Orbit *orbit, struct Data *data, struct Model *model, struc
 
             //rejection sample on SNR?
             double sn;
-            if(!strcmp("fourier",data->basis)) sn = snr(model_y->source[n], model_y->noise);
-            if(!strcmp("wavelet",data->basis)) sn = snr_wavelet(model_y->source[n], model_y->noise);
+            if(!strcmp("dft",data->basis)) sn = snr(model_y->source[n], model_y->noise);
+            if(!strcmp("wdm",data->basis)) sn = snr_wdm(model_y->source[n], model_y->noise);
             if(sn<5.0) logPy = -INFINITY;
 
             //add calibration error
@@ -203,8 +203,8 @@ static void rj_birth_death(struct Orbit *orbit, struct Data *data, struct Model 
             if(!flags->prior)
             {
                 double sn;
-                if(!strcmp("fourier",data->basis)) sn = snr(model_y->source[create], model_y->noise);
-                if(!strcmp("wavelet",data->basis)) sn = snr_wavelet(model_y->source[create], model_y->noise);
+                if(!strcmp("dft",data->basis)) sn = snr(model_y->source[create], model_y->noise);
+                if(!strcmp("wdm",data->basis)) sn = snr_wdm(model_y->source[create], model_y->noise);
                 if(sn<5.0) *logPy = -INFINITY;
             }
                 
@@ -220,8 +220,8 @@ static void rj_birth_death(struct Orbit *orbit, struct Data *data, struct Model 
         
         //pick source to kill
         int kill = (int)(rand_r_U_0_1(&chain->r[ic])*(double)model_x->Nlive);
-        if(!strcmp("fourier",data->basis)) remove_ucb_model(data, model_y,  model_y->source[kill]);
-        if(!strcmp("wavelet",data->basis)) remove_ucb_model_wavelet(data, model_y, model_y->source[kill]);
+        if(!strcmp("dft",data->basis)) remove_ucb_model(data, model_y,  model_y->source[kill]);
+        if(!strcmp("wdm",data->basis)) remove_ucb_model_wdm(data, model_y, model_y->source[kill]);
         
         if(model_y->Nlive>-1)
         {
@@ -553,8 +553,8 @@ void ucb_rjmcmc(struct Orbit *orbit, struct Data *data, struct Model *model, str
             //only compute FIM for sources that need it
             if(model_y->source[n]->fisher_update_flag)
             {
-                if(!strcmp("fourier",data->basis)) ucb_fisher(orbit, data, model_y->source[n], data->noise);
-                if(!strcmp("wavelet",data->basis)) ucb_fisher_wavelet(orbit, data, model_y->source[n], data->noise);
+                if(!strcmp("dft",data->basis)) ucb_fisher(orbit, data, model_y->source[n], data->noise);
+                if(!strcmp("wdm",data->basis)) ucb_fisher_wdm(orbit, data, model_y->source[n], data->noise);
 
                 //reset flag indicating FIM is up-to-date
                 model_y->source[n]->fisher_update_flag = 0;
@@ -583,7 +583,7 @@ void initialize_ucb_state(struct Data *data, struct Orbit *orbit, struct Flags *
         alloc_model(data,model[ic],UCB_MODEL_NP,DMAX);
         
         // set pointers to model-specific functions
-        if(!strcmp("fourier",data->basis))
+        if(!strcmp("dft",data->basis))
         {
             model[ic]->log_likelihood = &gaussian_log_likelihood;
             trial[ic]->log_likelihood = &gaussian_log_likelihood;
@@ -592,20 +592,20 @@ void initialize_ucb_state(struct Data *data, struct Orbit *orbit, struct Flags *
             trial[ic]->generate_signal_model = &generate_ucb_model;
 
         }
-        if(!strcmp("wavelet",data->basis))
+        if(!strcmp("wdm",data->basis))
         {
-            model[ic]->log_likelihood = &gaussian_log_likelhood_wavelet;
-            trial[ic]->log_likelihood = &gaussian_log_likelhood_wavelet;
+            model[ic]->log_likelihood = &gaussian_log_likelhood_wdm;
+            trial[ic]->log_likelihood = &gaussian_log_likelhood_wdm;
 
-            model[ic]->generate_signal_model = &generate_ucb_model_wavelet;
-            trial[ic]->generate_signal_model = &generate_ucb_model_wavelet;
+            model[ic]->generate_signal_model = &generate_ucb_model_wdm;
+            trial[ic]->generate_signal_model = &generate_ucb_model_wdm;
         }
         
         if(ic==0)set_uniform_prior(flags, model[ic], data, 1);
         else     set_uniform_prior(flags, model[ic], data, 0);
                 
         //override noise model w/ stationary version
-        if(!strcmp("wavelet",data->basis) && flags->stationary) GetStationaryNoiseModel(data, orbit, flags, data->noise);
+        if(!strcmp("wdm",data->basis) && flags->stationary) GetStationaryNoiseModel(data, orbit, flags, data->noise);
 
         //set noise model
         copy_noise(data->noise, model[ic]->noise);
@@ -630,8 +630,8 @@ void initialize_ucb_state(struct Data *data, struct Orbit *orbit, struct Flags *
                 model[ic]->source[n]->psi      = inj->psi;
                 model[ic]->source[n]->d2fdt2   = inj->d2fdt2;
                 map_ucb_params_to_array(model[ic]->source[n], model[ic]->source[n]->params, data->T);
-                if(!strcmp("wavelet",data->basis) && ic==0 && n==0 && flags->stationary)
-                    fprintf(stdout,"   ...stationary SNR for source %i=%g\n",n,snr_wavelet(inj,model[ic]->noise));
+                if(!strcmp("wdm",data->basis) && ic==0 && n==0 && flags->stationary)
+                    fprintf(stdout,"   ...stationary SNR for source %i=%g\n",n,snr_wdm(inj,model[ic]->noise));
             }
             else
             {
@@ -639,8 +639,8 @@ void initialize_ucb_state(struct Data *data, struct Orbit *orbit, struct Flags *
             }
             map_array_to_ucb_params(model[ic]->source[n], model[ic]->source[n]->params, data->T);
 
-            if(!strcmp("fourier",data->basis)) ucb_fisher(orbit, data, model[ic]->source[n], data->noise);
-            if(!strcmp("wavelet",data->basis)) ucb_fisher_wavelet(orbit, data, model[ic]->source[n], data->noise);
+            if(!strcmp("dft",data->basis)) ucb_fisher(orbit, data, model[ic]->source[n], data->noise);
+            if(!strcmp("wdm",data->basis)) ucb_fisher_wdm(orbit, data, model[ic]->source[n], data->noise);
 
             model[ic]->source[n]->fisher_update_flag=0;
         }
@@ -660,13 +660,13 @@ void initialize_ucb_state(struct Data *data, struct Orbit *orbit, struct Flags *
         (*model[ic]->generate_signal_model)(orbit,data,model[ic],-1);
 
         //noise
-        if(!strcmp("fourier",data->basis))
+        if(!strcmp("dft",data->basis))
         {
             generate_noise_model(data, model[ic]);
         }
-        if(!strcmp("wavelet",data->basis)) 
+        if(!strcmp("wdm",data->basis)) 
         {
-            generate_noise_model_wavelet(data, model[ic]);
+            generate_noise_model_wdm(data, model[ic]);
         }
 
         //calibration error
@@ -705,7 +705,7 @@ void initialize_vgb_state(struct Data *data, struct Orbit *orbit, struct Flags *
         alloc_model(data,model[ic],UCB_MODEL_NP,DMAX);
         
         // set pointers to model-specific functions
-        if(!strcmp("fourier",data->basis))
+        if(!strcmp("dft",data->basis))
         {
             model[ic]->log_likelihood = &gaussian_log_likelihood;
             trial[ic]->log_likelihood = &gaussian_log_likelihood;
@@ -714,20 +714,20 @@ void initialize_vgb_state(struct Data *data, struct Orbit *orbit, struct Flags *
             trial[ic]->generate_signal_model = &generate_ucb_model;
 
         }
-        if(!strcmp("wavelet",data->basis))
+        if(!strcmp("wdm",data->basis))
         {
-            model[ic]->log_likelihood = &gaussian_log_likelhood_wavelet;
-            trial[ic]->log_likelihood = &gaussian_log_likelhood_wavelet;
+            model[ic]->log_likelihood = &gaussian_log_likelhood_wdm;
+            trial[ic]->log_likelihood = &gaussian_log_likelhood_wdm;
 
-            model[ic]->generate_signal_model = &generate_ucb_model_wavelet;
-            trial[ic]->generate_signal_model = &generate_ucb_model_wavelet;
+            model[ic]->generate_signal_model = &generate_ucb_model_wdm;
+            trial[ic]->generate_signal_model = &generate_ucb_model_wdm;
         }
         
         if(ic==0)set_uniform_prior(flags, model[ic], data, 1);
         else     set_uniform_prior(flags, model[ic], data, 0);
                 
         //override noise model w/ stationary version
-        if(!strcmp("wavelet",data->basis) && flags->stationary) GetStationaryNoiseModel(data, orbit, flags, data->noise);
+        if(!strcmp("wdm",data->basis) && flags->stationary) GetStationaryNoiseModel(data, orbit, flags, data->noise);
 
         //set noise model
         copy_noise(data->noise, model[ic]->noise);
@@ -744,8 +744,8 @@ void initialize_vgb_state(struct Data *data, struct Orbit *orbit, struct Flags *
         model[ic]->source[0]->d2fdt2   = inj->d2fdt2;
         map_ucb_params_to_array(model[ic]->source[0], model[ic]->source[0]->params, data->T);
         
-        if(!strcmp("fourier",data->basis)) ucb_fisher(orbit, data, model[ic]->source[0], data->noise);
-        if(!strcmp("wavelet",data->basis)) ucb_fisher_wavelet(orbit, data, model[ic]->source[0], data->noise);
+        if(!strcmp("dft",data->basis)) ucb_fisher(orbit, data, model[ic]->source[0], data->noise);
+        if(!strcmp("wdm",data->basis)) ucb_fisher_wdm(orbit, data, model[ic]->source[0], data->noise);
         
         model[ic]->source[0]->fisher_update_flag=0;
         
@@ -764,13 +764,13 @@ void initialize_vgb_state(struct Data *data, struct Orbit *orbit, struct Flags *
         (*model[ic]->generate_signal_model)(orbit,data,model[ic],-1);
 
         //noise
-        if(!strcmp("fourier",data->basis))
+        if(!strcmp("dft",data->basis))
         {
             generate_noise_model(data, model[ic]);
         }
-        if(!strcmp("wavelet",data->basis))
+        if(!strcmp("wdm",data->basis))
         {
-            generate_noise_model_wavelet(data, model[ic]);
+            generate_noise_model_wdm(data, model[ic]);
         }
 
         //calibration error

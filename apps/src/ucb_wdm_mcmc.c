@@ -15,8 +15,8 @@
  */
 
 /**
- @file ucb_wavelet_mcmc.c
- \brief Main function for wavelet-domain UCB sampler app `ucb_wavelet_mcmc` 
+ @file ucb_wdm_mcmc.c
+ \brief Main function for wdm-domain UCB sampler app `ucb_wdm_mcmc` 
  */
 
 /*  REQUIRED LIBRARIES  */
@@ -31,7 +31,7 @@ static void print_usage()
     print_ucb_usage();
     
     fprintf(stdout,"EXAMPLE:\n");
-    fprintf(stdout,"ucb_wavelet_mcmc --inj [path to]/ldasoft/ucb/etc/sources/precision/PrecisionSource_0.txt --cheat\n");
+    fprintf(stdout,"ucb_wdm_mcmc --inj [path to]/ldasoft/ucb/etc/sources/precision/PrecisionSource_0.txt --cheat\n");
     fprintf(stdout,"\n");
 
     exit(0);
@@ -43,11 +43,11 @@ static void set_ucb_defaults(struct Data *data)
     data->t0       = 0.0; /* start time of data segment in seconds */
     data->sqT      = sqrt(data->T);
     data->Nlayer   = 1;
-    data->N        = (int)floor(data->T/WAVELET_DURATION)*data->Nlayer;
+    data->N        = (int)floor(data->T/WDM_DURATION)*data->Nlayer;
     data->NFFT     = data->N/2;    data->Nchannel = 3; //1=X, 2=AE, 3=XYZ
     data->qpad     = 0;
     data->fmin     = 5e-4; //Hz
-    sprintf(data->basis,"wavelet");
+    sprintf(data->basis,"wdm");
 }
 
 /**
@@ -56,7 +56,7 @@ static void set_ucb_defaults(struct Data *data)
  */
 int main(int argc, char *argv[])
 {
-    fprintf(stdout, "\n============= Wavelet-domain UCB MCMC ============\n");
+    fprintf(stdout, "\n============= WDM-domain UCB MCMC ============\n");
 
     time_t start, stop;
     start = time(NULL);
@@ -75,7 +75,7 @@ int main(int argc, char *argv[])
     
     /* Parse command line and set defaults/flags */
     set_ucb_defaults(data);
-    parse_data_args(argc,argv,data,orbit,flags,chain,"wavelet");
+    parse_data_args(argc,argv,data,orbit,flags,chain,"wdm");
     parse_ucb_args(argc,argv,flags);
     if(flags->help) print_usage();
 
@@ -123,10 +123,10 @@ int main(int argc, char *argv[])
     if(flags->strainData)
         ReadData(data,orbit,flags);
     else if(flags->simNoise)
-        MyAddNoiseWavelet(data,data->tdi);
+        MyAddNoiseWDM(data,data->tdi);
 
     /* Store DFT copy of simulated data */
-    if(!flags->strainData) wavelet_layer_to_fourier_transform(data);
+    if(!flags->strainData) wdm_layer_to_dft_transform(data);
     
     /* print various data products for plotting */
     print_data(data, flags);
@@ -198,7 +198,7 @@ int main(int argc, char *argv[])
             
             //update information matrix for each chain
             for(int n=0; n<model_ptr->Nlive; n++)
-                ucb_fisher_wavelet(orbit, data, model_ptr->source[n], data->noise);
+                ucb_fisher_wdm(orbit, data, model_ptr->source[n], data->noise);
             
         }// end (parallel) loop over chains
         

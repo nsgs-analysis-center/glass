@@ -62,10 +62,10 @@ struct Model
     double logLnorm; //!<normalization of log likelihood \f$ \propto -\log \det C \f$
     ///@}
 
-    ///@name Wavelet bookkeeping
+    ///@name WDM bookkeeping
     ///@{
-    int *list; //!<list of active wavelet pixels
-    int Nlist; //!<number of active wavelet pixels
+    int *list; //!<list of active wdm pixels
+    int Nlist; //!<number of active wdm pixels
     ///@}
     
     /// Likelihood function
@@ -139,10 +139,10 @@ struct Source
     int fisher_update_flag; //!<1 if fisher needs update, 0 if not
     ///@}
 
-    ///@name Wavelet bookkeeping
+    ///@name WDM bookkeeping
     ///@{
-    int *list; //!<list of active wavelet pixels
-    int Nlist; //!<number of active wavelet pixels
+    int *list; //!<list of active wdm pixels
+    int Nlist; //!<number of active wdm pixels
     ///@}
 
 };
@@ -217,13 +217,13 @@ double delta_log_likelihood(struct Data *data, struct Model *model, struct Model
  @return \f$ -\frac{1}{2}(d-h|d-h) \f$
  */
 double gaussian_log_likelihood(struct Data *data, struct Model *model);
-double gaussian_log_likelhood_wavelet(struct Data *data, struct Model *model);
+double gaussian_log_likelhood_wdm(struct Data *data, struct Model *model);
 
 /**
  \brief Compute normalization of Gaussian likelihood for constant noise level
  
  For noise models that are (approximately) a constant over the band
- of \f$N\f$ Fourier bins, parameterized by a multiplyer \f$\eta\f$
+ of \f$N\f$ DFT bins, parameterized by a multiplyer \f$\eta\f$
  
  @return \f$ \sum_{\rm TDI} N\log\eta_{\rm TDI} \f$
  */
@@ -233,7 +233,7 @@ double gaussian_log_likelihood_constant_norm(struct Data *data, struct Model *mo
  \brief Compute normalization of Gaussian likelihood for arbitrary noise level
  
  For noise models that are free to vary over the band
- of \f$N\f$ Fourier bins
+ of \f$N\f$ DFT bins
  
  @return \f$ \sum_{\rm TDI} \sum_f \log S_{n,{\rm TDI}}(f) \f$
  */

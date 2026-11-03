@@ -881,7 +881,7 @@ void noise_sgwb_model_mcmc(struct Data *data, struct InstrumentModel *noise, str
         free(correlation_matrix[n]);
     free(correlation_matrix);
 }
-void noise_sgwb_model_mcmc_wavelet_dumb(struct Data *data, struct InstrumentModel *noise, struct ForegroundModel *galaxy, struct SGWBModel *model, struct SGWBModel *trial, struct Noise *psd, const struct CoarseStats *stats, struct Chain *chain, struct Flags *flags, int ic)
+void noise_sgwb_model_mcmc_wdm_dumb(struct Data *data, struct InstrumentModel *noise, struct ForegroundModel *galaxy, struct SGWBModel *model, struct SGWBModel *trial, struct Noise *psd, const struct CoarseStats *stats, struct Chain *chain, struct Flags *flags, int ic)
 {
     //shorthand pointers
     struct SGWBModel *model_x = model;
@@ -924,13 +924,13 @@ void noise_sgwb_model_mcmc_wavelet_dumb(struct Data *data, struct InstrumentMode
             return;
         }
     }
-    generate_sgwb_model_wavelet(data->wdm, model_y);
+    generate_sgwb_model_wdm(data->wdm, model_y);
     if (flags->stationary)
         generate_full_stationary_covariance_matrix_coarse(data->wdm, stats->Q, noise, galaxy, model_y, psd);
     else
         generate_full_dynamic_covariance_matrix_coarse(data->wdm, stats->Q, noise, galaxy, model_y, psd);
     invert_noise_covariance_matrix(psd);
-    model_y->logL = my_noise_log_likelihood_wavelet_coarse(data, psd, stats);
+    model_y->logL = my_noise_log_likelihood_wdm_coarse(data, psd, stats);
 
     double logH = (model_y->logL - model_x->logL)/chain->temperature[ic];
     double loga = log(rand_r_U_0_1(&chain->r[ic]));
@@ -956,7 +956,7 @@ void noise_sgwb_model_mcmc_wavelet_dumb(struct Data *data, struct InstrumentMode
     }
 }
 
-void noise_instrument_model_mcmc_wavelet(struct Orbit *orbit, struct Data *data, struct InstrumentModel *model, struct InstrumentModel *trial, struct ForegroundModel *galaxy, struct SGWBModel *sgwb, struct Noise *psd, const struct CoarseStats *stats, struct Chain *chain, struct Flags *flags, int ic)
+void noise_instrument_model_mcmc_wdm(struct Orbit *orbit, struct Data *data, struct InstrumentModel *model, struct InstrumentModel *trial, struct ForegroundModel *galaxy, struct SGWBModel *sgwb, struct Noise *psd, const struct CoarseStats *stats, struct Chain *chain, struct Flags *flags, int ic)
 {
     double logH  = 0.0; //(log) Hastings ratio
     double loga  = 1.0; //(log) transition probability
@@ -1110,14 +1110,14 @@ void noise_instrument_model_mcmc_wavelet(struct Orbit *orbit, struct Data *data,
         //get noise covariance matrix for initial parameters
         if(logPy > -INFINITY && !flags->prior)
         {
-            generate_instrument_noise_model_wavelet(data->wdm, orbit, model_y);
+            generate_instrument_noise_model_wdm(data->wdm, orbit, model_y);
             if (flags->stationary)
                 generate_full_stationary_covariance_matrix_coarse(data->wdm, stats->Q, model_y, galaxy, sgwb, psd);
             else
                 generate_full_dynamic_covariance_matrix_coarse(data->wdm, stats->Q, model_y, galaxy, sgwb, psd);
             invert_noise_covariance_matrix(psd);
 
-            model_y->logL = my_noise_log_likelihood_wavelet_coarse(data, psd, stats);
+            model_y->logL = my_noise_log_likelihood_wdm_coarse(data, psd, stats);
 
             logH = (model_y->logL - model_x->logL)/chain->temperature[ic]; //delta logL
         }
@@ -1141,7 +1141,7 @@ void noise_instrument_model_mcmc_wavelet(struct Orbit *orbit, struct Data *data,
 
 }
 
-void noise_foreground_model_mcmc_wavelet(struct Data *data, struct InstrumentModel *noise, struct ForegroundModel *model, struct ForegroundModel *trial, struct SGWBModel *sgwb, struct Noise *psd, const struct CoarseStats *stats, struct Chain *chain, struct Flags *flags, int ic)
+void noise_foreground_model_mcmc_wdm(struct Data *data, struct InstrumentModel *noise, struct ForegroundModel *model, struct ForegroundModel *trial, struct SGWBModel *sgwb, struct Noise *psd, const struct CoarseStats *stats, struct Chain *chain, struct Flags *flags, int ic)
 {
     double logH  = 0.0; //(log) Hastings ratio
     double loga  = 1.0; //(log) transition probability
@@ -1257,14 +1257,14 @@ void noise_foreground_model_mcmc_wavelet(struct Data *data, struct InstrumentMod
         if(logPy > -INFINITY && !flags->prior)
         {
             map_array_to_foreground_params(model_y);
-            generate_galactic_foreground_model_wavelet(data->wdm, model_y);
+            generate_galactic_foreground_model_wdm(data->wdm, model_y);
             if (flags->stationary)
                 generate_full_stationary_covariance_matrix_coarse(data->wdm, stats->Q, noise, model_y, sgwb, psd);
             else
                 generate_full_dynamic_covariance_matrix_coarse(data->wdm, stats->Q, noise, model_y, sgwb, psd);
             invert_noise_covariance_matrix(psd);
 
-            model_y->logL = my_noise_log_likelihood_wavelet_coarse(data, psd, stats);
+            model_y->logL = my_noise_log_likelihood_wdm_coarse(data, psd, stats);
 
             logH = (model_y->logL - model_x->logL)/chain->temperature[ic]; //delta logL
         }
@@ -1288,7 +1288,7 @@ void noise_foreground_model_mcmc_wavelet(struct Data *data, struct InstrumentMod
     free(correlation_matrix);
 }
 
-void noise_sgwb_model_mcmc_wavelet(struct Data *data, struct InstrumentModel *noise, struct ForegroundModel *galaxy, struct SGWBModel *model, struct SGWBModel *trial, struct Noise *psd, struct Chain *chain, struct Flags *flags, int ic)
+void noise_sgwb_model_mcmc_wdm(struct Data *data, struct InstrumentModel *noise, struct ForegroundModel *galaxy, struct SGWBModel *model, struct SGWBModel *trial, struct Noise *psd, struct Chain *chain, struct Flags *flags, int ic)
 {
 
     double logH  = 0.0; //(log) Hastings ratio
@@ -1370,7 +1370,7 @@ void noise_sgwb_model_mcmc_wavelet(struct Data *data, struct InstrumentModel *no
         //get noise covariance matrix for initial parameters
         if(logPy > -INFINITY && !flags->prior)
         {
-            generate_sgwb_model_wavelet(data->wdm, model_y);
+            generate_sgwb_model_wdm(data->wdm, model_y);
             
             //add other stochastic contributions
             if (flags->stationary)
@@ -1379,7 +1379,7 @@ void noise_sgwb_model_mcmc_wavelet(struct Data *data, struct InstrumentModel *no
                 generate_full_dynamic_covariance_matrix(data->wdm, noise, galaxy, model_y, psd);
             invert_noise_covariance_matrix(psd);
             
-            model_y->logL = my_noise_log_likelihood_wavelet(data, psd);
+            model_y->logL = my_noise_log_likelihood_wdm(data, psd);
             //printf("trial %g %g %g\n", model_y->params[0], model_y->params[1], model_y->logL);
             
             logH = (model_y->logL - model_x->logL)/chain->temperature[ic]; //delta logL

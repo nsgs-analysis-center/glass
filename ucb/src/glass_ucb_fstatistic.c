@@ -761,7 +761,7 @@ void get_Fstat_xmax(struct Orbit *orbit, struct Data *data, double *x, double *x
 }
 
 
-double get_Fstat_logL_wavelet(struct Orbit *orbit, struct Data *data, double f0, double fdot, double theta, double phi)
+double get_Fstat_logL_wdm(struct Orbit *orbit, struct Data *data, double f0, double fdot, double theta, double phi)
 {
 
     /* compute filters A_i */
@@ -810,7 +810,7 @@ double get_Fstat_logL_wavelet(struct Orbit *orbit, struct Data *data, double f0,
         if(UCB_MODEL_NP>8) A[i]->params[8] = 0.0;
 
         map_array_to_ucb_params(A[i], A[i]->params, data->T);
-        ucb_waveform_wavelet(orbit,data->wdm,data->T, data->t0, A[i]->params, A[i]->list, &A[i]->Nlist, A[i]->tdi->X, A[i]->tdi->Y, A[i]->tdi->Z);
+        ucb_waveform_wdm(orbit,data->wdm,data->T, data->t0, A[i]->params, A[i]->list, &A[i]->Nlist, A[i]->tdi->X, A[i]->tdi->Y, A[i]->tdi->Z);
 
         //catch waveforms that are out of band
         if(A[i]->Nlist==0) return 1.0;
@@ -822,15 +822,15 @@ double get_Fstat_logL_wavelet(struct Orbit *orbit, struct Data *data, double f0,
 
     for(int i=0; i<Nfilter; i++)
     {
-        N[i] += wavelet_nwip(data->tdi->X, A[i]->tdi->X, data->noise->invC[0][0], A[i]->list, A[i]->Nlist);
-        N[i] += wavelet_nwip(data->tdi->Y, A[i]->tdi->Y, data->noise->invC[1][1], A[i]->list, A[i]->Nlist);
-        N[i] += wavelet_nwip(data->tdi->Z, A[i]->tdi->Z, data->noise->invC[2][2], A[i]->list, A[i]->Nlist);
-        N[i] += wavelet_nwip(data->tdi->X, A[i]->tdi->Y, data->noise->invC[0][1], A[i]->list, A[i]->Nlist);
-        N[i] += wavelet_nwip(data->tdi->X, A[i]->tdi->Z, data->noise->invC[0][2], A[i]->list, A[i]->Nlist);
-        N[i] += wavelet_nwip(data->tdi->Y, A[i]->tdi->Z, data->noise->invC[1][2], A[i]->list, A[i]->Nlist);
-        N[i] += wavelet_nwip(data->tdi->Y, A[i]->tdi->X, data->noise->invC[1][0], A[i]->list, A[i]->Nlist);
-        N[i] += wavelet_nwip(data->tdi->Z, A[i]->tdi->X, data->noise->invC[2][0], A[i]->list, A[i]->Nlist);
-        N[i] += wavelet_nwip(data->tdi->Z, A[i]->tdi->Y, data->noise->invC[2][1], A[i]->list, A[i]->Nlist);
+        N[i] += wdm_nwip(data->tdi->X, A[i]->tdi->X, data->noise->invC[0][0], A[i]->list, A[i]->Nlist);
+        N[i] += wdm_nwip(data->tdi->Y, A[i]->tdi->Y, data->noise->invC[1][1], A[i]->list, A[i]->Nlist);
+        N[i] += wdm_nwip(data->tdi->Z, A[i]->tdi->Z, data->noise->invC[2][2], A[i]->list, A[i]->Nlist);
+        N[i] += wdm_nwip(data->tdi->X, A[i]->tdi->Y, data->noise->invC[0][1], A[i]->list, A[i]->Nlist);
+        N[i] += wdm_nwip(data->tdi->X, A[i]->tdi->Z, data->noise->invC[0][2], A[i]->list, A[i]->Nlist);
+        N[i] += wdm_nwip(data->tdi->Y, A[i]->tdi->Z, data->noise->invC[1][2], A[i]->list, A[i]->Nlist);
+        N[i] += wdm_nwip(data->tdi->Y, A[i]->tdi->X, data->noise->invC[1][0], A[i]->list, A[i]->Nlist);
+        N[i] += wdm_nwip(data->tdi->Z, A[i]->tdi->X, data->noise->invC[2][0], A[i]->list, A[i]->Nlist);
+        N[i] += wdm_nwip(data->tdi->Z, A[i]->tdi->Y, data->noise->invC[2][1], A[i]->list, A[i]->Nlist);
     }
 
     /* compute matrix M_ij = (A_i|A_j) */
@@ -843,15 +843,15 @@ double get_Fstat_logL_wavelet(struct Orbit *orbit, struct Data *data, double f0,
             int Nlist;
             list_union(A[i]->list, A[j]->list, A[i]->Nlist, A[j]->Nlist, list, &Nlist);
 
-            M[i][j] += wavelet_nwip(A[i]->tdi->X, A[j]->tdi->X, data->noise->invC[0][0], list, Nlist);
-            M[i][j] += wavelet_nwip(A[i]->tdi->Y, A[j]->tdi->Y, data->noise->invC[1][1], list, Nlist);
-            M[i][j] += wavelet_nwip(A[i]->tdi->Z, A[j]->tdi->Z, data->noise->invC[2][2], list, Nlist);
-            M[i][j] += wavelet_nwip(A[i]->tdi->X, A[j]->tdi->Y, data->noise->invC[0][1], list, Nlist);
-            M[i][j] += wavelet_nwip(A[i]->tdi->X, A[j]->tdi->Z, data->noise->invC[0][2], list, Nlist);
-            M[i][j] += wavelet_nwip(A[i]->tdi->Y, A[j]->tdi->Z, data->noise->invC[1][2], list, Nlist);
-            M[i][j] += wavelet_nwip(A[i]->tdi->Y, A[j]->tdi->X, data->noise->invC[1][0], list, Nlist);
-            M[i][j] += wavelet_nwip(A[i]->tdi->Z, A[j]->tdi->X, data->noise->invC[2][0], list, Nlist);
-            M[i][j] += wavelet_nwip(A[i]->tdi->Z, A[j]->tdi->Y, data->noise->invC[2][1], list, Nlist);
+            M[i][j] += wdm_nwip(A[i]->tdi->X, A[j]->tdi->X, data->noise->invC[0][0], list, Nlist);
+            M[i][j] += wdm_nwip(A[i]->tdi->Y, A[j]->tdi->Y, data->noise->invC[1][1], list, Nlist);
+            M[i][j] += wdm_nwip(A[i]->tdi->Z, A[j]->tdi->Z, data->noise->invC[2][2], list, Nlist);
+            M[i][j] += wdm_nwip(A[i]->tdi->X, A[j]->tdi->Y, data->noise->invC[0][1], list, Nlist);
+            M[i][j] += wdm_nwip(A[i]->tdi->X, A[j]->tdi->Z, data->noise->invC[0][2], list, Nlist);
+            M[i][j] += wdm_nwip(A[i]->tdi->Y, A[j]->tdi->Z, data->noise->invC[1][2], list, Nlist);
+            M[i][j] += wdm_nwip(A[i]->tdi->Y, A[j]->tdi->X, data->noise->invC[1][0], list, Nlist);
+            M[i][j] += wdm_nwip(A[i]->tdi->Z, A[j]->tdi->X, data->noise->invC[2][0], list, Nlist);
+            M[i][j] += wdm_nwip(A[i]->tdi->Z, A[j]->tdi->Y, data->noise->invC[2][1], list, Nlist);
 
             free(list);
         }

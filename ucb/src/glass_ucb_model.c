@@ -102,7 +102,7 @@ void generate_ucb_model(struct Orbit *orbit, struct Data *data, struct Model *mo
     }//loop over sources
 }
 
-void generate_ucb_model_wavelet(struct Orbit *orbit, struct Data *data, struct Model *model, int source_id)
+void generate_ucb_model_wdm(struct Orbit *orbit, struct Data *data, struct Model *model, int source_id)
 {
     int i,n;
     
@@ -138,10 +138,10 @@ void generate_ucb_model_wavelet(struct Orbit *orbit, struct Data *data, struct M
         
         //Simulate gravitational wave signal
         /* the source_id = -1 condition is redundent if the model->tdi structure is up to date...*/
-        if(source_id==-1 || source_id==n) ucb_waveform_wavelet(orbit, data->wdm, data->T, model->t0, source->params, source->list, &source->Nlist, source->tdi->X, source->tdi->Y, source->tdi->Z);
+        if(source_id==-1 || source_id==n) ucb_waveform_wdm(orbit, data->wdm, data->T, model->t0, source->params, source->list, &source->Nlist, source->tdi->X, source->tdi->Y, source->tdi->Z);
 
         //Add waveform to model TDI channels
-        add_ucb_model_wavelet(data,model,source);
+        add_ucb_model_wdm(data,model,source);
 
     }//loop over sources
 }
@@ -230,7 +230,7 @@ void add_ucb_model(struct Data *data, struct Model *model, struct Source *source
         }//check that source_id is in range
     }//loop over waveform bins
 }
-void add_ucb_model_wavelet(struct Data *data, struct Model *model, struct Source *source)
+void add_ucb_model_wdm(struct Data *data, struct Model *model, struct Source *source)
 {
     //insert source into model 
     for(int n=0; n<source->Nlist; n++)
@@ -245,7 +245,7 @@ void add_ucb_model_wavelet(struct Data *data, struct Model *model, struct Source
     list_union(model->list, source->list, model->Nlist, source->Nlist, model->list, &model->Nlist); 
 }
 
-void remove_ucb_model_wavelet(struct Data *data, struct Model *model, struct Source *source)
+void remove_ucb_model_wdm(struct Data *data, struct Model *model, struct Source *source)
 {
     //insert source into model 
     for(int n=0; n<source->Nlist; n++)
@@ -307,7 +307,7 @@ void update_ucb_model(struct Orbit *orbit, struct Data *data, struct Model *mode
     
 }
 
-void update_ucb_model_wavelet(struct Orbit *orbit, struct Data *data, struct Model *model_x, struct Model *model_y, int source_id)
+void update_ucb_model_wdm(struct Orbit *orbit, struct Data *data, struct Model *model_x, struct Model *model_y, int source_id)
 {
     int i;
     int N=data->N;
@@ -315,7 +315,7 @@ void update_ucb_model_wavelet(struct Orbit *orbit, struct Data *data, struct Mod
     struct Source *source_y = model_y->source[source_id];
     
     //subtract current nth source from  model
-    remove_ucb_model_wavelet(data,model_y,source_x);
+    remove_ucb_model_wdm(data,model_y,source_x);
 
     //generate proposed signal model
     for(i=0; i<N; i++)
@@ -326,10 +326,10 @@ void update_ucb_model_wavelet(struct Orbit *orbit, struct Data *data, struct Mod
     }
 
     map_array_to_ucb_params(source_y, source_y->params, data->T);
-    ucb_waveform_wavelet(orbit, data->wdm, data->T, model_y->t0, source_y->params, source_y->list, &source_y->Nlist, source_y->tdi->X, source_y->tdi->Y, source_y->tdi->Z);
+    ucb_waveform_wdm(orbit, data->wdm, data->T, model_y->t0, source_y->params, source_y->list, &source_y->Nlist, source_y->tdi->X, source_y->tdi->Y, source_y->tdi->Z);
 
     //add proposed nth source to model
-    add_ucb_model_wavelet(data,model_y,source_y);
+    add_ucb_model_wdm(data,model_y,source_y);
     
 }
 
@@ -345,7 +345,7 @@ void generate_noise_model(struct Data *data, struct Model *model)
     invert_noise_covariance_matrix(model->noise);
 }
 
-void generate_noise_model_wavelet(struct Data *data, struct Model *model)
+void generate_noise_model_wdm(struct Data *data, struct Model *model)
 {
     int Nlayers = data->Nlayer;         //number of frequency layers
     int Nslices = data->N/data->Nlayer; //number of time slices

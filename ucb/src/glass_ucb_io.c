@@ -537,8 +537,8 @@ void print_chain_files(struct Data *data, struct Model **model, struct Chain *ch
         {
             //numerical SNR
             double snr_n;
-            if(!strcmp("fourier",data->basis)) snr_n = snr(model[n]->source[i], data->noise);
-            if(!strcmp("wavelet",data->basis)) snr_n = snr_wavelet(model[n]->source[i], data->noise);
+            if(!strcmp("dft",data->basis)) snr_n = snr(model[n]->source[i], data->noise);
+            if(!strcmp("wdm",data->basis)) snr_n = snr_wdm(model[n]->source[i], data->noise);
             //analytic SNR
             double snr_a = analytic_snr(exp(model[n]->source[i]->params[3]), data->noise->C[0][0][0], data->sine_f_on_fstar, data->sqT);
             
@@ -695,7 +695,7 @@ void save_waveforms(struct Data *data, struct Model *model, int mcmc)
     int n_re,n_im;
     double A_re,A_im,E_re,E_im,X_re,X_im,Y_re,Y_im,Z_re,Z_im,R_re,R_im;
     
-    if(!strcmp(data->basis,"fourier"))
+    if(!strcmp(data->basis,"dft"))
     {
         switch(data->Nchannel)
         {
@@ -818,8 +818,8 @@ void save_waveforms(struct Data *data, struct Model *model, int mcmc)
                 }
                 break;
         }
-    }//end if Fourier
-    if(!strcmp(data->basis,"wavelet"))
+    }//end if DFT
+    if(!strcmp(data->basis,"wdm"))
     {
         for(int n=0; n<data->N; n++)
         {
@@ -851,7 +851,7 @@ void save_waveforms(struct Data *data, struct Model *model, int mcmc)
 
 void print_waveform_strain(struct Data *data, struct Model *model, FILE *fptr)
 {
-    if(!strcmp(data->basis,"fourier"))
+    if(!strcmp(data->basis,"dft"))
     {
         for(int n=0; n<data->NFFT; n++)
         {
@@ -880,7 +880,7 @@ void print_waveform_strain(struct Data *data, struct Model *model, FILE *fptr)
             }
         }
     }
-    if(!strcmp(data->basis,"wavelet"))
+    if(!strcmp(data->basis,"wdm"))
     {
         for(int j=data->lmin; j<data->lmax; j++)
         {
@@ -889,7 +889,7 @@ void print_waveform_strain(struct Data *data, struct Model *model, FILE *fptr)
                 double f = j*data->wdm->df;
                 double t = i*data->wdm->dt;
                 int k;
-                wavelet_pixel_to_index(data->wdm, i, j, &k);
+                wdm_pixel_to_index(data->wdm, i, j, &k);
                 k-=data->wdm->kmin;
                 fprintf(fptr,"%.12g %.12g ",t,f);
                 fprintf(fptr,"%.12g ",model->tdi->X[k]);
@@ -910,8 +910,8 @@ void print_waveforms_reconstruction(struct Data *data, struct Flags *flags)
     FILE *fptr_var;
     
     int Nsamples;
-    if(!strcmp(data->basis,"fourier")) Nsamples = data->NFFT;
-    if(!strcmp(data->basis,"wavelet")) Nsamples = data->N;
+    if(!strcmp(data->basis,"dft")) Nsamples = data->NFFT;
+    if(!strcmp(data->basis,"wdm")) Nsamples = data->N;
     
     //get variance of residual
     double **res_var = malloc(Nsamples*sizeof(double *));
@@ -1007,7 +1007,7 @@ void print_psd_draw(struct Data *data, struct Model *model, struct Flags *flags)
     sprintf(filename,"%s/psd_draw.dat",data->dataDir);
     fptr=fopen(filename,"w");
 
-    if(!strcmp(data->basis,"fourier"))
+    if(!strcmp(data->basis,"dft"))
     {
         for(int n=0; n<data->NFFT; n++)
         {
@@ -1020,15 +1020,15 @@ void print_psd_draw(struct Data *data, struct Model *model, struct Flags *flags)
             fprintf(fptr,"\n");
         }
     }
-    if(!strcmp(data->basis,"wavelet"))
+    if(!strcmp(data->basis,"wdm"))
     {
         for(int n=0; n<data->Nlayer; n++)
         {
             int k;
-            double fmin = (data->lmin + n)*WAVELET_BANDWIDTH;
-            double fmax = fmin + WAVELET_BANDWIDTH;
+            double fmin = (data->lmin + n)*WDM_BANDWIDTH;
+            double fmax = fmin + WDM_BANDWIDTH;
             
-            wavelet_pixel_to_index(data->wdm, 0, data->lmin + n, &k);
+            wdm_pixel_to_index(data->wdm, 0, data->lmin + n, &k);
             k-=data->wdm->kmin;
             
             fprintf(fptr,"%lg ",fmin);

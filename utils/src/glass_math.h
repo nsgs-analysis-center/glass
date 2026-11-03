@@ -197,8 +197,8 @@ void detrend(double *data, int N, int Navg);
  
  Real and Imaginary components from  RFT functions are not ordered the way the rest of the package expects.
   
- @param x[out] array to be filled with ordered fourier coefficients
- @param x_packed[in] input array with ill-formatted fourier coefficients
+ @param x[out] array to be filled with ordered dft coefficients
+ @param x_packed[in] input array with ill-formatted dft coefficients
  @param N[in] size of arrays
  */
 void unpack_fft_output(double *x, double *x_packed, int N);
@@ -206,7 +206,7 @@ void unpack_fft_output(double *x, double *x_packed, int N);
 /**
 \brief Wrappers to FFT functions
  
- In-place forward and reverse mixed radix Fourier transforms
+ In-place forward and reverse mixed radix DFT transforms
   
  @param data[in/out] array to be transformed
  @param N[in] size of arrays
@@ -232,7 +232,7 @@ void glass_inverse_real_fft_outplace(double *freqdata, double* timedata, int N);
 double power_spectrum(double *data, int n);
 
 /**
-\brief Fourier-domain noise weighted inner product
+\brief DFT-domain noise weighted inner product
   
  @param a complex amplitude array
  @param b complex amplitude array
@@ -240,8 +240,8 @@ double power_spectrum(double *data, int n);
  @param N number of frequency bins in sum
  @return \f$(a|b) =  4 \sum_n a^*_n b_n C^-1_n \f$
  */
-double fourier_nwip(const double *a, const double *b, const double *invC, int N);
-double wavelet_nwip(const double *a, const double *b, const double *invC, const int *list, int N);
+double dft_nwip(const double *a, const double *b, const double *invC, int N);
+double wdm_nwip(const double *a, const double *b, const double *invC, const int *list, int N);
 
 /**
 \brief Signal to noise ratio in frequency domain
@@ -255,10 +255,10 @@ double wavelet_nwip(const double *a, const double *b, const double *invC, const 
 double snr(struct Source *source, struct Noise *noise);
 
 /**
- \brief Signal to noise ratio in wavelet domain
+ \brief Signal to noise ratio in wdm domain
  @see snr()
  */
-double snr_wavelet(struct Source *source, struct Noise *noise);
+double snr_wdm(struct Source *source, struct Noise *noise);
 
 /**
 \brief Our implementation of the recursive binary search algorithm

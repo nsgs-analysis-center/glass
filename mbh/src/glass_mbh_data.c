@@ -38,13 +38,13 @@ void MBHInjectSimulatedSource(struct Data *data, struct Orbit *orbit, struct Fla
     struct Source *inj = malloc(sizeof(struct Source));
     alloc_source(inj, data->N, MBH_MODEL_NP, data->Nchannel);
     
-    //reset wavelet basis max and min ranges
-    wavelet_pixel_to_index(data->wdm,0,data->lmin,&data->wdm->kmin);
-    wavelet_pixel_to_index(data->wdm,0,data->lmax,&data->wdm->kmax);
+    //reset wdm basis max and min ranges
+    wdm_pixel_to_index(data->wdm,0,data->lmin,&data->wdm->kmin);
+    wdm_pixel_to_index(data->wdm,0,data->lmax,&data->wdm->kmax);
     
     //recompute fmin and fmax so they align with a bin
-    data->fmin = data->lmin*WAVELET_BANDWIDTH;
-    data->fmax = data->lmax*WAVELET_BANDWIDTH;
+    data->fmin = data->lmin*WDM_BANDWIDTH;
+    data->fmax = data->lmax*WDM_BANDWIDTH;
     data->qmin = (int)(data->fmin*data->T);
     data->qmax = data->qmin+data->NFFT;
     
@@ -110,7 +110,7 @@ void MBHInjectSimulatedSource(struct Data *data, struct Orbit *orbit, struct Fla
                 for(int i=0; i<data->wdm->NT; i++)
                 {
                     double t = i*data->wdm->dt;
-                    wavelet_pixel_to_index(data->wdm,i,j,&k);
+                    wdm_pixel_to_index(data->wdm,i,j,&k);
                     k-=data->wdm->kmin;
                     fprintf(fptr,"%.14e %.14e %.14e %.14e %.14e\n", t, f, inj->tdi->X[k], inj->tdi->Y[k], inj->tdi->Z[k]);
                 }
@@ -118,11 +118,11 @@ void MBHInjectSimulatedSource(struct Data *data, struct Orbit *orbit, struct Fla
             }
             fclose(fptr);
             
-            //save fourier domain injection waveform
-            sprintf(filename,"%s/waveform_injection_fourier_%i.dat",data->dataDir,n_inj);
-            print_wavelet_fourier_spectra(data, inj->tdi, filename);
+            //save dft domain injection waveform
+            sprintf(filename,"%s/waveform_injection_dft_%i.dat",data->dataDir,n_inj);
+            print_wdm_dft_spectra(data, inj->tdi, filename);
             
-            //save wavelet domain scaleogram of injection waveform
+            //save wdm domain scaleogram of injection waveform
             sprintf(filename,"%s/data/power_injection_%i.dat",flags->runDir,n_inj);
             fptr=fopen(filename,"w");
             for(int j=data->lmin; j<data->lmax; j++)
@@ -131,7 +131,7 @@ void MBHInjectSimulatedSource(struct Data *data, struct Orbit *orbit, struct Fla
                 for(int i=0; i<data->wdm->NT; i++)
                 {
                     double t = i*data->wdm->dt;
-                    wavelet_pixel_to_index(data->wdm,i,j,&k);
+                    wdm_pixel_to_index(data->wdm,i,j,&k);
                     k-=data->wdm->kmin;
                     fprintf(fptr,"%.14e %.14e %.14e %.14e %.14e\n", t, f, inj->tdi->X[k]*inj->tdi->X[k], inj->tdi->Y[k]*inj->tdi->Y[k], inj->tdi->Z[k]*inj->tdi->Z[k]);
                 }
@@ -144,7 +144,7 @@ void MBHInjectSimulatedSource(struct Data *data, struct Orbit *orbit, struct Fla
 
             //Get injected SNR
             if(!flags->quiet)
-                fprintf(stdout,"   ...injected SNR=%g\n",snr_wavelet(inj,data->noise));
+                fprintf(stdout,"   ...injected SNR=%g\n",snr_wdm(inj,data->noise));
 
             
             //Compute fisher information matrix of injection
@@ -188,8 +188,8 @@ void MBHInjectSimulatedSource(struct Data *data, struct Orbit *orbit, struct Fla
         fclose(injectionFile);
     }
     
-    sprintf(filename,"%s/data/waveform_injection_fourier.dat",flags->runDir);
-    print_wavelet_fourier_spectra(data, inj_vec[0]->tdi, filename);
+    sprintf(filename,"%s/data/waveform_injection_dft.dat",flags->runDir);
+    print_wdm_dft_spectra(data, inj_vec[0]->tdi, filename);
     
     if(!flags->quiet)fprintf(stdout,"================================================\n\n");
 }

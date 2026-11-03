@@ -314,7 +314,7 @@ void UCBInjectSimulatedSource(struct Data *data, struct Orbit *orbit, struct Fla
             //set bandwidth of data segment centered on injection
             if(nn==0 && !flags->strainData)
             {
-                if(!strcmp("fourier",data->basis))
+                if(!strcmp("dft",data->basis))
                 {
                     data->fmin = f0 - (data->NFFT/2)/data->T;
                     data->fmax = f0 + (data->NFFT/2)/data->T;
@@ -327,22 +327,22 @@ void UCBInjectSimulatedSource(struct Data *data, struct Orbit *orbit, struct Fla
 
                     if(!flags->quiet)fprintf(stdout,"Frequency bins for segment [%i,%i]\n",data->qmin,data->qmax);
                 }
-                if(!strcmp("wavelet",data->basis))
+                if(!strcmp("wdm",data->basis))
                 {
                     
-                    int q0 = (int)floor(f0/WAVELET_BANDWIDTH);
+                    int q0 = (int)floor(f0/WDM_BANDWIDTH);
 
                     //pad by one layer above and below
                     data->lmin = q0-((data->Nlayer-1)/2);   //mimimum frequency layer
                     data->lmax = data->lmin + data->Nlayer; //maximum frequency layer
                     
-                    //reset wavelet basis max and min ranges
-                    wavelet_pixel_to_index(data->wdm,0,data->lmin,&data->wdm->kmin);
-                    wavelet_pixel_to_index(data->wdm,0,data->lmax,&data->wdm->kmax);
+                    //reset wdm basis max and min ranges
+                    wdm_pixel_to_index(data->wdm,0,data->lmin,&data->wdm->kmin);
+                    wdm_pixel_to_index(data->wdm,0,data->lmax,&data->wdm->kmax);
                     
                     //recompute fmin and fmax so they align with a bin
-                    data->fmin = f0-512./data->T;//data->lmin*WAVELET_BANDWIDTH;
-                    data->fmax = f0+512./data->T;//data->lmax*WAVELET_BANDWIDTH;
+                    data->fmin = f0-512./data->T;//data->lmin*WDM_BANDWIDTH;
+                    data->fmax = f0+512./data->T;//data->lmax*WDM_BANDWIDTH;
                     data->qmin = (int)(data->fmin*data->T);
                     data->qmax = data->qmin+data->NFFT;
 
@@ -393,7 +393,7 @@ void UCBInjectSimulatedSource(struct Data *data, struct Orbit *orbit, struct Fla
             fclose(paramFile);
             
             //Book-keeping of injection time-frequency volume
-            if(!strcmp("fourier",data->basis))
+            if(!strcmp("dft",data->basis))
             {
                 ucb_alignment(orbit, data, inj);
                 if(inj->qmax < data->qmin || inj->qmin > data->qmax)
@@ -409,16 +409,16 @@ void UCBInjectSimulatedSource(struct Data *data, struct Orbit *orbit, struct Fla
             }
 
             //Simulate gravitational wave signal
-            if(!strcmp("fourier",data->basis))     
+            if(!strcmp("dft",data->basis))     
                 ucb_waveform(orbit, data->format, data->T, data->t0, inj->params, UCB_MODEL_NP, inj->tdi->X, inj->tdi->Y, inj->tdi->Z, inj->tdi->A, inj->tdi->E, inj->BW, data->Nchannel);
-            if(!strcmp("wavelet",data->basis)) 
-                ucb_waveform_wavelet(orbit, data->wdm, data->T, data->t0, inj->params, inj->list, &inj->Nlist, inj->tdi->X, inj->tdi->Y, inj->tdi->Z);
+            if(!strcmp("wdm",data->basis)) 
+                ucb_waveform_wdm(orbit, data->wdm, data->T, data->t0, inj->params, inj->list, &inj->Nlist, inj->tdi->X, inj->tdi->Y, inj->tdi->Z);
             
             
             //Add waveform to data TDI channels
-            if(!strcmp("fourier",data->basis))
+            if(!strcmp("dft",data->basis))
             {
-                printf("add fourier waveform to data\n");
+                printf("add dft waveform to data\n");
                 for(int n=0; n<inj->BW; n++)
                 {
                     int i = n+inj->imin;
@@ -441,7 +441,7 @@ void UCBInjectSimulatedSource(struct Data *data, struct Orbit *orbit, struct Fla
                     }
                 }
             }
-            if(!strcmp("wavelet",data->basis))
+            if(!strcmp("wdm",data->basis))
             {
                 for(int n=0; n<inj->Nlist; n++)
                 {
@@ -454,7 +454,7 @@ void UCBInjectSimulatedSource(struct Data *data, struct Orbit *orbit, struct Fla
             
             sprintf(filename,"%s/data/waveform_injection_%i.dat",flags->runDir,n_inj);
             fptr=fopen(filename,"w");
-            if(!strcmp("fourier",data->basis))
+            if(!strcmp("dft",data->basis))
             {
                 for(int i=0; i<data->NFFT; i++)
                 {
@@ -473,7 +473,7 @@ void UCBInjectSimulatedSource(struct Data *data, struct Orbit *orbit, struct Fla
                     }
                 }
             }
-            if(!strcmp("wavelet",data->basis))
+            if(!strcmp("wdm",data->basis))
             {
                 for(int j=data->lmin; j<data->lmax; j++)
                 {
@@ -481,25 +481,25 @@ void UCBInjectSimulatedSource(struct Data *data, struct Orbit *orbit, struct Fla
                     for(int i=0; i<data->wdm->NT; i++)
                     {
                         double t = i*data->wdm->dt;
-                        wavelet_pixel_to_index(data->wdm,i,j,&k);
+                        wdm_pixel_to_index(data->wdm,i,j,&k);
                         k-=data->wdm->kmin;
-                        fprintf(fptr,"%.14e %.14e %.14e %.14e %.14e\n", t, f + WAVELET_BANDWIDTH/2, inj->tdi->X[k], inj->tdi->Y[k], inj->tdi->Z[k]);
+                        fprintf(fptr,"%.14e %.14e %.14e %.14e %.14e\n", t, f + WDM_BANDWIDTH/2, inj->tdi->X[k], inj->tdi->Y[k], inj->tdi->Z[k]);
                     }
                     fprintf(fptr,"\n");
                 }
             }
             fclose(fptr);
 
-            if(!strcmp("wavelet",data->basis))
+            if(!strcmp("wdm",data->basis))
             {
-                sprintf(filename,"%s/waveform_injection_fourier_%i.dat",data->dataDir,n_inj);
-                print_wavelet_fourier_spectra(data, inj->tdi, filename);
+                sprintf(filename,"%s/waveform_injection_dft_%i.dat",data->dataDir,n_inj);
+                print_wdm_dft_spectra(data, inj->tdi, filename);
             }
 
             
             sprintf(filename,"%s/data/power_injection_%i.dat",flags->runDir,n_inj);
             fptr=fopen(filename,"w");
-            if(!strcmp("fourier",data->basis))
+            if(!strcmp("dft",data->basis))
             {
                 for(int i=0; i<inj->BW; i++)
                 {
@@ -521,7 +521,7 @@ void UCBInjectSimulatedSource(struct Data *data, struct Orbit *orbit, struct Fla
                     }
                 }
             }
-            if(!strcmp("wavelet",data->basis))
+            if(!strcmp("wdm",data->basis))
             {
                 for(int j=data->lmin; j<data->lmax; j++)
                 {
@@ -529,7 +529,7 @@ void UCBInjectSimulatedSource(struct Data *data, struct Orbit *orbit, struct Fla
                     for(int i=0; i<data->wdm->NT; i++)
                     {
                         double t = i*data->wdm->dt;
-                        wavelet_pixel_to_index(data->wdm,i,j,&k);
+                        wdm_pixel_to_index(data->wdm,i,j,&k);
                         k-=data->wdm->kmin;
                         fprintf(fptr,"%.14e %.14e %.14e %.14e %.14e\n", t, f, inj->tdi->X[k]*inj->tdi->X[k], inj->tdi->Y[k]*inj->tdi->Y[k], inj->tdi->Z[k]*inj->tdi->Z[k]);
                     }
@@ -539,28 +539,28 @@ void UCBInjectSimulatedSource(struct Data *data, struct Orbit *orbit, struct Fla
             fclose(fptr);
             
             //Get noise spectrum for data segment
-            if(!strcmp("fourier",data->basis)) GetNoiseModel(data,orbit,flags);
-            if(!strcmp("wavelet",data->basis)) GetDynamicNoiseModel(data, orbit, flags);
+            if(!strcmp("dft",data->basis)) GetNoiseModel(data,orbit,flags);
+            if(!strcmp("wdm",data->basis)) GetDynamicNoiseModel(data, orbit, flags);
 
             //Get injected SNR
             if(!flags->quiet)
             {
-                if(!strcmp("fourier",data->basis))fprintf(stdout,"   ...injected SNR=%g\n",snr(inj, data->noise));
-                if(!strcmp("wavelet",data->basis))fprintf(stdout,"   ...injected SNR=%g\n",snr_wavelet(inj,data->noise));
+                if(!strcmp("dft",data->basis))fprintf(stdout,"   ...injected SNR=%g\n",snr(inj, data->noise));
+                if(!strcmp("wdm",data->basis))fprintf(stdout,"   ...injected SNR=%g\n",snr_wdm(inj,data->noise));
             }
             
             /*Add Gaussian noise to injection
             if(flags->simNoise && nn==0)
             {
-                if(!strcmp("fourier",data->basis)) AddNoise(data,tdi);
-                if(!strcmp("wavelet",data->basis)) AddNoiseWavelet(data,tdi);
+                if(!strcmp("dft",data->basis)) AddNoise(data,tdi);
+                if(!strcmp("wdm",data->basis)) AddNoiseWDM(data,tdi);
             }*/
 
             //Compute fisher information matrix of injection
             if(!flags->quiet)fprintf(stdout,"   ...computing Fisher Information Matrix of injection\n");
             
-            if(!strcmp("fourier",data->basis)) ucb_fisher(orbit, data, inj, data->noise);
-            if(!strcmp("wavelet",data->basis)) ucb_fisher_wavelet(orbit, data, inj, data->noise);
+            if(!strcmp("dft",data->basis)) ucb_fisher(orbit, data, inj, data->noise);
+            if(!strcmp("wdm",data->basis)) ucb_fisher_wdm(orbit, data, inj, data->noise);
             
             if(!flags->quiet)
             {
@@ -591,7 +591,7 @@ void UCBInjectSimulatedSource(struct Data *data, struct Orbit *orbit, struct Fla
     //print_data(data,flags);
 
     /* compute overlaps between injections */
-    if(!strcmp(data->basis,"fourier"))
+    if(!strcmp(data->basis,"dft"))
     {
         printf("\n Match Matrix:\n");
         for(int i=0; i<n_inj; i++)
@@ -604,21 +604,21 @@ void UCBInjectSimulatedSource(struct Data *data, struct Orbit *orbit, struct Fla
             printf("\n");
         }
     }
-    if(!strcmp(data->basis,"wavelet"))
+    if(!strcmp(data->basis,"wdm"))
     {
         printf("\n Match Matrix:\n");
         for(int i=0; i<n_inj; i++)
         {
             for(int j=0; j<n_inj; j++)
             {
-                if(i==j) printf(" %+.2e",snr_wavelet(inj_vec[i],data->noise));
-                else printf(" %+.2e",waveform_match_wavelet(inj_vec[i], inj_vec[j], data->noise));
+                if(i==j) printf(" %+.2e",snr_wdm(inj_vec[i],data->noise));
+                else printf(" %+.2e",waveform_match_wdm(inj_vec[i], inj_vec[j], data->noise));
             }
             printf("\n");
         }
         
-        sprintf(filename,"%s/data/waveform_injection_fourier.dat",flags->runDir);
-        print_wavelet_fourier_spectra(data, inj_vec[0]->tdi, filename);
+        sprintf(filename,"%s/data/waveform_injection_dft.dat",flags->runDir);
+        print_wdm_dft_spectra(data, inj_vec[0]->tdi, filename);
     }
 
     if(!flags->quiet)fprintf(stdout,"================================================\n\n");

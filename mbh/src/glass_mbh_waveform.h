@@ -88,15 +88,15 @@ double mbh_ringdown_frequency(double *params);
  
  
  @param[in] orbit LISA ephemerides
- @param[in] wdm Wavelet basis
+ @param[in] wdm WDM basis
  @param[in] Tobs observation time \f$ T_{\rm obs}\ [{\rm s}]\f$
  @param[in] t0 start time of observations \f$ t_0\ [{\rm s}]\f$
  @param[in] params vector of MBH parameters
- @param[out] wavelet_list list of active wavelet pixels for the signal
- @param[out] Nwavelet number of active wavelet pixels for the signal
+ @param[out] wdm_list list of active wdm pixels for the signal
+ @param[out] Nwdm number of active wdm pixels for the signal
  @param[out] X,Y,Z Michelson channels
  */
-void mbh_fd_waveform(struct Orbit *orbit, struct Wavelets *wdm, double Tobs, double t0, double *params, int *wavelet_list, int *Nwavelet, double *X, double *Y, double *Z);
+void mbh_fd_waveform(struct Orbit *orbit, struct WDM *wdm, double Tobs, double t0, double *params, int *wdm_list, int *Nwdm, double *X, double *Y, double *Z);
 
 /**
  \brief Same as mbh_fd_waveform() but for time-domain waveform.
@@ -104,7 +104,7 @@ void mbh_fd_waveform(struct Orbit *orbit, struct Wavelets *wdm, double Tobs, dou
  @see mbh_fd_wavefor()
  m
  */
-void mbh_td_waveform(struct Orbit *orbit, struct Wavelets *wdm, double Tobs, double t0, double *params, int *wavelet_list, int *Nwavelet, double *X, double *Y, double *Z);
+void mbh_td_waveform(struct Orbit *orbit, struct WDM *wdm, double Tobs, double t0, double *params, int *wdm_list, int *Nwdm, double *X, double *Y, double *Z);
 
 void mbh_fisher(struct Orbit *orbit, struct Data *data, struct Source *source, struct Noise *noise);
 

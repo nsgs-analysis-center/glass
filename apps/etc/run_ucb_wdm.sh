@@ -3,7 +3,7 @@
 injection_file="${GLASS_REPO}/ucb/etc/sources/precision/PrecisionSource_1.txt"
 threads=12
 
-ucb_sampler="${GLASS_PREFIX}/ucb_wavelet_mcmc"
+ucb_sampler="${GLASS_PREFIX}/ucb_wdm_mcmc"
 outdir="${GLASS_TEST}/ucb_dwt"
 cmd="${ucb_sampler} --rundir ${outdir} --cheat --threads ${threads} --inj ${injection_file}"
 echo $cmd

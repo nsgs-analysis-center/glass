@@ -359,7 +359,7 @@ double power_spectrum(double *data, int n)
     return (Re*Re + Im*Im);
 }
 
-double fourier_nwip(const double *a, const double *b, const double *invC, int N)
+double dft_nwip(const double *a, const double *b, const double *invC, int N)
 {
     int j,k;
     double arg, product;
@@ -379,7 +379,7 @@ double fourier_nwip(const double *a, const double *b, const double *invC, int N)
     return(2.0*arg);
 }
 
-double wavelet_nwip(const double *a, const double *b, const double *invC, const int *list, int N)
+double wdm_nwip(const double *a, const double *b, const double *invC, const int *list, int N)
 {
     double arg = 0.0;
     for(int n=0; n<N; n++)
@@ -406,34 +406,34 @@ double snr(struct Source *source, struct Noise *noise)
     switch(source->tdi->Nchannel)
     {
         case 1: //Michelson
-            snr2 += fourier_nwip(source->tdi->X,source->tdi->X,noise->invC[0][0],source->tdi->N/2);
+            snr2 += dft_nwip(source->tdi->X,source->tdi->X,noise->invC[0][0],source->tdi->N/2);
             break;
         case 2: //A&E
-            snr2 += fourier_nwip(source->tdi->A,source->tdi->A,noise->invC[0][0],source->tdi->N/2);
-            snr2 += fourier_nwip(source->tdi->E,source->tdi->E,noise->invC[1][1],source->tdi->N/2);
+            snr2 += dft_nwip(source->tdi->A,source->tdi->A,noise->invC[0][0],source->tdi->N/2);
+            snr2 += dft_nwip(source->tdi->E,source->tdi->E,noise->invC[1][1],source->tdi->N/2);
             break;
         case 3: //XYZ
-            snr2 += fourier_nwip(source->tdi->X,source->tdi->X,noise->invC[0][0],source->tdi->N/2);
-            snr2 += fourier_nwip(source->tdi->Y,source->tdi->Y,noise->invC[1][1],source->tdi->N/2);
-            snr2 += fourier_nwip(source->tdi->Z,source->tdi->Z,noise->invC[2][2],source->tdi->N/2);
-            snr2 += fourier_nwip(source->tdi->X,source->tdi->Y,noise->invC[0][1],source->tdi->N/2)*2.;
-            snr2 += fourier_nwip(source->tdi->X,source->tdi->Z,noise->invC[0][2],source->tdi->N/2)*2.;
-            snr2 += fourier_nwip(source->tdi->Y,source->tdi->Z,noise->invC[1][2],source->tdi->N/2)*2.;
+            snr2 += dft_nwip(source->tdi->X,source->tdi->X,noise->invC[0][0],source->tdi->N/2);
+            snr2 += dft_nwip(source->tdi->Y,source->tdi->Y,noise->invC[1][1],source->tdi->N/2);
+            snr2 += dft_nwip(source->tdi->Z,source->tdi->Z,noise->invC[2][2],source->tdi->N/2);
+            snr2 += dft_nwip(source->tdi->X,source->tdi->Y,noise->invC[0][1],source->tdi->N/2)*2.;
+            snr2 += dft_nwip(source->tdi->X,source->tdi->Z,noise->invC[0][2],source->tdi->N/2)*2.;
+            snr2 += dft_nwip(source->tdi->Y,source->tdi->Z,noise->invC[1][2],source->tdi->N/2)*2.;
             break;
     }
     
     return(sqrt(snr2));
 }
 
-double snr_wavelet(struct Source *source, struct Noise *noise)
+double snr_wdm(struct Source *source, struct Noise *noise)
 {
     double snr2 = 0.0;
-    snr2 += wavelet_nwip(source->tdi->X, source->tdi->X, noise->invC[0][0], source->list, source->Nlist);
-    snr2 += wavelet_nwip(source->tdi->Y, source->tdi->Y, noise->invC[1][1], source->list, source->Nlist);
-    snr2 += wavelet_nwip(source->tdi->Z, source->tdi->Z, noise->invC[2][2], source->list, source->Nlist);
-    snr2 += wavelet_nwip(source->tdi->X, source->tdi->Y, noise->invC[0][1], source->list, source->Nlist)*2;
-    snr2 += wavelet_nwip(source->tdi->X, source->tdi->Z, noise->invC[0][2], source->list, source->Nlist)*2;
-    snr2 += wavelet_nwip(source->tdi->Y, source->tdi->Z, noise->invC[1][2], source->list, source->Nlist)*2;
+    snr2 += wdm_nwip(source->tdi->X, source->tdi->X, noise->invC[0][0], source->list, source->Nlist);
+    snr2 += wdm_nwip(source->tdi->Y, source->tdi->Y, noise->invC[1][1], source->list, source->Nlist);
+    snr2 += wdm_nwip(source->tdi->Z, source->tdi->Z, noise->invC[2][2], source->list, source->Nlist);
+    snr2 += wdm_nwip(source->tdi->X, source->tdi->Y, noise->invC[0][1], source->list, source->Nlist)*2;
+    snr2 += wdm_nwip(source->tdi->X, source->tdi->Z, noise->invC[0][2], source->list, source->Nlist)*2;
+    snr2 += wdm_nwip(source->tdi->Y, source->tdi->Z, noise->invC[1][2], source->list, source->Nlist)*2;
     return sqrt(snr2);
 }
 

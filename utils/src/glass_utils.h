@@ -48,7 +48,7 @@
 
 #include "glass_constants.h"
 #include "glass_lisa.h"
-#include "glass_wavelet.h"
+#include "glass_wdm.h"
 #include "glass_data.h"
 #include "glass_gmm.h"
 #include "glass_galaxy.h"

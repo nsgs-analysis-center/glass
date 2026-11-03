@@ -89,11 +89,11 @@ static void set_ucb_defaults(struct Data *data)
     data->t0       = 0.0; /* start time of data segment in seconds */
     data->sqT      = sqrt(data->T);
     data->Nlayer   = 1;
-    data->N        = (int)floor(data->T/WAVELET_DURATION)*data->Nlayer;
+    data->N        = (int)floor(data->T/WDM_DURATION)*data->Nlayer;
     data->NFFT     = data->N/2;    data->Nchannel = 3; //1=X, 2=AE, 3=XYZ
     data->qpad     = 0;
     data->fmin     = 1e-4; //Hz
-    sprintf(data->basis,"wavelet");
+    sprintf(data->basis,"wdm");
 }
 
 /**
@@ -119,7 +119,7 @@ int main(int argc, char *argv[])
     
     /* Parse command line and set defaults/flags */
     set_ucb_defaults(data);
-    parse_data_args(argc,argv,data,orbit,flags,chain,"wavelet");
+    parse_data_args(argc,argv,data,orbit,flags,chain,"wdm");
     parse_ucb_args(argc,argv,flags);
     parse_ucb_test_likelihood_args(argc,argv,flags);
     if(flags->help) print_usage();
@@ -169,10 +169,10 @@ int main(int argc, char *argv[])
     }
 
     /* Add Gaussian noise realization */
-    if(flags->simNoise) AddNoiseWavelet(data,data->tdi);
+    if(flags->simNoise) AddNoiseWDM(data,data->tdi);
 
     /* Store DFT copy of simulated data */
-    if(!flags->strainData) wavelet_layer_to_fourier_transform(data);
+    if(!flags->strainData) wdm_layer_to_dft_transform(data);
     
     /* print various data products for plotting */
     print_data(data, flags);
@@ -254,7 +254,7 @@ int main(int argc, char *argv[])
                     double f = j*data->wdm->df;
                     double t = i*data->wdm->dt;
                     int k;
-                    wavelet_pixel_to_index(data->wdm, i, j, &k);
+                    wdm_pixel_to_index(data->wdm, i, j, &k);
                     k-=data->wdm->kmin;
                     fprintf(wavfile,"%.12g %.12g ",t,f);
                     fprintf(wavfile,"%.12g ",model[0]->residual->X[k]);

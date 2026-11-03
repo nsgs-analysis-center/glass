@@ -24,10 +24,10 @@ int main(int argc, char* argv[])
     int N = (int)(Tobs/LISA_CADENCE);
 
     /*
-     Wavelet basis
+     WDM basis
      */
-    struct Wavelets *wdm = malloc(sizeof(struct Wavelets));
-    initialize_wavelet(wdm, Tobs);
+    struct WDM *wdm = malloc(sizeof(struct WDM));
+    initialize_wdm(wdm, Tobs);
     
     /*
     Define and set up Orbit structure which contains spacecraft ephemerides
@@ -73,16 +73,16 @@ int main(int argc, char* argv[])
     alloc_tdi(tdi,N,3);
     
     /*
-     Keep track of which wavelets are used for template
+     Keep track of which wdm are used for template
      */
-    int *wavelet_list = int_vector(N);
-    int Nwavelet;
+    int *wdm_list = int_vector(N);
+    int Nwdm;
     
     /*
      Test frequency domain waveform
      */
     start = clock();
-    for(int i=0; i<NTEST; i++) mbh_fd_waveform(orbit, wdm, Tobs, t0, params, wavelet_list, &Nwavelet, tdi->X, tdi->Y, tdi->Z);
+    for(int i=0; i<NTEST; i++) mbh_fd_waveform(orbit, wdm, Tobs, t0, params, wdm_list, &Nwdm, tdi->X, tdi->Y, tdi->Z);
     end = clock();
     cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC / NTEST;
     printf("PhenomD calculation took %f seconds\n", cpu_time_used);
@@ -91,7 +91,7 @@ int main(int argc, char* argv[])
      Test time domain waveform
      
     start = clock();
-    for(int i=0; i<NTEST; i++) mbh_td_waveform(orbit, wdm, Tobs, t0, params, wavelet_list, &Nwavelet, tdi->X, tdi->Y, tdi->Z);
+    for(int i=0; i<NTEST; i++) mbh_td_waveform(orbit, wdm, Tobs, t0, params, wdm_list, &Nwdm, tdi->X, tdi->Y, tdi->Z);
     end = clock();
     cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC / NTEST;
     printf("PhenomT calculation took %f seconds\n", cpu_time_used);*/

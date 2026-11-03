@@ -4,8 +4,8 @@
  */
 
 /**
- @file noise_wavelet_mcmc.c
- \brief Main function for wavelet-domain noise and SGWB sampler app `noise_wavelet_mcmc` 
+ @file noise_wdm_mcmc.c
+ \brief Main function for wdm-domain noise and SGWB sampler app `noise_wdm_mcmc` 
  */
 
 /*  REQUIRED LIBRARIES  */
@@ -29,7 +29,7 @@ static void print_usage()
 {
     print_glass_usage();
     fprintf(stdout,"EXAMPLE:\n");
-    fprintf(stdout,"noise_wavelet_mcmc --sim-noise --conf-noise --sgwb-template 0 --duration 7864320 --fmin 1e-4 --fmax 8e-3 [--coarse-Q 4]\n");
+    fprintf(stdout,"noise_wdm_mcmc --sim-noise --conf-noise --sgwb-template 0 --duration 7864320 --fmin 1e-4 --fmax 8e-3 [--coarse-Q 4]\n");
     fprintf(stdout,"\n");
     exit(0);
 }
@@ -71,7 +71,7 @@ int write_fft_data(double df, int NFFT, double* data, char* fname) {
 
 int write_wdm_data(struct Data* d, double* data, char* fname) {
     FILE *fptr = NULL;
-    struct Wavelets* wdm = d->wdm;
+    struct WDM* wdm = d->wdm;
     fptr = fopen(fname,"w");
     if (!fptr) {
         fprintf(stderr, "Couldn't open %s for writing!\n", fname);
@@ -82,7 +82,7 @@ int write_wdm_data(struct Data* d, double* data, char* fname) {
         double t = i*wdm->dt;
         for (int j=d->lmin; j < d->lmax; j++) {
             double f = j*wdm->df;
-            wavelet_pixel_to_index(wdm, i, j, &k);
+            wdm_pixel_to_index(wdm, i, j, &k);
             k -= wdm->kmin;
             fprintf(fptr,"%lg ",t);
             fprintf(fptr,"%lg ",f);
@@ -96,7 +96,7 @@ int write_wdm_data(struct Data* d, double* data, char* fname) {
 
 int write_coarse_wdm_data(struct Data* d, double* data, char* fname, int Q) {
     FILE *fptr = NULL;
-    struct Wavelets* wdm = d->wdm;
+    struct WDM* wdm = d->wdm;
     fptr = fopen(fname,"w");
     if (!fptr) {
         fprintf(stderr, "Couldn't open %s for writing!\n", fname);
@@ -120,7 +120,7 @@ int write_coarse_wdm_data(struct Data* d, double* data, char* fname, int Q) {
 
 int main(int argc, char *argv[])
 {
-    fprintf(stdout, "\n============== NOISE WAVELET MCMC ===========\n");
+    fprintf(stdout, "\n============== NOISE WDM MCMC ===========\n");
 
     time_t start, stop;
     start = time(NULL);
@@ -137,7 +137,7 @@ int main(int argc, char *argv[])
     struct Orbit *orbit = malloc(sizeof(struct Orbit));
     struct Chain *chain = malloc(sizeof(struct Chain));
     
-    parse_data_args(argc,argv,data,orbit,flags,chain,"wavelet");
+    parse_data_args(argc,argv,data,orbit,flags,chain,"wdm");
     printf("old fmin=%lg, fmax=%lg\n",data->fmin,data->fmax);
     if(flags->help) print_usage();
 
@@ -168,17 +168,17 @@ int main(int argc, char *argv[])
     // we'll approximate command line choices
     data->lmin = (int)floor(data->fmin / data->wdm->df);
     data->lmax =  (int)ceil(data->fmax / data->wdm->df);
-    //reset wavelet basis max and min ranges
-    wavelet_pixel_to_index(data->wdm,0,data->lmin,&data->wdm->kmin); 
-    wavelet_pixel_to_index(data->wdm,0,data->lmax,&data->wdm->kmax); 
+    //reset wdm basis max and min ranges
+    wdm_pixel_to_index(data->wdm,0,data->lmin,&data->wdm->kmin); 
+    wdm_pixel_to_index(data->wdm,0,data->lmax,&data->wdm->kmax); 
     // this points kmin/kmax to first time pixel of first/last freq layer
     
     //recompute fmin and fmax so they align with a bin
-    data->fmin = data->lmin*WAVELET_BANDWIDTH;
-    data->fmax = data->lmax*WAVELET_BANDWIDTH;
+    data->fmin = data->lmin*WDM_BANDWIDTH;
+    data->fmax = data->lmax*WDM_BANDWIDTH;
     printf("new fmin=%lg, fmax=%lg\n",data->fmin,data->fmax);
 
-    printf("total wavelet pixels: %d\n", data->N);
+    printf("total wdm pixels: %d\n", data->N);
     if (data->wdm->NF%2==1 || data->wdm->NT%2==1) {
         fprintf(stderr, "Currently, cannot handle odd length NF or NT wdm basis!\n");
         exit(-1);
@@ -212,19 +212,19 @@ int main(int argc, char *argv[])
     else if(flags->simNoise) {
         // inject some noise
         struct InstrumentModel inst_inj = {0};
-        initialize_instrument_model_wavelet(orbit, data, &inst_inj);
+        initialize_instrument_model_wdm(orbit, data, &inst_inj);
         struct ForegroundModel conf_inj = {0};
         struct ForegroundModel *conf_ptr = NULL;
         if (flags->confNoise) {
             conf_ptr = &conf_inj;
-            initialize_foreground_model_wavelet(orbit, data, conf_ptr);
+            initialize_foreground_model_wdm(orbit, data, conf_ptr);
         }
         struct SGWBModel sgwb_inj = {0};
         struct SGWBModel *sgwb_ptr = NULL;
         // NOTE: refactored so these pointers being NULL means excluded from cov matrix
         if (flags->sgwbTemplate>=0) {
             sgwb_ptr = &sgwb_inj;
-            initialize_sgwb_model_wavelet(orbit, data, sgwb_ptr, flags->sgwbTemplate);
+            initialize_sgwb_model_wdm(orbit, data, sgwb_ptr, flags->sgwbTemplate);
         }
         if (flags->stationaryConf)
             generate_full_stationary_covariance_matrix(data->wdm, &inst_inj, conf_ptr, sgwb_ptr, data->noise);
@@ -233,10 +233,10 @@ int main(int argc, char *argv[])
         // alloc tdi data
         alloc_tdi(data->tdi, data->N, 3);
 
-        //AddNoiseWavelet(data,data->tdi);
-        MyAddNoiseWavelet(data,data->tdi);
+        //AddNoiseWDM(data,data->tdi);
+        MyAddNoiseWDM(data,data->tdi);
 
-        // mirror noise into dwt so the wavelet-domain state is consistent
+        // mirror noise into dwt so the wdm-domain state is consistent
         size_t band_bytes = (size_t)data->N * sizeof(double);
         memcpy(data->dwt->X, data->tdi->X, band_bytes);
         memcpy(data->dwt->Y, data->tdi->Y, band_bytes);
@@ -254,7 +254,7 @@ int main(int argc, char *argv[])
     data->qmin = data->lmin;
     if(!flags->strainData) {
         // data->dft->X is sized for the active FFT band (2*data->NFFT doubles),
-        // but wavelet_transform_inverse_freq writes a full ND+2. Likewise it
+        // but wdm_transform_inverse_freq writes a full ND+2. Likewise it
         // *reads* a full NF*NT scalogram, while data->dwt is only sized for the
         // active band. Route input and output through full-size scratch buffers
         // and copy the active slices in/out.
@@ -267,15 +267,15 @@ int main(int argc, char *argv[])
         size_t fft_off    = 2 * (size_t)data->qmin;
 
         memcpy(full_wave + band_off, data->dwt->X, band_bytes);
-        wavelet_transform_inverse_freq(data->wdm, full_wave, full_fft);
+        wdm_transform_inverse_freq(data->wdm, full_wave, full_fft);
         memcpy(data->dft->X, full_fft + fft_off, copy_bytes);
 
         memcpy(full_wave + band_off, data->dwt->Y, band_bytes);
-        wavelet_transform_inverse_freq(data->wdm, full_wave, full_fft);
+        wdm_transform_inverse_freq(data->wdm, full_wave, full_fft);
         memcpy(data->dft->Y, full_fft + fft_off, copy_bytes);
 
         memcpy(full_wave + band_off, data->dwt->Z, band_bytes);
-        wavelet_transform_inverse_freq(data->wdm, full_wave, full_fft);
+        wdm_transform_inverse_freq(data->wdm, full_wave, full_fft);
         memcpy(data->dft->Z, full_fft + fft_off, copy_bytes);
         free(full_fft);
         free(full_wave);
@@ -291,14 +291,14 @@ int main(int argc, char *argv[])
      */
     struct CoarseStats stats;
     alloc_coarse_stats(&stats, data->Nlayer, Q, data->wdm->NT);
-    coarse_grain_wavelet_data(data, &stats);
+    coarse_grain_wdm_data(data, &stats);
     if (Q > 1) {
         sprintf(filename,"%s/coarse_Pxx.dat", data->dataDir);
         write_coarse_wdm_data(data, (double*)stats.Pxx, filename, Q);
     }
 
 
-    // For now, we are not going to have full wavelet scaleograms stored everywhere!
+    // For now, we are not going to have full wdm scaleograms stored everywhere!
     // we'll treat these as outer products of the spectrum and modulation
     // the modulation will be constant for everything except the confusion noise for now
     // TODO: eventually, allow for slow frequency-dependent modulations in the instrument model
@@ -326,17 +326,17 @@ int main(int argc, char *argv[])
         // see above note. this is frequency-axis only
         inst_model[ic] = malloc(sizeof(struct InstrumentModel));
         inst_trial[ic] = malloc(sizeof(struct InstrumentModel));
-        initialize_instrument_model_wavelet(orbit, data, inst_model[ic]);
-        initialize_instrument_model_wavelet(orbit, data, inst_trial[ic]);
+        initialize_instrument_model_wdm(orbit, data, inst_model[ic]);
+        initialize_instrument_model_wdm(orbit, data, inst_trial[ic]);
     }
     // noise model is only along freq axis for now
     sprintf(filename,"%s/instrument_noise_model.dat", data->dataDir);
     print_noise_model(inst_model[0]->psd, filename);
 
     /* Initialize Galactic Foreground Model */
-    // note: UCB wavelet app hides this inside initialize_ucb_state if stationary noise, and in the waveform calls otherwise.
+    // note: UCB wdm app hides this inside initialize_ucb_state if stationary noise, and in the waveform calls otherwise.
     // See GetDynamicNoiseModel and GetStationaryNoiseModel
-    // remember, plan here for now is to not sample over foreground model in wavelet basis, but still sample over noise/sgwb
+    // remember, plan here for now is to not sample over foreground model in wdm basis, but still sample over noise/sgwb
     if(flags->confNoise)printf("   ...initialize foreground noise model\n");
     struct ForegroundModel **conf_model = calloc(chain->NC,sizeof(struct ForegroundModel *));
     struct ForegroundModel **conf_trial = calloc(chain->NC,sizeof(struct ForegroundModel *));
@@ -345,8 +345,8 @@ int main(int argc, char *argv[])
         {
             conf_model[ic] = malloc(sizeof(struct ForegroundModel));
             conf_trial[ic] = malloc(sizeof(struct ForegroundModel));
-            initialize_foreground_model_wavelet(orbit, data, conf_model[ic]);
-            initialize_foreground_model_wavelet(orbit, data, conf_trial[ic]);
+            initialize_foreground_model_wdm(orbit, data, conf_model[ic]);
+            initialize_foreground_model_wdm(orbit, data, conf_trial[ic]);
         }
         // NOTE: these do not include the modulation prefactors
         sprintf(filename,"%s/foreground_noise_model.dat",data->dataDir);
@@ -362,8 +362,8 @@ int main(int argc, char *argv[])
         {
             sgwb_model[ic] = malloc(sizeof(struct SGWBModel));
             sgwb_trial[ic] = malloc(sizeof(struct SGWBModel));
-            initialize_sgwb_model_wavelet(orbit, data, sgwb_model[ic], flags->sgwbTemplate);
-            initialize_sgwb_model_wavelet(orbit, data, sgwb_trial[ic], flags->sgwbTemplate);
+            initialize_sgwb_model_wdm(orbit, data, sgwb_model[ic], flags->sgwbTemplate);
+            initialize_sgwb_model_wdm(orbit, data, sgwb_trial[ic], flags->sgwbTemplate);
         }
         sprintf(filename,"%s/sgwb_noise_model.dat",data->dataDir);
         print_noise_model(sgwb_model[0]->psd, filename);
@@ -380,7 +380,7 @@ int main(int argc, char *argv[])
 
         /* get initial likelihoods */
         invert_noise_covariance_matrix(scaleogram[ic]);
-        double logL = my_noise_log_likelihood_wavelet_coarse(data, scaleogram[ic], &stats);
+        double logL = my_noise_log_likelihood_wdm_coarse(data, scaleogram[ic], &stats);
         inst_model[ic]->logL = logL;
         if (sgwb_model[ic])
             sgwb_model[ic]->logL = logL;
@@ -392,7 +392,7 @@ int main(int argc, char *argv[])
     print_noise_model_dynamic_coarse(data, scaleogram[0], Q, filename);
 
     //MCMC
-    printf("\n==== Noise Wavelet MCMC Sampler ====\n");
+    printf("\n==== Noise WDM MCMC Sampler ====\n");
     
     sprintf(filename,"%s/noise_chain.dat",chain->chainDir);
     FILE *noiseChainFile = fopen(filename,"w");
@@ -440,11 +440,11 @@ int main(int argc, char *argv[])
 
                 for(int mc=0; mc<10; mc++)
                 {
-                    noise_instrument_model_mcmc_wavelet(orbit, data, inst_model_ptr, inst_trial_ptr, conf_model_ptr, sgwb_model_ptr, psd_ptr, &stats, chain, flags, ic);
+                    noise_instrument_model_mcmc_wdm(orbit, data, inst_model_ptr, inst_trial_ptr, conf_model_ptr, sgwb_model_ptr, psd_ptr, &stats, chain, flags, ic);
                     // Note that we do not sample over the galaxy's modulation, only its spectral shape
-                    if(flags->confNoise) noise_foreground_model_mcmc_wavelet(data, inst_model_ptr, conf_model_ptr, conf_trial_ptr, sgwb_model_ptr, psd_ptr, &stats, chain, flags, ic);
-                    if(flags->sgwbTemplate>=0) noise_sgwb_model_mcmc_wavelet_dumb(data, inst_model_ptr, conf_model_ptr, sgwb_model_ptr, sgwb_trial_ptr, psd_ptr, &stats, chain, flags, ic);
-                    // TODO: the logLs aren't tracked well at all here. We should probably refactor to have some kind of WaveletNoise struct that can handle all these components...
+                    if(flags->confNoise) noise_foreground_model_mcmc_wdm(data, inst_model_ptr, conf_model_ptr, conf_trial_ptr, sgwb_model_ptr, psd_ptr, &stats, chain, flags, ic);
+                    if(flags->sgwbTemplate>=0) noise_sgwb_model_mcmc_wdm_dumb(data, inst_model_ptr, conf_model_ptr, sgwb_model_ptr, sgwb_trial_ptr, psd_ptr, &stats, chain, flags, ic);
+                    // TODO: the logLs aren't tracked well at all here. We should probably refactor to have some kind of WDMNoise struct that can handle all these components...
                 }
             }// end loop over chains
             
@@ -459,20 +459,20 @@ int main(int argc, char *argv[])
                 
                 if(flags->NMCMC >= 100 && step%(flags->NMCMC/100)==0)
                 {
-                    printf("noise_wavelet_mcmc at step %i\n",step);
-                    generate_instrument_noise_model_wavelet(data->wdm, orbit, inst_model[chain->index[0]]);
+                    printf("noise_wdm_mcmc at step %i\n",step);
+                    generate_instrument_noise_model_wdm(data->wdm, orbit, inst_model[chain->index[0]]);
                     sprintf(filename,"%s/current_instrument_noise_model.dat",data->dataDir);
                     print_noise_model(inst_model[chain->index[0]]->psd, filename);
 
                     if(flags->confNoise)
                     {
-                        generate_galactic_foreground_model_wavelet(data->wdm, conf_model[chain->index[0]]);
+                        generate_galactic_foreground_model_wdm(data->wdm, conf_model[chain->index[0]]);
                         sprintf(filename,"%s/current_foreground_noise_model.dat",data->dataDir);
                         print_noise_model(conf_model[chain->index[0]]->psd, filename);
                     }
                     if(flags->sgwbTemplate>=0) 
                     {
-                        generate_sgwb_model_wavelet(data->wdm, sgwb_model[chain->index[0]]);
+                        generate_sgwb_model_wdm(data->wdm, sgwb_model[chain->index[0]]);
                         sprintf(filename,"%s/current_sgwb_noise_model.dat",data->dataDir);
                         print_noise_model(sgwb_model[chain->index[0]]->psd, filename);
                     }
@@ -482,14 +482,14 @@ int main(int argc, char *argv[])
                 /*
                 if(step%data->downsample==0 && step/data->downsample < data->Nwave)
                 {
-                    generate_instrument_noise_model_wavelet(data->wdm, orbit, inst_model[chain->index[0]]);
+                    generate_instrument_noise_model_wdm(data->wdm, orbit, inst_model[chain->index[0]]);
                     if(flags->confNoise)
                     {
-                        generate_galactic_foreground_model_wavelet(data->wdm, conf_model[chain->index[0]]);
+                        generate_galactic_foreground_model_wdm(data->wdm, conf_model[chain->index[0]]);
                     }
                     if(flags->sgwbTemplate>=0) 
                     {
-                        generate_sgwb_model_wavelet(data->wdm, sgwb_model[chain->index[0]]);
+                        generate_sgwb_model_wdm(data->wdm, sgwb_model[chain->index[0]]);
                     }
                     generate_full_dynamic_covariance_matrix(data->wdm, inst_model[chain->index[0]], conf_model[chain->index[0]], sgwb_model[chain->index[0]], scaleogram[chain->index[0]]);
                     
@@ -531,19 +531,19 @@ int main(int argc, char *argv[])
     if(flags->confNoise)fclose(foregroundChainFile);
     if(flags->sgwbTemplate>=0)fclose(sgwbChainFile);
 
-    generate_instrument_noise_model_wavelet(data->wdm, orbit, inst_model[chain->index[0]]);
+    generate_instrument_noise_model_wdm(data->wdm, orbit, inst_model[chain->index[0]]);
     sprintf(filename,"%s/final_instrument_noise_model.dat", data->dataDir);
     print_noise_model(inst_model[chain->index[0]]->psd, filename);
 
     if(flags->confNoise)
     {
-        generate_galactic_foreground_model_wavelet(data->wdm, conf_model[chain->index[0]]);
+        generate_galactic_foreground_model_wdm(data->wdm, conf_model[chain->index[0]]);
         sprintf(filename,"%s/final_foreground_noise_model.dat",data->dataDir);
         print_noise_model(conf_model[chain->index[0]]->psd, filename);
     }
     if(flags->sgwbTemplate>=0)
     {
-        generate_sgwb_model_wavelet(data->wdm, sgwb_model[chain->index[0]]);
+        generate_sgwb_model_wdm(data->wdm, sgwb_model[chain->index[0]]);
         sprintf(filename,"%s/final_sgwb_noise_model.dat",data->dataDir);
         print_noise_model(sgwb_model[chain->index[0]]->psd, filename);
     }
@@ -562,7 +562,7 @@ int main(int argc, char *argv[])
     //print_noise_reconstruction(data, flags);
 
     // print_whitened_data indexes scaleogram with the full-resolution
-    // wavelet_pixel_to_index, so it is only valid at Q=1.
+    // wdm_pixel_to_index, so it is only valid at Q=1.
     if (Q == 1)
     {
         sprintf(filename,"%s/whitened_data.dat",data->dataDir);

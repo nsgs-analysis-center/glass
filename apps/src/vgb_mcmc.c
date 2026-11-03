@@ -48,7 +48,7 @@ static void set_vgb_defaults(struct Data *data)
     data->Nchannel = 3; //1=X, 2=AE, 3=XYZ
     data->qpad     = 0;
     data->fmin     = 1e-4; //Hz
-    sprintf(data->basis,"fourier");
+    sprintf(data->basis,"dft");
 }
 
 /**
@@ -103,7 +103,7 @@ int main(int argc, char *argv[])
     
     /* Parse command line and set defaults/flags */
     set_vgb_defaults(data);
-    parse_data_args(argc,argv,data,orbit,flags,chain,"fourier");
+    parse_data_args(argc,argv,data,orbit,flags,chain,"dft");
     parse_ucb_args(argc,argv,flags);
     if(flags->help) print_usage();
     

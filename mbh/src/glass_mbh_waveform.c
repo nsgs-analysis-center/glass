@@ -279,7 +279,7 @@ static void reconstruct_td_waveform(double Tobs, double t0, double *time_ssb, st
     free_cubic_spline(phase_interpolant);
 }
 
-void mbh_td_waveform(struct Orbit *orbit, struct Wavelets *wdm, double Tobs, double t0, double *params, int *wavelet_list, int *Nwavelet, double *X, double *Y, double *Z)
+void mbh_td_waveform(struct Orbit *orbit, struct WDM *wdm, double Tobs, double t0, double *params, int *wdm_list, int *Nwdm, double *X, double *Y, double *Z)
 {
     int n;
     
@@ -370,7 +370,7 @@ void mbh_td_waveform(struct Orbit *orbit, struct Wavelets *wdm, double Tobs, dou
     }
     
     /*
-    Interpolate amplitude and phase for instrument response of each TDI channel onto wavelet grid
+    Interpolate amplitude and phase for instrument response of each TDI channel onto wdm grid
      */
     reconstruct_td_waveform(Tobs, t0, time_ssb, tdi_amp, tdi_phase, Nspline);
     
@@ -601,12 +601,12 @@ static double * mbh_frequency_grid(double Tobs, double *params, int *Ngrid)
     return freq_grid;
 }
 
-static struct TimeFrequencyTrack * wdm_time_frequency_pixels(struct Wavelets *wdm, int N, double *time, double *freq)
+static struct TimeFrequencyTrack * wdm_time_frequency_pixels(struct WDM *wdm, int N, double *time, double *freq)
 {
     struct TimeFrequencyTrack *track = malloc_time_frequency_track(wdm);
                                               
     // alias some pieces of the wdm structure
-    double HBW = wdm->BW/2.0; //half bandwidth of wavelet filter
+    double HBW = wdm->BW/2.0; //half bandwidth of wdm filter
     double Tobs = wdm->NT*wdm->NF*wdm->cadence;
     
     // spline for t(f)
@@ -614,8 +614,8 @@ static struct TimeFrequencyTrack * wdm_time_frequency_pixels(struct Wavelets *wd
     initialize_cubic_spline(tf_spline, freq, time, SPLINE_BINARY_SEARCH);
         
     // which frequency layers
-    track->min_layer = (int)floor((freq[0] - HBW)/WAVELET_BANDWIDTH);
-    track->max_layer = (int)floor(freq[N-1]/WAVELET_BANDWIDTH);
+    track->min_layer = (int)floor((freq[0] - HBW)/WDM_BANDWIDTH);
+    track->max_layer = (int)floor(freq[N-1]/WDM_BANDWIDTH);
         
     if(track->min_layer < 1) track->min_layer = 1;
     if(track->max_layer > wdm->NF-1) track->max_layer = wdm->NF-1;
@@ -624,8 +624,8 @@ static struct TimeFrequencyTrack * wdm_time_frequency_pixels(struct Wavelets *wd
     for(int layer=track->min_layer; layer<track->max_layer; layer++)
     {
         // bandwidth of frequency layer
-        double fmin = layer*WAVELET_BANDWIDTH - HBW;
-        double fmax = layer*WAVELET_BANDWIDTH + HBW;
+        double fmin = layer*WDM_BANDWIDTH - HBW;
+        double fmax = layer*WDM_BANDWIDTH + HBW;
         
         // duration that signal spends in layer
         double tmin = 0.0;
@@ -638,14 +638,14 @@ static struct TimeFrequencyTrack * wdm_time_frequency_pixels(struct Wavelets *wd
         
         // find number of time pixels in the duration, plus some padding, cast to the nearest 2^n
         // TODO: is the 2^n just because you wanted to use a radix2 FFT?
-        int n  = (int)(ceil(tmax/WAVELET_DURATION) - floor(tmin/WAVELET_DURATION)) + 2.0*wdm->oversample - 1;
+        int n  = (int)(ceil(tmax/WDM_DURATION) - floor(tmin/WDM_DURATION)) + 2.0*wdm->oversample - 1;
         int n2 = (int)pow(2,floor(log2(n)));
                 
         if(n2 < (n-2)) n2*=2; //willing to miss the two end pixels in time //TODO: huh?
         track->segment_size[layer] = n2;
 
         // find middle pixel relative to start of segment
-        int i_mid = 0.5*(tmin+tmax)/WAVELET_DURATION; //pixel in the middle of the band
+        int i_mid = 0.5*(tmin+tmax)/WDM_DURATION; //pixel in the middle of the band
         if(i_mid%2 != 0)   i_mid--; //needs to be even so as to not mess up the transform //TODO: huh?
         if(i_mid-n2/2 < 0) i_mid = n2/2; //TODO: huh??
         track->segment_midpt[layer] = i_mid;
@@ -752,8 +752,8 @@ static void build_interpolated_waveform(struct TimeFrequencyTrack *track, int la
     double *freq_grid = amp_ssb_spline->x;
     int Nsegment = track->segment_size[layer];
     int nmid = track->segment_midpt[layer];
-    double delta_f = 1./(Nsegment*WAVELET_DURATION);
-    double delta_t = Tobs - tc + (nmid - Nsegment/2)*WAVELET_DURATION;
+    double delta_f = 1./(Nsegment*WDM_DURATION);
+    double delta_t = Tobs - tc + (nmid - Nsegment/2)*WDM_DURATION;
     waveform[0] = 0.0;
     waveform[1] = 0.0;
     
@@ -762,7 +762,7 @@ static void build_interpolated_waveform(struct TimeFrequencyTrack *track, int la
         waveform[2*i]   = 0.0;
         waveform[2*i+1] = 0.0;
 
-        double f = (double)(i - Nsegment/2)*delta_f + layer*WAVELET_BANDWIDTH;
+        double f = (double)(i - Nsegment/2)*delta_f + layer*WDM_BANDWIDTH;
 
         if(f>freq_grid[0] && f<freq_grid[Nspline-1])
         {
@@ -780,7 +780,7 @@ static void build_interpolated_waveform(struct TimeFrequencyTrack *track, int la
 }
 
 
-void mbh_fd_waveform(struct Orbit *orbit, struct Wavelets *wdm, double Tobs, double t0, double *params, int *wavelet_list, int *Nwavelet, double *X, double *Y, double *Z)
+void mbh_fd_waveform(struct Orbit *orbit, struct WDM *wdm, double Tobs, double t0, double *params, int *wdm_list, int *Nwdm, double *X, double *Y, double *Z)
 {
     
     // get frequency grid
@@ -844,10 +844,10 @@ void mbh_fd_waveform(struct Orbit *orbit, struct Wavelets *wdm, double Tobs, dou
         tdi_phase->Z[i] = phase_ssb[i] - tdi_phase->Z[i];
     }
     
-    // dump fourier domain waveform
+    // dump dft domain waveform
     //reconstruct_fd_waveform(Tobs, params, freq_grid, tdi_amp,  tdi_phase, Nspline);
     
-    // get time-frequency track through wavelet basis tiling of data
+    // get time-frequency track through wdm basis tiling of data
     struct TimeFrequencyTrack *track = wdm_time_frequency_pixels(wdm, Nspline, time_ssb, freq_grid);
 
     /*
@@ -877,22 +877,22 @@ void mbh_fd_waveform(struct Orbit *orbit, struct Wavelets *wdm, double Tobs, dou
     initialize_cubic_spline(amp_ssb_spline, freq_grid, amp_ssb, SPLINE_BINARY_SEARCH);
 
     
-    int N=0; //number of wavelet pixels
-    int k;   //wavelet pixel index
+    int N=0; //number of wdm pixels
+    int k;   //wdm pixel index
 
     for(int layer=track->min_layer; layer<track->max_layer; layer++)
     {
         int Nsegment = track->segment_size[layer];
         int nmid = track->segment_midpt[layer];
 
-        //wavelet transfrom the piece of the track in this layer
+        //wdm transfrom the piece of the track in this layer
         build_interpolated_waveform(track, layer, Tobs, tc, amp_ssb_spline, amp_tdi_spline_X, phase_tdi_spline_X, wave->X);
         build_interpolated_waveform(track, layer, Tobs, tc, amp_ssb_spline, amp_tdi_spline_Y, phase_tdi_spline_Y, wave->Y);
         build_interpolated_waveform(track, layer, Tobs, tc, amp_ssb_spline, amp_tdi_spline_Z, phase_tdi_spline_Z, wave->Z);
         
-        wavelet_transform_freq_segment(wdm, Nsegment, layer, wave->X);
-        wavelet_transform_freq_segment(wdm, Nsegment, layer, wave->Y);
-        wavelet_transform_freq_segment(wdm, Nsegment, layer, wave->Z);
+        wdm_transform_freq_segment(wdm, Nsegment, layer, wave->X);
+        wdm_transform_freq_segment(wdm, Nsegment, layer, wave->Y);
+        wdm_transform_freq_segment(wdm, Nsegment, layer, wave->Z);
         
         //map to full tf grid
         for(int n=0; n<Nsegment; n++)
@@ -900,17 +900,17 @@ void mbh_fd_waveform(struct Orbit *orbit, struct Wavelets *wdm, double Tobs, dou
             int i = n + nmid - Nsegment/2;
             if(i>=0 && i<wdm->NT)
             {
-                wavelet_pixel_to_index(wdm,i,layer,&k);
+                wdm_pixel_to_index(wdm,i,layer,&k);
                 
                 //check that the pixel is in range
                 if(k>=wdm->kmin && k<wdm->kmax)
                 {
-                    wavelet_list[N] = k-wdm->kmin;
+                    wdm_list[N] = k-wdm->kmin;
                 
-                    //insert non-zero wavelet pixels into correct indicies
-                    X[wavelet_list[N]] = wave->X[n];
-                    Y[wavelet_list[N]] = wave->Y[n];
-                    Z[wavelet_list[N]] = wave->Z[n];
+                    //insert non-zero wdm pixels into correct indicies
+                    X[wdm_list[N]] = wave->X[n];
+                    Y[wdm_list[N]] = wave->Y[n];
+                    Z[wdm_list[N]] = wave->Z[n];
                     
                     N++;
                 }
@@ -920,7 +920,7 @@ void mbh_fd_waveform(struct Orbit *orbit, struct Wavelets *wdm, double Tobs, dou
     }//end loop over layers
     
     
-    *Nwavelet = N;
+    *Nwdm = N;
         
     /* DEBUG
     FILE *fptr=fopen("BinaryFast.dat","w");
@@ -929,8 +929,8 @@ void mbh_fd_waveform(struct Orbit *orbit, struct Wavelets *wdm, double Tobs, dou
         for(int i=0; i<wdm->NT; i++)
         {
             int k;
-            wavelet_pixel_to_index(wdm, i, j, &k);
-            fprintf(fptr,"%.12g %.12g ",i*WAVELET_DURATION,j*WAVELET_BANDWIDTH + WAVELET_BANDWIDTH/2);
+            wdm_pixel_to_index(wdm, i, j, &k);
+            fprintf(fptr,"%.12g %.12g ",i*WDM_DURATION,j*WDM_BANDWIDTH + WDM_BANDWIDTH/2);
             fprintf(fptr,"%.12g ",X[k]);
             fprintf(fptr,"%.12g ",Y[k]);
             fprintf(fptr,"%.12g ",Z[k]);
@@ -1050,7 +1050,7 @@ void mbh_fisher(struct Orbit *orbit, struct Data *data, struct Source *source, s
         for(n=0; n<wave_p->Nlist; n++)
         {
             int k = wave_p->list[n];
-            wavelet_index_to_pixel(data->wdm, &i_wdm, &j_wdm, k+data->wdm->kmin);
+            wdm_index_to_pixel(data->wdm, &i_wdm, &j_wdm, k+data->wdm->kmin);
 
             if(i_wdm>data->wdm->imin && i_wdm<data->wdm->imax && k>=0 && k<data->N)
             {
@@ -1067,15 +1067,15 @@ void mbh_fisher(struct Orbit *orbit, struct Data *data, struct Source *source, s
     {
         for(j=0; j<MBH_MODEL_NP; j++)
         {
-            source->fisher_matrix[i][j]  = wavelet_nwip(dhdx[i]->X, dhdx[j]->X, noise->invC[0][0], list, data->N);
-            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->Y, dhdx[j]->Y, noise->invC[1][1], list, data->N);
-            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->Z, dhdx[j]->Z, noise->invC[2][2], list, data->N);
-            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->X, dhdx[j]->Y, noise->invC[0][1], list, data->N);
-            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->X, dhdx[j]->Z, noise->invC[0][2], list, data->N);
-            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->Y, dhdx[j]->Z, noise->invC[1][2], list, data->N);
-            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->Y, dhdx[j]->X, noise->invC[1][0], list, data->N);
-            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->Z, dhdx[j]->X, noise->invC[2][0], list, data->N);
-            source->fisher_matrix[i][j] += wavelet_nwip(dhdx[i]->Z, dhdx[j]->Y, noise->invC[2][1], list, data->N);
+            source->fisher_matrix[i][j]  = wdm_nwip(dhdx[i]->X, dhdx[j]->X, noise->invC[0][0], list, data->N);
+            source->fisher_matrix[i][j] += wdm_nwip(dhdx[i]->Y, dhdx[j]->Y, noise->invC[1][1], list, data->N);
+            source->fisher_matrix[i][j] += wdm_nwip(dhdx[i]->Z, dhdx[j]->Z, noise->invC[2][2], list, data->N);
+            source->fisher_matrix[i][j] += wdm_nwip(dhdx[i]->X, dhdx[j]->Y, noise->invC[0][1], list, data->N);
+            source->fisher_matrix[i][j] += wdm_nwip(dhdx[i]->X, dhdx[j]->Z, noise->invC[0][2], list, data->N);
+            source->fisher_matrix[i][j] += wdm_nwip(dhdx[i]->Y, dhdx[j]->Z, noise->invC[1][2], list, data->N);
+            source->fisher_matrix[i][j] += wdm_nwip(dhdx[i]->Y, dhdx[j]->X, noise->invC[1][0], list, data->N);
+            source->fisher_matrix[i][j] += wdm_nwip(dhdx[i]->Z, dhdx[j]->X, noise->invC[2][0], list, data->N);
+            source->fisher_matrix[i][j] += wdm_nwip(dhdx[i]->Z, dhdx[j]->Y, noise->invC[2][1], list, data->N);
 
             
             
@@ -1167,15 +1167,15 @@ double mbh_Fstat_logL(struct Orbit *orbit, struct Data *data, double *params)
 
     for(int i=0; i<Nfilter; i++)
     {
-        N[i] += wavelet_nwip(data->tdi->X, A[i]->tdi->X, data->noise->invC[0][0], A[i]->list, A[i]->Nlist);
-        N[i] += wavelet_nwip(data->tdi->Y, A[i]->tdi->Y, data->noise->invC[1][1], A[i]->list, A[i]->Nlist);
-        N[i] += wavelet_nwip(data->tdi->Z, A[i]->tdi->Z, data->noise->invC[2][2], A[i]->list, A[i]->Nlist);
-        N[i] += wavelet_nwip(data->tdi->X, A[i]->tdi->Y, data->noise->invC[0][1], A[i]->list, A[i]->Nlist);
-        N[i] += wavelet_nwip(data->tdi->X, A[i]->tdi->Z, data->noise->invC[0][2], A[i]->list, A[i]->Nlist);
-        N[i] += wavelet_nwip(data->tdi->Y, A[i]->tdi->Z, data->noise->invC[1][2], A[i]->list, A[i]->Nlist);
-        N[i] += wavelet_nwip(data->tdi->Y, A[i]->tdi->X, data->noise->invC[1][0], A[i]->list, A[i]->Nlist);
-        N[i] += wavelet_nwip(data->tdi->Z, A[i]->tdi->X, data->noise->invC[2][0], A[i]->list, A[i]->Nlist);
-        N[i] += wavelet_nwip(data->tdi->Z, A[i]->tdi->Y, data->noise->invC[2][1], A[i]->list, A[i]->Nlist);
+        N[i] += wdm_nwip(data->tdi->X, A[i]->tdi->X, data->noise->invC[0][0], A[i]->list, A[i]->Nlist);
+        N[i] += wdm_nwip(data->tdi->Y, A[i]->tdi->Y, data->noise->invC[1][1], A[i]->list, A[i]->Nlist);
+        N[i] += wdm_nwip(data->tdi->Z, A[i]->tdi->Z, data->noise->invC[2][2], A[i]->list, A[i]->Nlist);
+        N[i] += wdm_nwip(data->tdi->X, A[i]->tdi->Y, data->noise->invC[0][1], A[i]->list, A[i]->Nlist);
+        N[i] += wdm_nwip(data->tdi->X, A[i]->tdi->Z, data->noise->invC[0][2], A[i]->list, A[i]->Nlist);
+        N[i] += wdm_nwip(data->tdi->Y, A[i]->tdi->Z, data->noise->invC[1][2], A[i]->list, A[i]->Nlist);
+        N[i] += wdm_nwip(data->tdi->Y, A[i]->tdi->X, data->noise->invC[1][0], A[i]->list, A[i]->Nlist);
+        N[i] += wdm_nwip(data->tdi->Z, A[i]->tdi->X, data->noise->invC[2][0], A[i]->list, A[i]->Nlist);
+        N[i] += wdm_nwip(data->tdi->Z, A[i]->tdi->Y, data->noise->invC[2][1], A[i]->list, A[i]->Nlist);
     }
 
     /* compute matrix M_ij = (A_i|A_j) */
@@ -1188,15 +1188,15 @@ double mbh_Fstat_logL(struct Orbit *orbit, struct Data *data, double *params)
             int Nlist;
             list_union(A[i]->list, A[j]->list, A[i]->Nlist, A[j]->Nlist, list, &Nlist);
 
-            M[i][j] += wavelet_nwip(A[i]->tdi->X, A[j]->tdi->X, data->noise->invC[0][0], list, Nlist);
-            M[i][j] += wavelet_nwip(A[i]->tdi->Y, A[j]->tdi->Y, data->noise->invC[1][1], list, Nlist);
-            M[i][j] += wavelet_nwip(A[i]->tdi->Z, A[j]->tdi->Z, data->noise->invC[2][2], list, Nlist);
-            M[i][j] += wavelet_nwip(A[i]->tdi->X, A[j]->tdi->Y, data->noise->invC[0][1], list, Nlist);
-            M[i][j] += wavelet_nwip(A[i]->tdi->X, A[j]->tdi->Z, data->noise->invC[0][2], list, Nlist);
-            M[i][j] += wavelet_nwip(A[i]->tdi->Y, A[j]->tdi->Z, data->noise->invC[1][2], list, Nlist);
-            M[i][j] += wavelet_nwip(A[i]->tdi->Y, A[j]->tdi->X, data->noise->invC[1][0], list, Nlist);
-            M[i][j] += wavelet_nwip(A[i]->tdi->Z, A[j]->tdi->X, data->noise->invC[2][0], list, Nlist);
-            M[i][j] += wavelet_nwip(A[i]->tdi->Z, A[j]->tdi->Y, data->noise->invC[2][1], list, Nlist);
+            M[i][j] += wdm_nwip(A[i]->tdi->X, A[j]->tdi->X, data->noise->invC[0][0], list, Nlist);
+            M[i][j] += wdm_nwip(A[i]->tdi->Y, A[j]->tdi->Y, data->noise->invC[1][1], list, Nlist);
+            M[i][j] += wdm_nwip(A[i]->tdi->Z, A[j]->tdi->Z, data->noise->invC[2][2], list, Nlist);
+            M[i][j] += wdm_nwip(A[i]->tdi->X, A[j]->tdi->Y, data->noise->invC[0][1], list, Nlist);
+            M[i][j] += wdm_nwip(A[i]->tdi->X, A[j]->tdi->Z, data->noise->invC[0][2], list, Nlist);
+            M[i][j] += wdm_nwip(A[i]->tdi->Y, A[j]->tdi->Z, data->noise->invC[1][2], list, Nlist);
+            M[i][j] += wdm_nwip(A[i]->tdi->Y, A[j]->tdi->X, data->noise->invC[1][0], list, Nlist);
+            M[i][j] += wdm_nwip(A[i]->tdi->Z, A[j]->tdi->X, data->noise->invC[2][0], list, Nlist);
+            M[i][j] += wdm_nwip(A[i]->tdi->Z, A[j]->tdi->Y, data->noise->invC[2][1], list, Nlist);
 
             free(list);
         }

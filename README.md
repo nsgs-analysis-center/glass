@@ -55,7 +55,7 @@ Directory tree for the GLASS installation:
 │   ├── ucb_match
 │   ├── ucb_mcmc
 │   ├── ucb_waveform_benchmark
-│   ├── ucb_wavelet_mcmc
+│   ├── ucb_wdm_mcmc
 │   └── vgb_mcmc
 ├── include
 │   ├── astrometry
@@ -94,7 +94,7 @@ Directory tree for the GLASS installation:
 │   │   ├── glass_ucb_waveform.h
 │   │   ├── glass_ucb.h
 │   │   ├── glass_utils.h
-│   │   ├── glass_wavelet.h
+│   │   ├── glass_wdm.h
 │   │   ├── IMRPhenomD_internals.h
 │   │   ├── IMRPhenomD.h
 │   │   └── IMRPhenomT.h
