@@ -1299,12 +1299,12 @@ void ucb_waveform_wdm(struct Orbit *orbit, struct WDM *wdm, double Tobs, double 
     struct CubicSpline *phase_interpolant_Y = ws->phase_interpolant_Y;
     struct CubicSpline *phase_interpolant_Z = ws->phase_interpolant_Z;
 
-    initialize_cubic_spline(amp_interpolant_X,   time_ssb, tdi_amp->X,SPLINE_BINARY_SEARCH);
-    initialize_cubic_spline(amp_interpolant_Y,   time_ssb, tdi_amp->Y,SPLINE_BINARY_SEARCH);
-    initialize_cubic_spline(amp_interpolant_Z,   time_ssb, tdi_amp->Z,SPLINE_BINARY_SEARCH);
-    initialize_cubic_spline(phase_interpolant_X, time_ssb, tdi_phase->X,SPLINE_BINARY_SEARCH);
-    initialize_cubic_spline(phase_interpolant_Y, time_ssb, tdi_phase->Y,SPLINE_BINARY_SEARCH);
-    initialize_cubic_spline(phase_interpolant_Z, time_ssb, tdi_phase->Z,SPLINE_BINARY_SEARCH);
+    initialize_cubic_spline(amp_interpolant_X,   time_ssb, tdi_amp->X,  SPLINE_EVEN_SAMPLED);
+    initialize_cubic_spline(amp_interpolant_Y,   time_ssb, tdi_amp->Y,  SPLINE_EVEN_SAMPLED);
+    initialize_cubic_spline(amp_interpolant_Z,   time_ssb, tdi_amp->Z,  SPLINE_EVEN_SAMPLED);
+    initialize_cubic_spline(phase_interpolant_X, time_ssb, tdi_phase->X,SPLINE_EVEN_SAMPLED);
+    initialize_cubic_spline(phase_interpolant_Y, time_ssb, tdi_phase->Y,SPLINE_EVEN_SAMPLED);
+    initialize_cubic_spline(phase_interpolant_Z, time_ssb, tdi_phase->Z,SPLINE_EVEN_SAMPLED);
 
     // get frequency wdm window function for downsampled data
     // Nlayers passed instead of NF to get norm right of heterodyned UCB wavefomr

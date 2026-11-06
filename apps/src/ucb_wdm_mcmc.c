@@ -186,7 +186,7 @@ int main(int argc, char *argv[])
                     ucb_rjmcmc(orbit, data, model_ptr, trial_ptr, chain, flags, prior, proposal, ic);
                 }
                 //fixed dimension parameter updates
-                else
+                else if(model_ptr->Nlive>0)
                 {
                     ucb_mcmc(orbit, data, model_ptr, trial_ptr, chain, flags, prior, proposal, ic);
                 }
